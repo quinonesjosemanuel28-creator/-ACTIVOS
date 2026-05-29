@@ -34,6 +34,7 @@ interface CierreRow {
   comentarios: string | null;
   unidad_negocio: string;
   estado: string;
+  revisar: string | null;
 }
 const toCierre = (r: CierreRow): Cierre => ({
   idCierre: r.id_cierre,
@@ -50,6 +51,7 @@ const toCierre = (r: CierreRow): Cierre => ({
   comentarios: r.comentarios ?? undefined,
   unidadNegocio: r.unidad_negocio as UnidadNegocio,
   estado: r.estado as EstadoCierre,
+  revisar: r.revisar ?? undefined,
 });
 
 interface PagoRow {
@@ -124,9 +126,9 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
       db.prepare(
         `INSERT OR REPLACE INTO cierres
          (id_cierre, fecha_cierre, cliente_nombre, cliente_mail, cliente_telefono, programa,
-          ticket_total_usd, closer, setter, funnel, referido, comentarios, unidad_negocio, estado)
+          ticket_total_usd, closer, setter, funnel, referido, comentarios, unidad_negocio, estado, revisar)
          VALUES (@idCierre,@fechaCierre,@clienteNombre,@clienteMail,@clienteTelefono,@programa,
-          @ticketTotalUsd,@closer,@setter,@funnel,@referido,@comentarios,@unidadNegocio,@estado)`,
+          @ticketTotalUsd,@closer,@setter,@funnel,@referido,@comentarios,@unidadNegocio,@estado,@revisar)`,
       ).run({
         ...c,
         clienteMail: c.clienteMail ?? null,
@@ -136,6 +138,7 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         funnel: c.funnel ?? null,
         referido: c.referido ?? null,
         comentarios: c.comentarios ?? null,
+        revisar: c.revisar ?? null,
       });
     },
     eliminar(id) {

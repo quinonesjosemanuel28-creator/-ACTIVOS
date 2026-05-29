@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS cierres (
   referido         TEXT,
   comentarios      TEXT,
   unidad_negocio   TEXT NOT NULL DEFAULT 'ACADEMY',
-  estado           TEXT NOT NULL DEFAULT 'Activo' CHECK(estado IN ('Activo','No continúa'))
+  estado           TEXT NOT NULL DEFAULT 'Activo' CHECK(estado IN ('Activo','No continúa')),
+  revisar          TEXT
 );
 
 CREATE TABLE IF NOT EXISTS pagos (
@@ -114,4 +115,14 @@ CREATE INDEX IF NOT EXISTS idx_egresos_mes ON egresos(mes);
 
 export function migrar(db: Database.Database): void {
   db.exec(SCHEMA_SQL);
+  // Migraciones aditivas para bases ya creadas (CREATE TABLE IF NOT EXISTS
+  // no agrega columnas nuevas a tablas existentes).
+  agregarColumnaSiFalta(db, 'cierres', 'revisar', 'TEXT');
+}
+
+function agregarColumnaSiFalta(db: Database.Database, tabla: string, columna: string, tipo: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${tabla})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === columna)) {
+    db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${columna} ${tipo}`);
+  }
 }

@@ -9,7 +9,7 @@ import { BadgeSaldo } from './BadgeSaldo';
 import { CierreFormDialog } from './CierreFormDialog';
 import { PagoFormDialog } from './PagoFormDialog';
 import { ConfirmDialog } from './ConfirmDialog';
-import { useEliminarCierre, useEliminarPago } from '../../hooks';
+import { useEliminarCierre, useEliminarPago, useQuitarRevisar } from '../../hooks';
 
 const TD = 'px-3 py-2.5 align-middle';
 const iconBtn =
@@ -26,6 +26,7 @@ export function FilaCierre({ fila }: { fila: Fila }) {
 
   const elimCierre = useEliminarCierre();
   const elimPago = useEliminarPago();
+  const quitarRevisar = useQuitarRevisar();
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,7 +54,26 @@ export function FilaCierre({ fila }: { fila: Fila }) {
         <td className={cn(TD, 'text-right tnum', fila.pendienteUsd > 0 ? 'text-signal-amber' : 'text-signal-green')}>
           {fmtUsd(fila.pendienteUsd)}
         </td>
-        <td className={cn(TD, 'text-center')}><BadgeSaldo estado={fila.estadoSaldo} /></td>
+        <td className={cn(TD, 'text-center')}>
+          <div className="flex flex-col items-center gap-1">
+            <BadgeSaldo estado={fila.estadoSaldo} />
+            {cierre.revisar && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-600 text-signal-amber dark:bg-amber-900/40 dark:text-amber-300"
+                title={cierre.revisar}
+              >
+                ⚠ Revisar
+                <button
+                  className="rounded-full px-1 hover:bg-amber-200/70 dark:hover:bg-amber-800"
+                  title="Marcar como revisado"
+                  onClick={stop(() => quitarRevisar.mutate(cierre.idCierre))}
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+          </div>
+        </td>
         <td className={cn(TD, 'whitespace-nowrap text-right')}>
           <button className={iconBtn} title="Editar cierre" onClick={stop(() => setEditarCierre(true))}><Pencil size={15} /></button>
           <button className={cn(iconBtn, 'hover:text-signal-red')} title="Eliminar cierre" onClick={stop(() => setBorrarCierre(true))}><Trash2 size={15} /></button>

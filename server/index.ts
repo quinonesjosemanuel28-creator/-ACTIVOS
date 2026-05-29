@@ -109,6 +109,9 @@ app.post('/api/cierres', h((req) => ucc.crearCierre(reposCierres, req.body)));
 app.put('/api/cierres/:id', h((req) => ucc.editarCierre(reposCierres, param(req, 'id'), req.body)));
 app.delete('/api/cierres/:id', h((req) => ucc.eliminarCierre(reposCierres, param(req, 'id'))));
 
+app.post('/api/cierres/importar', h((req) => ucc.importarCierresPagos(reposCierres, req.body)));
+app.delete('/api/cierres/:id/revisar', h((req) => ucc.quitarRevisar(reposCierres, param(req, 'id'))));
+
 app.post('/api/pagos', h((req) => ucc.agregarPago(reposCierres, req.body)));
 app.put('/api/pagos/:id', h((req) => ucc.editarPago(reposCierres, param(req, 'id'), req.body)));
 app.delete('/api/pagos/:id', h((req) => ucc.eliminarPago(reposCierres, param(req, 'id'))));

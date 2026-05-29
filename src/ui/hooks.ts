@@ -100,6 +100,17 @@ export function useBorrarDemo() {
   const inval = useInvalidarTodo();
   return useMutation({ mutationFn: () => api.borrarDatosDemo(), onSuccess: inval });
 }
+export function useImportarCierres() {
+  const inval = useInvalidarTodo();
+  return useMutation({
+    mutationFn: (payload: { cierres: unknown[]; pagos: unknown[] }) => api.importarCierresPagos(payload),
+    onSuccess: inval,
+  });
+}
+export function useQuitarRevisar() {
+  const inval = useInvalidarTodo();
+  return useMutation({ mutationFn: (id: string) => api.quitarRevisar(id), onSuccess: inval });
+}
 export function useReiniciarCierres() {
   const inval = useInvalidarTodo();
   return useMutation({ mutationFn: (confirm: string) => api.reiniciarCierres(confirm), onSuccess: inval });

@@ -8,7 +8,7 @@ import * as cm from '../../domain/cierres/metrics';
 import type { Cierre, CierreConPagos, EstadoSaldo, Pago } from '../../domain/cierres/types';
 import type { Mes } from '../../domain/types';
 import type { FiltrosCierres, ReposCierres } from './ports';
-import { cierreInputSchema, pagoInputSchema, resetConfirmSchema } from './schemas';
+import { cierreInputSchema, importPayloadSchema, pagoInputSchema, resetConfirmSchema } from './schemas';
 
 // ───────────────────────── Lectura ─────────────────────────
 
@@ -95,6 +95,7 @@ export function crearCierre(repos: ReposCierres, input: unknown): Cierre {
     comentarios: c.comentarios,
     unidadNegocio: c.unidadNegocio,
     estado: c.estado,
+    revisar: c.revisar,
   };
   repos.cierres.guardar(cierre);
   return cierre;
@@ -168,4 +169,57 @@ export function reiniciarCierresYPagos(repos: ReposCierres, input: unknown): Res
   const pagosBorrados = repos.pagos.vaciar();
   const cierresBorrados = repos.cierres.vaciar();
   return { cierresBorrados, pagosBorrados };
+}
+
+// ───────────────────────── Importación de Excel ─────────────────────────
+
+export interface ImportarResult {
+  cierres: number;
+  pagos: number;
+}
+
+/**
+ * Persiste un payload de importación ya estructurado por el cliente
+ * (construirImportacion). Revalida en el borde con Zod, hace upsert en una
+ * transacción (idempotente por los IDs deterministas) y NO borra nada.
+ */
+export function importarCierresPagos(repos: ReposCierres, input: unknown): ImportarResult {
+  const { cierres, pagos } = importPayloadSchema.parse(input);
+  for (const c of cierres) {
+    repos.cierres.guardar({
+      idCierre: c.idCierre,
+      fechaCierre: c.fechaCierre,
+      clienteNombre: c.clienteNombre,
+      clienteMail: c.clienteMail,
+      programa: c.programa,
+      ticketTotalUsd: c.ticketTotalUsd,
+      closer: c.closer,
+      funnel: c.funnel,
+      unidadNegocio: c.unidadNegocio,
+      estado: c.estado,
+      revisar: c.revisar,
+    });
+  }
+  for (const p of pagos) {
+    repos.pagos.guardar({
+      idPago: p.idPago,
+      idCierre: p.idCierre,
+      fechaPago: p.fechaPago,
+      montoUsd: p.montoUsd,
+      montoArs: p.montoArs,
+      cotizacion: p.cotizacion,
+      tipoPago: p.tipoPago,
+      numeroCuota: p.numeroCuota,
+      medioPago: p.medioPago,
+      comentarios: p.comentarios,
+    });
+  }
+  return { cierres: cierres.length, pagos: pagos.length };
+}
+
+/** Quita el flag "a revisar" de un cierre (dato ya completado). */
+export function quitarRevisar(repos: ReposCierres, id: string): void {
+  const cierre = repos.cierres.obtener(id);
+  if (!cierre) throw new Error(`No existe el cierre ${id}.`);
+  repos.cierres.guardar({ ...cierre, revisar: undefined });
 }

@@ -42,6 +42,8 @@ export interface Cierre {
   comentarios?: string;
   unidadNegocio: UnidadNegocio;
   estado: EstadoCierre;
+  /** Si tiene texto, el cierre se muestra con badge "⚠ Revisar" (dato a completar). */
+  revisar?: string;
 }
 
 /**

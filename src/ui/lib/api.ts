@@ -122,6 +122,9 @@ export const api = {
   agregarPago: (p: unknown) => req<Pago>('/pagos', { method: 'POST', body: JSON.stringify(p) }),
   editarPago: (id: string, p: unknown) => req<Pago>(`/pagos/${id}`, { method: 'PUT', body: JSON.stringify(p) }),
   eliminarPago: (id: string) => req(`/pagos/${id}`, { method: 'DELETE' }),
+  importarCierresPagos: (payload: { cierres: unknown[]; pagos: unknown[] }) =>
+    req<{ cierres: number; pagos: number }>('/cierres/importar', { method: 'POST', body: JSON.stringify(payload) }),
+  quitarRevisar: (id: string) => req(`/cierres/${id}/revisar`, { method: 'DELETE' }),
   borrarDatosDemo: () => req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-demo', { method: 'DELETE' }),
   reiniciarCierres: (confirm: string) =>
     req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-reset', { method: 'POST', body: JSON.stringify({ confirm }) }),

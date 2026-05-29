@@ -39,8 +39,44 @@ export const cierreInputSchema = z.object({
   comentarios: z.string().optional(),
   unidadNegocio: unidadSchema.default('ACADEMY'),
   estado: estadoCierreSchema.default('Activo'),
+  revisar: z.string().optional(),
 });
 export type CierreInput = z.infer<typeof cierreInputSchema>;
+
+// ───────────────────── Importación (payload ya estructurado) ─────────────────
+// Revalida en el borde lo que el cliente arma con construirImportacion.
+const cierreImportSchema = z.object({
+  idCierre: z.string().min(1),
+  fechaCierre: fechaSchema,
+  clienteNombre: z.string().min(1),
+  clienteMail: z.string().optional(),
+  programa: programaCierreSchema,
+  ticketTotalUsd: z.number().positive(),
+  closer: z.string().optional(),
+  funnel: z.string().optional(),
+  unidadNegocio: unidadSchema.default('ACADEMY'),
+  estado: estadoCierreSchema.default('Activo'),
+  revisar: z.string().optional(),
+});
+
+const pagoImportSchema = z.object({
+  idPago: z.string().min(1),
+  idCierre: z.string().min(1),
+  fechaPago: fechaSchema,
+  montoUsd: z.number().positive(),
+  montoArs: z.number().positive().optional(),
+  cotizacion: z.number().positive().optional(),
+  tipoPago: tipoPagoSchema,
+  numeroCuota: z.string().optional(),
+  medioPago: medioPagoSchema,
+  comentarios: z.string().optional(),
+});
+
+export const importPayloadSchema = z.object({
+  cierres: z.array(cierreImportSchema),
+  pagos: z.array(pagoImportSchema),
+});
+export type ImportPayload = z.infer<typeof importPayloadSchema>;
 
 export const pagoInputSchema = z
   .object({
