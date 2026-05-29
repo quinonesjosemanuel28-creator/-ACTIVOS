@@ -1,0 +1,195 @@
+/**
+ * CAPA 4 — INFRAESTRUCTURA · Repositorios SQLite del módulo Cierres y Clientes.
+ * Implementan los puertos de la aplicación. Mapean filas snake_case ↔ dominio.
+ */
+import type Database from 'better-sqlite3';
+import type {
+  Cierre,
+  EstadoCierre,
+  MedioPago,
+  Pago,
+  ProgramaCierre,
+  TipoPago,
+} from '../../domain/cierres/types';
+import type { UnidadNegocio } from '../../domain/types';
+import type { CierresRepo, FiltrosCierres, PagosRepo, ReposCierres } from '../../application/cierres/ports';
+
+/** Prefijo de IDs sembrados; "Borrar datos de demostración" filtra por él. */
+export const DEMO_PREFIX = 'DEMO-';
+
+// ───────────────────────── Mapeo de filas ─────────────────────────
+
+interface CierreRow {
+  id_cierre: string;
+  fecha_cierre: string;
+  cliente_nombre: string;
+  cliente_mail: string | null;
+  cliente_telefono: string | null;
+  programa: string;
+  ticket_total_usd: number;
+  closer: string | null;
+  setter: string | null;
+  funnel: string | null;
+  referido: string | null;
+  comentarios: string | null;
+  unidad_negocio: string;
+  estado: string;
+  revisar: string | null;
+}
+const toCierre = (r: CierreRow): Cierre => ({
+  idCierre: r.id_cierre,
+  fechaCierre: r.fecha_cierre,
+  clienteNombre: r.cliente_nombre,
+  clienteMail: r.cliente_mail ?? undefined,
+  clienteTelefono: r.cliente_telefono ?? undefined,
+  programa: r.programa as ProgramaCierre,
+  ticketTotalUsd: r.ticket_total_usd,
+  closer: r.closer ?? undefined,
+  setter: r.setter ?? undefined,
+  funnel: r.funnel ?? undefined,
+  referido: r.referido ?? undefined,
+  comentarios: r.comentarios ?? undefined,
+  unidadNegocio: r.unidad_negocio as UnidadNegocio,
+  estado: r.estado as EstadoCierre,
+  revisar: r.revisar ?? undefined,
+});
+
+interface PagoRow {
+  id_pago: string;
+  id_cierre: string;
+  fecha_pago: string;
+  hora_pago: string | null;
+  monto_usd: number;
+  monto_ars: number | null;
+  cotizacion: number | null;
+  tipo_pago: string;
+  numero_cuota: string | null;
+  medio_pago: string;
+  comprobante_url: string | null;
+  comentarios: string | null;
+}
+const toPago = (r: PagoRow): Pago => ({
+  idPago: r.id_pago,
+  idCierre: r.id_cierre,
+  fechaPago: r.fecha_pago,
+  horaPago: r.hora_pago ?? undefined,
+  montoUsd: r.monto_usd,
+  montoArs: r.monto_ars ?? undefined,
+  cotizacion: r.cotizacion ?? undefined,
+  tipoPago: r.tipo_pago as TipoPago,
+  numeroCuota: r.numero_cuota ?? undefined,
+  medioPago: r.medio_pago as MedioPago,
+  comprobanteUrl: r.comprobante_url ?? undefined,
+  comentarios: r.comentarios ?? undefined,
+});
+
+export function crearReposCierres(db: Database.Database): ReposCierres {
+  const cierres: CierresRepo = {
+    obtener(id) {
+      const row = db.prepare('SELECT * FROM cierres WHERE id_cierre = ?').get(id) as CierreRow | undefined;
+      return row ? toCierre(row) : null;
+    },
+    listar(filtros: FiltrosCierres = {}) {
+      const where: string[] = ['1=1'];
+      const params: unknown[] = [];
+      if (filtros.mes) {
+        where.push("substr(fecha_cierre,1,7) = ?");
+        params.push(filtros.mes);
+      }
+      if (filtros.programa) {
+        where.push('programa = ?');
+        params.push(filtros.programa);
+      }
+      if (filtros.closer) {
+        where.push('closer = ?');
+        params.push(filtros.closer);
+      }
+      if (filtros.estado) {
+        where.push('estado = ?');
+        params.push(filtros.estado);
+      }
+      if (filtros.unidadNegocio && filtros.unidadNegocio !== 'CONSOLIDADO') {
+        where.push('unidad_negocio = ?');
+        params.push(filtros.unidadNegocio);
+      }
+      if (filtros.q) {
+        where.push('(lower(cliente_nombre) LIKE ? OR lower(cliente_mail) LIKE ?)');
+        const like = `%${filtros.q.toLowerCase()}%`;
+        params.push(like, like);
+      }
+      const rows = db
+        .prepare(`SELECT * FROM cierres WHERE ${where.join(' AND ')} ORDER BY fecha_cierre DESC`)
+        .all(...params) as CierreRow[];
+      return rows.map(toCierre);
+    },
+    guardar(c) {
+      db.prepare(
+        `INSERT OR REPLACE INTO cierres
+         (id_cierre, fecha_cierre, cliente_nombre, cliente_mail, cliente_telefono, programa,
+          ticket_total_usd, closer, setter, funnel, referido, comentarios, unidad_negocio, estado, revisar)
+         VALUES (@idCierre,@fechaCierre,@clienteNombre,@clienteMail,@clienteTelefono,@programa,
+          @ticketTotalUsd,@closer,@setter,@funnel,@referido,@comentarios,@unidadNegocio,@estado,@revisar)`,
+      ).run({
+        ...c,
+        clienteMail: c.clienteMail ?? null,
+        clienteTelefono: c.clienteTelefono ?? null,
+        closer: c.closer ?? null,
+        setter: c.setter ?? null,
+        funnel: c.funnel ?? null,
+        referido: c.referido ?? null,
+        comentarios: c.comentarios ?? null,
+        revisar: c.revisar ?? null,
+      });
+    },
+    eliminar(id) {
+      db.prepare('DELETE FROM cierres WHERE id_cierre = ?').run(id);
+    },
+    borrarDemo() {
+      return db.prepare(`DELETE FROM cierres WHERE id_cierre LIKE '${DEMO_PREFIX}%'`).run().changes;
+    },
+    vaciar() {
+      return db.prepare('DELETE FROM cierres').run().changes;
+    },
+  };
+
+  const pagos: PagosRepo = {
+    listarPorCierre(idCierre) {
+      return (
+        db.prepare('SELECT * FROM pagos WHERE id_cierre = ? ORDER BY fecha_pago').all(idCierre) as PagoRow[]
+      ).map(toPago);
+    },
+    listarTodos() {
+      return (db.prepare('SELECT * FROM pagos ORDER BY fecha_pago').all() as PagoRow[]).map(toPago);
+    },
+    guardar(p) {
+      db.prepare(
+        `INSERT OR REPLACE INTO pagos
+         (id_pago, id_cierre, fecha_pago, hora_pago, monto_usd, monto_ars, cotizacion,
+          tipo_pago, numero_cuota, medio_pago, comprobante_url, comentarios)
+         VALUES (@idPago,@idCierre,@fechaPago,@horaPago,@montoUsd,@montoArs,@cotizacion,
+          @tipoPago,@numeroCuota,@medioPago,@comprobanteUrl,@comentarios)`,
+      ).run({
+        ...p,
+        horaPago: p.horaPago ?? null,
+        montoArs: p.montoArs ?? null,
+        cotizacion: p.cotizacion ?? null,
+        numeroCuota: p.numeroCuota ?? null,
+        comprobanteUrl: p.comprobanteUrl ?? null,
+        comentarios: p.comentarios ?? null,
+      });
+    },
+    eliminar(id) {
+      db.prepare('DELETE FROM pagos WHERE id_pago = ?').run(id);
+    },
+    borrarDemo() {
+      return db
+        .prepare(`DELETE FROM pagos WHERE id_pago LIKE '${DEMO_PREFIX}%' OR id_cierre LIKE '${DEMO_PREFIX}%'`)
+        .run().changes;
+    },
+    vaciar() {
+      return db.prepare('DELETE FROM pagos').run().changes;
+    },
+  };
+
+  return { cierres, pagos };
+}

@@ -1,12 +1,18 @@
-/** Carga de datos, importación de Excel, cierre de mes y parámetros. */
-import { useRef, useState, type FormEvent } from 'react';
+/**
+ * Carga & Administración — alineada al modelo nuevo (enfoque A).
+ * Las ventas/cobros se cargan en "Cierres y Clientes" (Nuevo cierre / Agregar
+ * pago). Acá quedan: importador de cierres desde Excel, Egresos, Parámetros
+ * y Cierre de mes (estos tres siguen alimentando el dashboard sin cambios).
+ */
+import { useState, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Lock, Unlock, Upload } from 'lucide-react';
+import { FileSpreadsheet, Lock, Unlock } from 'lucide-react';
 import { api } from '../lib/api';
 import { useDashboard, useParametros } from '../hooks';
 import { useUI } from '../store';
 import { Button, Card, CardBody, CardHeader, CardTitle, Input, Select, Spinner } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
+import { ImportarDialog } from '../components/cierres/ImportarDialog';
 import { fmtMes } from '../lib/format';
 
 function useInvalidar() {
@@ -15,24 +21,23 @@ function useInvalidar() {
 }
 
 export function VistaDatos() {
-  const { mes, programa } = useUI();
+  const { mes } = useUI();
   const { data: dash } = useDashboard();
   const invalidar = useInvalidar();
   const estado = dash?.estadoMes ?? 'Abierto';
 
   return (
     <div>
-      <SectionHeader titulo="Carga & Administración" descripcion="Cargá movimientos, importá el tablero y cerrá el mes." />
-      {programa !== 'TODOS' && (
-        <p className="mb-4 rounded-xl bg-gold-100 px-4 py-2 text-sm text-gold-700">
-          Filtro de programa activo ({programa}). Las altas se guardan igual; quitá el filtro para ver todo.
-        </p>
-      )}
+      <SectionHeader
+        titulo="Carga & Administración"
+        descripcion="Importá cierres, registrá egresos, ajustá parámetros y cerrá el mes."
+      />
+      <p className="mb-4 rounded-xl bg-navy-100 px-4 py-2 text-sm text-navy-600 dark:bg-navy-800 dark:text-navy-200">
+        Las ventas y los pagos se cargan en <b>Cierres y Clientes</b> (botones “Nuevo cierre” y “Agregar pago”).
+      </p>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ImportarCard onDone={invalidar} />
+        <ImportarCierresCard />
         <CierreCard mes={mes} estado={estado} onDone={invalidar} />
-        <VentaForm onDone={invalidar} />
-        <CobroForm onDone={invalidar} />
         <EgresoForm onDone={invalidar} />
         <ParametrosCard onDone={invalidar} />
       </div>
@@ -51,41 +56,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Mensaje({ m }: { m: { tipo: 'ok' | 'error'; texto: string } | null }) {
   if (!m) return null;
-  return (
-    <p className={`mt-3 text-sm ${m.tipo === 'ok' ? 'text-signal-green' : 'text-signal-red'}`}>{m.texto}</p>
-  );
+  return <p className={`mt-3 text-sm ${m.tipo === 'ok' ? 'text-signal-green' : 'text-signal-red'}`}>{m.texto}</p>;
 }
 
-// ───────────────────────── Importar Excel ─────────────────────────
-function ImportarCard({ onDone }: { onDone: () => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
-  const mut = useMutation({
-    mutationFn: (f: File) => api.importarExcel(f),
-    onSuccess: (r: any) => {
-      setMsg({ tipo: 'ok', texto: `Importado: ${r.ventas} ventas, ${r.cobros} cobros, ${r.egresos} egresos.` });
-      onDone();
-    },
-    onError: (e: Error) => setMsg({ tipo: 'error', texto: e.message }),
-  });
+// ───────────────────────── Importar cierres desde Excel ─────────────────────────
+function ImportarCierresCard() {
+  const [open, setOpen] = useState(false);
   return (
     <Card>
-      <CardHeader><CardTitle>Importar tablero (.xlsx)</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Importar cierres desde Excel</CardTitle></CardHeader>
       <CardBody>
         <p className="mb-3 text-sm text-navy-500 dark:text-navy-300">
-          Migra Ventas/Cobros/Egresos/Parámetros del Excel actual. Idempotente.
+          Cargá un <b>.xlsx</b> con hoja <b>PAGOS</b> (una fila por pago, agrupadas por <code>id_cierre</code>).
+          Vista previa antes de guardar · no duplica al reimportar.
         </p>
-        <input
-          ref={ref}
-          type="file"
-          accept=".xlsx,.xls"
-          className="hidden"
-          onChange={(e) => e.target.files?.[0] && mut.mutate(e.target.files[0])}
-        />
-        <Button variant="gold" onClick={() => ref.current?.click()} disabled={mut.isPending}>
-          {mut.isPending ? <Spinner /> : <Upload size={16} />} Elegir archivo
+        <Button variant="gold" onClick={() => setOpen(true)}>
+          <FileSpreadsheet size={16} /> Importar cierres
         </Button>
-        <Mensaje m={msg} />
+        <ImportarDialog open={open} onClose={() => setOpen(false)} />
       </CardBody>
     </Card>
   );
@@ -107,84 +95,6 @@ function CierreCard({ mes, estado, onDone }: { mes: string | null; estado: 'Abie
         <Button variant={estado === 'Abierto' ? 'danger' : 'primary'} onClick={() => mut.mutate()} disabled={!mes || mut.isPending}>
           {estado === 'Abierto' ? <><Lock size={16} /> Cerrar mes</> : <><Unlock size={16} /> Reabrir mes</>}
         </Button>
-      </CardBody>
-    </Card>
-  );
-}
-
-// ───────────────────────── Venta ─────────────────────────
-function VentaForm({ onDone }: { onDone: () => void }) {
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
-  const mut = useMutation({
-    mutationFn: api.agregarVenta,
-    onSuccess: () => { setMsg({ tipo: 'ok', texto: 'Venta agregada.' }); onDone(); },
-    onError: (e: Error) => setMsg({ tipo: 'error', texto: e.message }),
-  });
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    mut.mutate({
-      fechaVenta: f.get('fecha'),
-      programa: f.get('programa'),
-      cliente: f.get('cliente') || undefined,
-      closer: f.get('closer') || undefined,
-      ticketTotalUsd: Number(f.get('ticket')),
-    });
-  };
-  return (
-    <Card>
-      <CardHeader><CardTitle>Nueva venta</CardTitle></CardHeader>
-      <CardBody>
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-          <Field label="Fecha"><Input type="date" name="fecha" required /></Field>
-          <Field label="Programa">
-            <Select name="programa"><option>Empresario</option><option>Gestor</option></Select>
-          </Field>
-          <Field label="Cliente"><Input name="cliente" placeholder="Opcional" /></Field>
-          <Field label="Closer"><Input name="closer" placeholder="Opcional" /></Field>
-          <Field label="Ticket (USD)"><Input type="number" name="ticket" min="1" step="any" required /></Field>
-          <div className="flex items-end"><Button type="submit" className="w-full" disabled={mut.isPending}>Agregar</Button></div>
-        </form>
-        <Mensaje m={msg} />
-      </CardBody>
-    </Card>
-  );
-}
-
-// ───────────────────────── Cobro ─────────────────────────
-function CobroForm({ onDone }: { onDone: () => void }) {
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
-  const mut = useMutation({
-    mutationFn: api.agregarCobro,
-    onSuccess: () => { setMsg({ tipo: 'ok', texto: 'Cobro agregado.' }); onDone(); },
-    onError: (e: Error) => setMsg({ tipo: 'error', texto: e.message }),
-  });
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    mut.mutate({
-      fechaCobro: f.get('fecha'),
-      mesOriginalVenta: f.get('mesOrigen'),
-      montoUsd: Number(f.get('monto')),
-      programa: f.get('programa'),
-      idVentaOrigen: f.get('idVenta') || undefined,
-    });
-  };
-  return (
-    <Card>
-      <CardHeader><CardTitle>Nuevo cobro</CardTitle></CardHeader>
-      <CardBody>
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-          <Field label="Fecha cobro"><Input type="date" name="fecha" required /></Field>
-          <Field label="Mes venta origen"><Input name="mesOrigen" placeholder="YYYY-MM" pattern="\d{4}-\d{2}" required /></Field>
-          <Field label="Monto (USD)"><Input type="number" name="monto" min="1" step="any" required /></Field>
-          <Field label="Programa">
-            <Select name="programa"><option>Empresario</option><option>Gestor</option></Select>
-          </Field>
-          <Field label="ID venta (opc.)"><Input name="idVenta" placeholder="Opcional" /></Field>
-          <div className="flex items-end"><Button type="submit" className="w-full" disabled={mut.isPending}>Agregar</Button></div>
-        </form>
-        <Mensaje m={msg} />
       </CardBody>
     </Card>
   );

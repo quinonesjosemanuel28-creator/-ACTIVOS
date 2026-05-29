@@ -67,6 +67,47 @@ CREATE TABLE IF NOT EXISTS cierre_mes (
   estado  TEXT NOT NULL DEFAULT 'Abierto' CHECK(estado IN ('Abierto','Cerrado'))
 );
 
+-- ───────── Módulo "Cierres y Clientes" (modelo canónico doble moneda) ─────────
+-- Aditivo: no modifica las tablas previas. cierres ≈ ventas (más rico);
+-- pagos ≈ cobros (superset con ARS). Un cierre tiene muchos pagos.
+CREATE TABLE IF NOT EXISTS cierres (
+  id_cierre        TEXT PRIMARY KEY,
+  fecha_cierre     TEXT NOT NULL,
+  cliente_nombre   TEXT NOT NULL,
+  cliente_mail     TEXT,
+  cliente_telefono TEXT,
+  programa         TEXT NOT NULL CHECK(programa IN ('Cero a Gestor','Empresario')),
+  ticket_total_usd REAL NOT NULL,
+  closer           TEXT,
+  setter           TEXT,
+  funnel           TEXT,
+  referido         TEXT,
+  comentarios      TEXT,
+  unidad_negocio   TEXT NOT NULL DEFAULT 'ACADEMY',
+  estado           TEXT NOT NULL DEFAULT 'Activo' CHECK(estado IN ('Activo','No continúa')),
+  revisar          TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pagos (
+  id_pago         TEXT PRIMARY KEY,
+  id_cierre       TEXT NOT NULL REFERENCES cierres(id_cierre) ON DELETE CASCADE,
+  fecha_pago      TEXT NOT NULL,
+  hora_pago       TEXT,
+  monto_usd       REAL NOT NULL,
+  monto_ars       REAL,
+  cotizacion      REAL,
+  tipo_pago       TEXT NOT NULL CHECK(tipo_pago IN ('Reserva/Seña','Cuota','Pago Completo')),
+  numero_cuota    TEXT,
+  medio_pago      TEXT NOT NULL,
+  comprobante_url TEXT,
+  comentarios     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cierres_fecha ON cierres(fecha_cierre);
+CREATE INDEX IF NOT EXISTS idx_pagos_cierre ON pagos(id_cierre);
+CREATE INDEX IF NOT EXISTS idx_pagos_fecha ON pagos(fecha_pago);
+
+
 CREATE INDEX IF NOT EXISTS idx_ventas_mes ON ventas(mes_venta);
 CREATE INDEX IF NOT EXISTS idx_cobros_mes ON cobros(mes_cobro);
 CREATE INDEX IF NOT EXISTS idx_egresos_mes ON egresos(mes);
@@ -74,4 +115,14 @@ CREATE INDEX IF NOT EXISTS idx_egresos_mes ON egresos(mes);
 
 export function migrar(db: Database.Database): void {
   db.exec(SCHEMA_SQL);
+  // Migraciones aditivas para bases ya creadas (CREATE TABLE IF NOT EXISTS
+  // no agrega columnas nuevas a tablas existentes).
+  agregarColumnaSiFalta(db, 'cierres', 'revisar', 'TEXT');
+}
+
+function agregarColumnaSiFalta(db: Database.Database, tabla: string, columna: string, tipo: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${tabla})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === columna)) {
+    db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${columna} ${tipo}`);
+  }
 }

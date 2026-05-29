@@ -14,6 +14,7 @@ const TITULOS: Record<Vista, string> = {
   historico: 'Histórico',
   marketing: 'Marketing',
   programas: 'Empresario vs Gestor',
+  cierres: 'Cierres y Clientes',
   datos: 'Carga & Admin',
 };
 

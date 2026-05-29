@@ -10,11 +10,20 @@ import cors from 'cors';
 import { ZodError } from 'zod';
 import { getDb } from '../src/infrastructure/sqlite/db';
 import { crearRepositorios } from '../src/infrastructure/sqlite/repos';
+import { crearReposCierres } from '../src/infrastructure/sqlite/cierresRepos';
+import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
+import * as ucc from '../src/application/cierres/useCases';
 import type { Programa } from '../src/domain/types';
 import type { Filtro } from '../src/application/ports';
+import type { FiltrosCierres } from '../src/application/cierres/ports';
 
-const repos = crearRepositorios(getDb());
+const db = getDb();
+// Repo legacy: egresos, funnel, parámetros, cierre_mes e importación.
+const repos = crearRepositorios(db);
+// Repo del dashboard: ventas/cobros provienen de cierres/pagos (adaptador).
+const reposDash = crearRepositoriosDashboard(db);
+const reposCierres = crearReposCierres(db);
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -46,21 +55,22 @@ const h =
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-app.get('/api/meses', h(() => uc.obtenerMeses(repos)));
+// Lecturas del dashboard: usan el adaptador (cierres/pagos → Venta/Cobro).
+app.get('/api/meses', h(() => uc.obtenerMeses(reposDash)));
 
 app.get(
   '/api/dashboard/:mes',
   h((req) =>
-    uc.obtenerDashboardDelMes(repos, param(req, 'mes'), {
+    uc.obtenerDashboardDelMes(reposDash, param(req, 'mes'), {
       filtro: filtroDe(req.query),
       programa: (req.query.programa as 'TODOS' | Programa) ?? 'TODOS',
     }),
   ),
 );
 
-app.get('/api/historico', h((req) => uc.obtenerHistorico(repos, filtroDe(req.query))));
+app.get('/api/historico', h((req) => uc.obtenerHistorico(reposDash, filtroDe(req.query))));
 
-app.get('/api/comparar/:mes', h((req) => uc.compararProgramas(repos, param(req, 'mes'), filtroDe(req.query))));
+app.get('/api/comparar/:mes', h((req) => uc.compararProgramas(reposDash, param(req, 'mes'), filtroDe(req.query))));
 
 app.get('/api/parametros', h(() => repos.parametros.obtener()));
 app.put('/api/parametros', h((req) => uc.guardarParametros(repos, req.body)));
@@ -81,6 +91,34 @@ app.post(
     return uc.importarExcel(repos, req.body);
   }),
 );
+
+// ───────────────────── Módulo "Cierres y Clientes" ─────────────────────
+const filtrosCierresDe = (q: express.Request['query']): FiltrosCierres => ({
+  mes: typeof q.mes === 'string' ? q.mes : undefined,
+  programa: typeof q.programa === 'string' ? (q.programa as FiltrosCierres['programa']) : undefined,
+  closer: typeof q.closer === 'string' ? q.closer : undefined,
+  estado: typeof q.estado === 'string' ? (q.estado as FiltrosCierres['estado']) : undefined,
+  q: typeof q.q === 'string' ? q.q : undefined,
+  unidadNegocio: typeof q.unidad === 'string' ? q.unidad : undefined,
+});
+
+app.get('/api/cierres', h((req) => ucc.listarCierresConPagos(reposCierres, filtrosCierresDe(req.query))));
+app.get('/api/cierres/resumen/:mes', h((req) => ucc.resumenDelMes(reposCierres, param(req, 'mes'), filtrosCierresDe(req.query))));
+app.get('/api/cierres/:id', h((req) => ucc.obtenerCierre(reposCierres, param(req, 'id'))));
+app.post('/api/cierres', h((req) => ucc.crearCierre(reposCierres, req.body)));
+app.put('/api/cierres/:id', h((req) => ucc.editarCierre(reposCierres, param(req, 'id'), req.body)));
+app.delete('/api/cierres/:id', h((req) => ucc.eliminarCierre(reposCierres, param(req, 'id'))));
+
+app.post('/api/cierres/importar', h((req) => ucc.importarCierresPagos(reposCierres, req.body)));
+app.delete('/api/cierres/:id/revisar', h((req) => ucc.quitarRevisar(reposCierres, param(req, 'id'))));
+
+app.post('/api/pagos', h((req) => ucc.agregarPago(reposCierres, req.body)));
+app.put('/api/pagos/:id', h((req) => ucc.editarPago(reposCierres, param(req, 'id'), req.body)));
+app.delete('/api/pagos/:id', h((req) => ucc.eliminarPago(reposCierres, param(req, 'id'))));
+
+// Reseteo seguro
+app.delete('/api/cierres-demo', h(() => ucc.borrarDatosDemo(reposCierres)));
+app.post('/api/cierres-reset', h((req) => ucc.reiniciarCierresYPagos(reposCierres, req.body)));
 
 const PORT = Number(process.env.PORT ?? 8787);
 app.listen(PORT, () => {

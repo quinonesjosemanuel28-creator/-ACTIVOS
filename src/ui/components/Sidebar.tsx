@@ -1,5 +1,5 @@
-/** Navegación lateral entre las pantallas del dashboard. */
-import { AlertTriangle, BarChart3, Database, Filter, LayoutDashboard, LineChart, Megaphone, Users } from 'lucide-react';
+/** Navegación entre pantallas: sidebar en desktop, barra superior en mobile. */
+import { AlertTriangle, BarChart3, Database, Filter, LayoutDashboard, LineChart, Megaphone, Receipt, Users } from 'lucide-react';
 import { useUI, type Vista } from '../store';
 import { cn } from '../lib/utils';
 
@@ -11,9 +11,11 @@ const ITEMS: { id: Vista; label: string; icono: typeof LayoutDashboard }[] = [
   { id: 'historico', label: 'Histórico', icono: LineChart },
   { id: 'marketing', label: 'Marketing', icono: Megaphone },
   { id: 'programas', label: 'Empresario vs Gestor', icono: Users },
+  { id: 'cierres', label: 'Cierres y Clientes', icono: Receipt },
   { id: 'datos', label: 'Carga & Admin', icono: Database },
 ];
 
+/** Sidebar fijo para ≥ md. */
 export function Sidebar() {
   const { vista, setVista } = useUI();
   return (
@@ -44,5 +46,29 @@ export function Sidebar() {
       </nav>
       <p className="px-2 text-xs text-navy-300">v1 · 100% local</p>
     </aside>
+  );
+}
+
+/** Barra de navegación horizontal, scrollable, para < md (mobile/preview). */
+export function MobileNav() {
+  const { vista, setVista } = useUI();
+  return (
+    <nav className="flex gap-1 overflow-x-auto border-b border-navy-100 bg-white/80 px-2 py-2 backdrop-blur md:hidden dark:border-navy-700 dark:bg-navy-900/80 print:hidden">
+      {ITEMS.map(({ id, label, icono: Icono }) => (
+        <button
+          key={id}
+          onClick={() => setVista(id)}
+          className={cn(
+            'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-500 transition-colors',
+            vista === id
+              ? 'bg-navy-900 text-white dark:bg-gold-400 dark:text-navy-900'
+              : 'text-navy-600 hover:bg-navy-100 dark:text-navy-200 dark:hover:bg-navy-800',
+          )}
+        >
+          <Icono size={16} />
+          {label}
+        </button>
+      ))}
+    </nav>
   );
 }
