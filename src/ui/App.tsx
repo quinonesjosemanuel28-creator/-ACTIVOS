@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useMeses } from './hooks';
 import { useUI } from './store';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, MobileNav } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { Spinner } from './components/ui/primitives';
 import { VistaEjecutiva } from './views/VistaEjecutiva';
@@ -28,6 +28,7 @@ export function App() {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
+        <MobileNav />
         <main className="flex-1 p-4 md:p-6">
           {isLoading ? (
             <div className="flex min-h-[50vh] items-center justify-center"><Spinner className="h-8 w-8" /></div>
