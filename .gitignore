@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+
+# Base de datos local (se regenera con `npm run seed`)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+
+# Logs / temporales
+*.log
+.tmp
