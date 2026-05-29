@@ -10,6 +10,7 @@ export type Vista =
   | 'historico'
   | 'marketing'
   | 'programas'
+  | 'cierres'
   | 'datos';
 
 export type FiltroPrograma = 'TODOS' | Programa;

@@ -1,5 +1,5 @@
 /** Navegación lateral entre las pantallas del dashboard. */
-import { AlertTriangle, BarChart3, Database, Filter, LayoutDashboard, LineChart, Megaphone, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, Database, Filter, LayoutDashboard, LineChart, Megaphone, Receipt, Users } from 'lucide-react';
 import { useUI, type Vista } from '../store';
 import { cn } from '../lib/utils';
 
@@ -11,6 +11,7 @@ const ITEMS: { id: Vista; label: string; icono: typeof LayoutDashboard }[] = [
   { id: 'historico', label: 'Histórico', icono: LineChart },
   { id: 'marketing', label: 'Marketing', icono: Megaphone },
   { id: 'programas', label: 'Empresario vs Gestor', icono: Users },
+  { id: 'cierres', label: 'Cierres y Clientes', icono: Receipt },
   { id: 'datos', label: 'Carga & Admin', icono: Database },
 ];
 

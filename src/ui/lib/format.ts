@@ -21,6 +21,18 @@ export function fmtUsd(n: number | null | undefined, cents = false): string {
   return (cents ? usdFmtCents : usdFmt).format(n);
 }
 
+const arsFmt = new Intl.NumberFormat('es-AR', {
+  style: 'currency',
+  currency: 'ARS',
+  maximumFractionDigits: 0,
+});
+
+/** Pesos argentinos (dinero real cobrado). */
+export function fmtArs(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return EM_DASH;
+  return arsFmt.format(n);
+}
+
 export function fmtPct(n: number | null | undefined, digits = 1): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return EM_DASH;
   return `${(n * 100).toFixed(digits)}%`;

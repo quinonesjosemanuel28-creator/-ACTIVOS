@@ -5,6 +5,7 @@
 import type { DashboardSnapshot } from '@domain/dashboard';
 import type { Alerta } from '@domain/alerts';
 import type { EstadoMes, Mes, Parametros, Programa } from '@domain/types';
+import type { Cierre, EstadoSaldo, Pago } from '@domain/cierres/types';
 
 export interface DashboardResult {
   snapshot: DashboardSnapshot;
@@ -31,6 +32,36 @@ export interface MesesResponse {
 export interface CompararResponse {
   empresario: DashboardSnapshot;
   gestor: DashboardSnapshot;
+}
+
+// ───────────────────── Módulo "Cierres y Clientes" ─────────────────────
+
+/** Fila del listado: cierre + pagos + métricas derivadas (espeja FilaCierre). */
+export interface FilaCierre {
+  cierre: Cierre;
+  pagos: Pago[];
+  pagadoUsd: number;
+  pagadoArs: number;
+  pendienteUsd: number;
+  estadoSaldo: EstadoSaldo;
+}
+
+export interface ResumenCierres {
+  mes: Mes;
+  totalCobradoUsd: number;
+  totalCobradoArs: number;
+  cotizacionPonderada: number | null;
+  cantidadCierres: number;
+  cantidadPagos: number;
+}
+
+export interface FiltrosCierresUI {
+  mes?: string;
+  programa?: string;
+  closer?: string;
+  estado?: string;
+  q?: string;
+  unidad?: string;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -79,4 +110,19 @@ export const api = {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Error al importar');
     return res.json();
   },
+
+  // Cierres y Clientes
+  cierres: (f: FiltrosCierresUI = {}) =>
+    req<FilaCierre[]>(`/cierres${qs({ mes: f.mes, programa: f.programa, closer: f.closer, estado: f.estado, q: f.q, unidad: f.unidad })}`),
+  resumenCierres: (mes: Mes, f: Omit<FiltrosCierresUI, 'mes'> = {}) =>
+    req<ResumenCierres>(`/cierres/resumen/${mes}${qs({ programa: f.programa, closer: f.closer, estado: f.estado, q: f.q, unidad: f.unidad })}`),
+  crearCierre: (c: unknown) => req<Cierre>('/cierres', { method: 'POST', body: JSON.stringify(c) }),
+  editarCierre: (id: string, c: unknown) => req<Cierre>(`/cierres/${id}`, { method: 'PUT', body: JSON.stringify(c) }),
+  eliminarCierre: (id: string) => req(`/cierres/${id}`, { method: 'DELETE' }),
+  agregarPago: (p: unknown) => req<Pago>('/pagos', { method: 'POST', body: JSON.stringify(p) }),
+  editarPago: (id: string, p: unknown) => req<Pago>(`/pagos/${id}`, { method: 'PUT', body: JSON.stringify(p) }),
+  eliminarPago: (id: string) => req(`/pagos/${id}`, { method: 'DELETE' }),
+  borrarDatosDemo: () => req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-demo', { method: 'DELETE' }),
+  reiniciarCierres: (confirm: string) =>
+    req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-reset', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };

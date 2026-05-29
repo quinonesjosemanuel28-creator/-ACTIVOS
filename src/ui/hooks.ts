@@ -33,3 +33,9 @@ export function useComparar() {
 export function useParametros() {
   return useQuery({ queryKey: ['parametros'], queryFn: api.parametros });
 }
+
+// ───────────────────── Módulo "Cierres y Clientes" ─────────────────────
+// Fase 3: listado completo (sin filtros). Los filtros/buscador llegan en Fase 5.
+export function useCierres() {
+  return useQuery({ queryKey: ['cierres'], queryFn: () => api.cierres() });
+}
