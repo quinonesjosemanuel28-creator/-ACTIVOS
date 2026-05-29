@@ -25,6 +25,9 @@ const filtroDe = (q: express.Request['query']): Filtro | undefined => {
   return u ? { unidadNegocio: u as Filtro['unidadNegocio'] } : undefined;
 };
 
+/** Lee un parámetro de ruta garantizando string (noUncheckedIndexedAccess). */
+const param = (req: express.Request, nombre: string): string => req.params[nombre] ?? '';
+
 // Wrapper para capturar errores y mapear Zod → 400.
 const h =
   (fn: (req: express.Request, res: express.Response) => unknown) =>
@@ -48,7 +51,7 @@ app.get('/api/meses', h(() => uc.obtenerMeses(repos)));
 app.get(
   '/api/dashboard/:mes',
   h((req) =>
-    uc.obtenerDashboardDelMes(repos, req.params.mes, {
+    uc.obtenerDashboardDelMes(repos, param(req, 'mes'), {
       filtro: filtroDe(req.query),
       programa: (req.query.programa as 'TODOS' | Programa) ?? 'TODOS',
     }),
@@ -57,7 +60,7 @@ app.get(
 
 app.get('/api/historico', h((req) => uc.obtenerHistorico(repos, filtroDe(req.query))));
 
-app.get('/api/comparar/:mes', h((req) => uc.compararProgramas(repos, req.params.mes, filtroDe(req.query))));
+app.get('/api/comparar/:mes', h((req) => uc.compararProgramas(repos, param(req, 'mes'), filtroDe(req.query))));
 
 app.get('/api/parametros', h(() => repos.parametros.obtener()));
 app.put('/api/parametros', h((req) => uc.guardarParametros(repos, req.body)));
@@ -66,10 +69,10 @@ app.post('/api/ventas', h((req) => uc.agregarVenta(repos, req.body)));
 app.post('/api/cobros', h((req) => uc.agregarCobro(repos, req.body)));
 app.post('/api/egresos', h((req) => uc.agregarEgreso(repos, req.body)));
 
-app.put('/api/funnel/:mes', h((req) => uc.guardarFunnel(repos, req.params.mes, req.body, filtroDe(req.query))));
+app.put('/api/funnel/:mes', h((req) => uc.guardarFunnel(repos, param(req, 'mes'), req.body, filtroDe(req.query))));
 
-app.post('/api/cierre/:mes', h((req) => uc.cerrarMes(repos, req.params.mes)));
-app.delete('/api/cierre/:mes', h((req) => uc.reabrirMes(repos, req.params.mes)));
+app.post('/api/cierre/:mes', h((req) => uc.cerrarMes(repos, param(req, 'mes'))));
+app.delete('/api/cierre/:mes', h((req) => uc.reabrirMes(repos, param(req, 'mes'))));
 
 app.post(
   '/api/importar',

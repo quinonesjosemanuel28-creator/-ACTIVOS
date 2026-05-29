@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-navy-50 text-navy-900 font-sans antialiased;
+  }
+  .dark body {
+    @apply bg-navy-950 text-navy-50;
+  }
+  /* Números financieros tabulares para alinear columnas. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-navy-100 bg-white shadow-card transition-shadow;
+  }
+  .dark .card {
+    @apply border-navy-700 bg-navy-800;
+  }
+  .card-hover {
+    @apply hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200;
+  }
+}
+
+/* Exportación a PDF: una página ejecutiva limpia. */
+@media print {
+  body {
+    background: #fff;
+  }
+  .card {
+    box-shadow: none;
+    border: 1px solid #e2e8f0;
+    break-inside: avoid;
+  }
+  main {
+    padding: 0 !important;
+  }
+}

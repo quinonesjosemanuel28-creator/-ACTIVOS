@@ -9,7 +9,7 @@
  * denominador que puede ser 0 (cierres, inversión, cash), devuelve `null`.
  * La UI traduce `null` a "—". Nunca NaN, nunca crash.
  */
-import type { DatosMes, Egreso, Cobro, FunnelMes, Mes, Parametros, Programa } from './types';
+import type { DatosMes, Egreso, Cobro, FunnelMes, Mes, Programa } from './types';
 import { safeDiv, sumBy } from './money';
 
 // ───────────────────────── Helpers de filtrado ─────────────────────────
