@@ -65,6 +65,8 @@ export interface Pago {
   medioPago: MedioPago;
   comprobanteUrl?: string;
   comentarios?: string;
+  /** Closer que cobró ESTE pago. Si falta, hereda el closer del cierre. */
+  closer?: string;
 }
 
 /** Estado de saldo de un cierre, para el badge del listado. */

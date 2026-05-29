@@ -106,6 +106,7 @@ export function FilaCierre({ fila }: { fila: Fila }) {
                       <th className="px-3 py-2 text-right font-600">Cotización</th>
                       <th className="px-3 py-2 text-left font-600">Tipo</th>
                       <th className="px-3 py-2 text-left font-600">Cuota</th>
+                      <th className="px-3 py-2 text-left font-600">Closer</th>
                       <th className="px-3 py-2 text-left font-600">Medio</th>
                       <th className="px-3 py-2 text-right font-600">Acciones</th>
                     </tr>
@@ -119,6 +120,13 @@ export function FilaCierre({ fila }: { fila: Fila }) {
                         <td className="px-3 py-2 text-right tnum text-navy-500 dark:text-navy-300">{p.cotizacion ? fmtNum(Math.round(p.cotizacion)) : '—'}</td>
                         <td className="px-3 py-2 text-navy-600 dark:text-navy-200">{p.tipoPago}</td>
                         <td className="px-3 py-2 text-navy-500 dark:text-navy-300">{p.numeroCuota ?? '—'}</td>
+                        <td className="px-3 py-2">
+                          {p.closer ? (
+                            <span className="font-600 text-navy-900 dark:text-navy-50">{p.closer}</span>
+                          ) : (
+                            <span className="text-navy-400" title="Hereda el closer del cierre">{cierre.closer ?? '—'} <span className="text-[10px]">(hereda)</span></span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-navy-600 dark:text-navy-200">{p.medioPago}</td>
                         <td className="px-3 py-2 whitespace-nowrap text-right">
                           <button className={iconBtn} title="Editar pago" onClick={() => setPagoEditar(p)}><Pencil size={14} /></button>
@@ -145,8 +153,8 @@ export function FilaCierre({ fila }: { fila: Fila }) {
 
       {/* Diálogos */}
       {editarCierre && <CierreFormDialog open onClose={() => setEditarCierre(false)} cierre={cierre} />}
-      {nuevoPago && <PagoFormDialog open onClose={() => setNuevoPago(false)} idCierre={cierre.idCierre} cliente={cierre.clienteNombre} />}
-      {pagoEditar && <PagoFormDialog open onClose={() => setPagoEditar(null)} idCierre={cierre.idCierre} cliente={cierre.clienteNombre} pago={pagoEditar} />}
+      {nuevoPago && <PagoFormDialog open onClose={() => setNuevoPago(false)} idCierre={cierre.idCierre} cliente={cierre.clienteNombre} closerCierre={cierre.closer} />}
+      {pagoEditar && <PagoFormDialog open onClose={() => setPagoEditar(null)} idCierre={cierre.idCierre} cliente={cierre.clienteNombre} closerCierre={cierre.closer} pago={pagoEditar} />}
 
       <ConfirmDialog
         open={borrarCierre}

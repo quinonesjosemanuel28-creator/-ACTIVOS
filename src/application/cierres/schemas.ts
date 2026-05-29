@@ -70,6 +70,7 @@ const pagoImportSchema = z.object({
   numeroCuota: z.string().optional(),
   medioPago: medioPagoSchema,
   comentarios: z.string().optional(),
+  closer: z.string().optional(),
 });
 
 export const importPayloadSchema = z.object({
@@ -92,6 +93,7 @@ export const pagoInputSchema = z
     medioPago: medioPagoSchema,
     comprobanteUrl: z.string().url('URL inválida').optional().or(z.literal('').transform(() => undefined)),
     comentarios: z.string().optional(),
+    closer: z.string().optional(),
   })
   .transform((p) => {
     // Resuelve la triada doble moneda. ARS + USD mandan: la cotización se

@@ -40,9 +40,16 @@ export function VistaCierres() {
   const sinMes = { programa: filtros.programa, closer: filtros.closer, estado: filtros.estado, q: qDebounced };
   const { data: resumenMes } = useResumenCierres(filtros.mes, sinMes);
 
+  // Opciones de closer = closers efectivos (del cierre Y de los pagos), porque
+  // un pago puede tener un closer propio que no es el closer de ningún cierre.
   const closers = useMemo(() => {
     const set = new Set<string>();
-    (todos ?? []).forEach((f) => f.cierre.closer && set.add(f.cierre.closer));
+    (todos ?? []).forEach((f) => {
+      if (f.cierre.closer) set.add(f.cierre.closer);
+      f.pagos.forEach((p) => {
+        if (p.closer) set.add(p.closer);
+      });
+    });
     return [...set].sort();
   }, [todos]);
 

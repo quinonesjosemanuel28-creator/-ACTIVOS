@@ -69,6 +69,17 @@ describe('construirImportacion', () => {
     expect(a.cierres[0]!.idCierre).toBe(b.cierres[0]!.idCierre);
   });
 
+  it('asigna el closer DE CADA FILA al pago; el cierre toma el de la 1ra fila', () => {
+    const r = construirImportacion([
+      fila({ id_cierre: 'C0113', fecha_pago: '2026-03-31', cliente_nombre: 'Cristhian Marín', programa: 'Empresario', closer: 'Julian', monto_usd: 100, medio_pago: 'Transferencia Lemon', tipo_pago: 'Reserva/Seña' }),
+      fila({ id_cierre: 'C0113', fecha_pago: '2026-05-04', cliente_nombre: 'Cristhian Marín', programa: 'Empresario', closer: 'Ayrton', monto_usd: 900, medio_pago: 'Transferencia BBVA', tipo_pago: 'Cuota' }),
+    ]);
+    expect(r.cierres[0]!.closer).toBe('Julian'); // closer de la venta (1ra fila)
+    const pagos = r.pagos.filter((p) => p.idCierre === 'C0113');
+    expect(pagos.find((p) => p.montoUsd === 100)!.closer).toBe('Julian');
+    expect(pagos.find((p) => p.montoUsd === 900)!.closer).toBe('Ayrton');
+  });
+
   it('cierre sin pagos válidos no se crea', () => {
     const r = construirImportacion([
       fila({ id_cierre: 'C9', fecha_pago: 'xx', programa: 'Empresario', monto_usd: 'abc', medio_pago: 'Otro' }),

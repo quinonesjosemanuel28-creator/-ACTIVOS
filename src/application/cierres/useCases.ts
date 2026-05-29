@@ -48,21 +48,46 @@ export interface ResumenMes {
 }
 
 /**
- * Resumen del período para la barra superior del listado: total cobrado
- * USD/ARS de los pagos del mes (respetando los filtros aplicados a los
- * cierres) y la cotización promedio ponderada.
+ * Resumen del período (barra superior del listado). PAGO-CÉNTRICO: suma los
+ * pagos del mes atribuyéndolos por el closer DEL PAGO (efectivo = pago.closer
+ * ?? cierre.closer). Regla de negocio: quien cobra se lleva el crédito.
+ *
+ * - programa/estado/q filtran a nivel cierre (el cierre del pago debe matchear).
+ * - closer filtra a nivel pago (efectivo), no por el closer del cierre. Por eso
+ *   un cobro de Ayrton sobre un cierre cuya venta cerró Julian suma a Ayrton.
+ * - Sin filtro de closer, el total del mes es el cash real del mes (cohortes
+ *   incluidos) y coincide con el total sin filtrar.
  */
 export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCierres): ResumenMes {
-  const cierres = repos.cierres.listar({ ...filtros, mes: undefined });
-  const idsVisibles = new Set(cierres.map((c) => c.idCierre));
-  const pagosVisibles = repos.pagos.listarTodos().filter((p) => idsVisibles.has(p.idCierre));
-  const pagosMes = cm.pagosDelMes(pagosVisibles, mes);
+  // Cierres que matchean los filtros de cierre (programa/estado/q), sin filtro de mes.
+  const cierresMatch = repos.cierres.listar({
+    programa: filtros?.programa,
+    estado: filtros?.estado,
+    q: filtros?.q,
+    unidadNegocio: filtros?.unidadNegocio,
+  });
+  const cierrePorId = new Map(cierresMatch.map((c) => [c.idCierre, c]));
+
+  const closerFiltro = filtros?.closer;
+  const pagosMes = cm.pagosDelMes(repos.pagos.listarTodos(), mes).filter((p) => {
+    const cierre = cierrePorId.get(p.idCierre);
+    if (!cierre) return false; // el cierre no matchea programa/estado/q
+    if (closerFiltro && cm.closerEfectivo(p, cierre) !== closerFiltro) return false;
+    return true;
+  });
+
+  const idsCierres = new Set(pagosMes.map((p) => p.idCierre));
+  const sumUsd = pagosMes.reduce((a, p) => a + p.montoUsd, 0);
+  const conArs = pagosMes.filter((p) => p.montoArs !== undefined && p.montoArs !== null);
+  const sumArs = conArs.reduce((a, p) => a + (p.montoArs ?? 0), 0);
+  const usdConArs = conArs.reduce((a, p) => a + p.montoUsd, 0);
+
   return {
     mes,
-    totalCobradoUsd: cm.cashCollectedUsd(pagosMes, mes),
-    totalCobradoArs: cm.cashCollectedArs(pagosMes, mes),
-    cotizacionPonderada: cm.cotizacionPonderada(pagosMes),
-    cantidadCierres: cm.cierresNuevos(cierres, mes),
+    totalCobradoUsd: sumUsd,
+    totalCobradoArs: sumArs,
+    cotizacionPonderada: usdConArs > 0 ? sumArs / usdConArs : null,
+    cantidadCierres: idsCierres.size,
     cantidadPagos: pagosMes.length,
   };
 }
@@ -130,6 +155,7 @@ export function agregarPago(repos: ReposCierres, input: unknown): Pago {
     medioPago: p.medioPago,
     comprobanteUrl: p.comprobanteUrl,
     comentarios: p.comentarios,
+    closer: p.closer, // closer del pago (si falta, hereda el del cierre al calcular)
   };
   repos.pagos.guardar(pago);
   return pago;
@@ -212,6 +238,7 @@ export function importarCierresPagos(repos: ReposCierres, input: unknown): Impor
       numeroCuota: p.numeroCuota,
       medioPago: p.medioPago,
       comentarios: p.comentarios,
+      closer: p.closer,
     });
   }
   return { cierres: cierres.length, pagos: pagos.length };

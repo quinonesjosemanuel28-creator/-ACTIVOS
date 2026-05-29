@@ -100,7 +100,8 @@ CREATE TABLE IF NOT EXISTS pagos (
   numero_cuota    TEXT,
   medio_pago      TEXT NOT NULL,
   comprobante_url TEXT,
-  comentarios     TEXT
+  comentarios     TEXT,
+  closer          TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_cierres_fecha ON cierres(fecha_cierre);
@@ -118,6 +119,7 @@ export function migrar(db: Database.Database): void {
   // Migraciones aditivas para bases ya creadas (CREATE TABLE IF NOT EXISTS
   // no agrega columnas nuevas a tablas existentes).
   agregarColumnaSiFalta(db, 'cierres', 'revisar', 'TEXT');
+  agregarColumnaSiFalta(db, 'pagos', 'closer', 'TEXT');
 }
 
 function agregarColumnaSiFalta(db: Database.Database, tabla: string, columna: string, tipo: string): void {

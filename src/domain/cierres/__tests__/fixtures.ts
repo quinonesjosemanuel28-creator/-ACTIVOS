@@ -34,5 +34,6 @@ export function pago(p: Partial<Pago> = {}): Pago {
     medioPago: p.medioPago ?? 'Transferencia Lemon',
     comprobanteUrl: p.comprobanteUrl,
     comentarios: p.comentarios,
+    closer: p.closer,
   };
 }

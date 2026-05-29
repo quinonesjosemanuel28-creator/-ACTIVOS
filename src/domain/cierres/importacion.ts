@@ -159,6 +159,8 @@ export function construirImportacion(filas: readonly FilaPagoCruda[]): Resultado
         numeroCuota: txt(fila.numero_cuota),
         medioPago: medio(fila.medio_pago),
         comentarios: txt(fila.comentarios),
+        // Closer DE ESTA FILA: quien cobró este pago (puede diferir del cierre).
+        closer: txt(fila.closer),
       });
     }
 

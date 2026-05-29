@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "seed": "tsx server/scripts/seed.ts",
+    "backfill:closer": "tsx server/scripts/backfill-closer-pagos.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit"

@@ -12,6 +12,8 @@ interface Props {
   onClose: () => void;
   idCierre: string;
   cliente?: string;
+  /** Closer de la venta: default del campo cuando el pago no tiene closer propio. */
+  closerCierre?: string;
   pago?: Pago; // si viene, es edición
 }
 
@@ -31,7 +33,7 @@ const numOrUndef = (s: string): number | undefined => {
   return s.trim() !== '' && Number.isFinite(n) ? n : undefined;
 };
 
-export function PagoFormDialog({ open, onClose, idCierre, cliente, pago }: Props) {
+export function PagoFormDialog({ open, onClose, idCierre, cliente, closerCierre, pago }: Props) {
   const esEdicion = !!pago;
   const agregar = useAgregarPago();
   const editar = useEditarPago();
@@ -61,6 +63,7 @@ export function PagoFormDialog({ open, onClose, idCierre, cliente, pago }: Props
       tipoPago: f.get('tipoPago'),
       numeroCuota: (f.get('numeroCuota') as string) || undefined,
       medioPago: f.get('medioPago'),
+      closer: (f.get('closer') as string) || undefined,
       comprobanteUrl: (f.get('comprobanteUrl') as string) || undefined,
       comentarios: (f.get('comentarios') as string) || undefined,
     };
@@ -103,6 +106,9 @@ export function PagoFormDialog({ open, onClose, idCierre, cliente, pago }: Props
           </Select>
         </Field>
         <Field label="N° de cuota (opcional)"><Input name="numeroCuota" defaultValue={pago?.numeroCuota} placeholder="1/2, 2/3…" /></Field>
+        <Field label="Closer (quién cobró este pago)">
+          <Input name="closer" defaultValue={pago?.closer ?? closerCierre} placeholder={closerCierre ? `${closerCierre} (del cierre)` : 'Closer'} />
+        </Field>
         <Field label="Medio de pago">
           <Select name="medioPago" defaultValue={pago?.medioPago ?? 'Transferencia Lemon'}>
             {MEDIOS.map((m) => <option key={m}>{m}</option>)}

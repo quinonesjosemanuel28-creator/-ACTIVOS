@@ -67,6 +67,7 @@ interface PagoRow {
   medio_pago: string;
   comprobante_url: string | null;
   comentarios: string | null;
+  closer: string | null;
 }
 const toPago = (r: PagoRow): Pago => ({
   idPago: r.id_pago,
@@ -81,6 +82,7 @@ const toPago = (r: PagoRow): Pago => ({
   medioPago: r.medio_pago as MedioPago,
   comprobanteUrl: r.comprobante_url ?? undefined,
   comentarios: r.comentarios ?? undefined,
+  closer: r.closer ?? undefined,
 });
 
 export function crearReposCierres(db: Database.Database): ReposCierres {
@@ -101,7 +103,11 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         params.push(filtros.programa);
       }
       if (filtros.closer) {
-        where.push('closer = ?');
+        // "Cierres donde ese closer cobró ≥1 pago" (closer efectivo del pago =
+        // pago.closer, o el del cierre si el pago no tiene closer propio).
+        where.push(
+          'EXISTS (SELECT 1 FROM pagos p WHERE p.id_cierre = cierres.id_cierre AND COALESCE(p.closer, cierres.closer) = ?)',
+        );
         params.push(filtros.closer);
       }
       if (filtros.estado) {
@@ -165,9 +171,9 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
       db.prepare(
         `INSERT OR REPLACE INTO pagos
          (id_pago, id_cierre, fecha_pago, hora_pago, monto_usd, monto_ars, cotizacion,
-          tipo_pago, numero_cuota, medio_pago, comprobante_url, comentarios)
+          tipo_pago, numero_cuota, medio_pago, comprobante_url, comentarios, closer)
          VALUES (@idPago,@idCierre,@fechaPago,@horaPago,@montoUsd,@montoArs,@cotizacion,
-          @tipoPago,@numeroCuota,@medioPago,@comprobanteUrl,@comentarios)`,
+          @tipoPago,@numeroCuota,@medioPago,@comprobanteUrl,@comentarios,@closer)`,
       ).run({
         ...p,
         horaPago: p.horaPago ?? null,
@@ -176,6 +182,7 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         numeroCuota: p.numeroCuota ?? null,
         comprobanteUrl: p.comprobanteUrl ?? null,
         comentarios: p.comentarios ?? null,
+        closer: p.closer ?? null,
       });
     },
     eliminar(id) {
