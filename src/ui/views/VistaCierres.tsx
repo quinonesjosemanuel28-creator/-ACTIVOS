@@ -1,16 +1,22 @@
 /**
- * Pantalla "Cierres y Clientes" — Fase 3: listado + detalle expandible.
- * Solo lectura. Formularios CRUD (Fase 4) y filtros/resumen (Fase 5) luego.
+ * Pantalla "Cierres y Clientes" — Fase 4: listado + detalle + CRUD + reset.
+ * Cargar/editar/eliminar recalcula el dashboard al instante (adaptador +
+ * invalidación de queries). Filtros/buscador/resumen llegan en Fase 5.
  */
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { useCierres } from '../hooks';
-import { Card, Spinner } from '../components/ui/primitives';
+import { Button, Card, Spinner } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import { FilaCierre } from '../components/cierres/FilaCierre';
+import { CierreFormDialog } from '../components/cierres/CierreFormDialog';
+import { ZonaAdmin } from '../components/cierres/ZonaAdmin';
 
 const TH = 'px-3 py-2.5 text-left text-xs font-600 uppercase tracking-wide text-navy-400';
 
 export function VistaCierres() {
   const { data, isLoading, error } = useCierres();
+  const [nuevo, setNuevo] = useState(false);
 
   if (isLoading)
     return <div className="flex min-h-[40vh] items-center justify-center"><Spinner className="h-8 w-8" /></div>;
@@ -23,14 +29,16 @@ export function VistaCierres() {
     <div>
       <SectionHeader
         titulo="Cierres y Clientes"
-        descripcion="Cada venta y sus pagos. El negocio cierra en USD y cobra en ARS — ves ambas monedas. Tocá una fila para ver sus pagos."
+        descripcion="Cada venta y sus pagos, en USD y ARS. Cargar o editar mueve también los KPIs del dashboard."
+        accion={<Button onClick={() => setNuevo(true)}><Plus size={16} /> Nuevo cierre</Button>}
       />
 
       {filas.length === 0 ? (
         <div className="mx-auto mt-16 max-w-md text-center">
           <h3 className="font-display text-xl font-700 text-navy-900 dark:text-navy-50">Sin cierres todavía</h3>
           <p className="mt-2 text-sm text-navy-500 dark:text-navy-300">
-            Corré <code className="rounded bg-navy-100 px-1.5 py-0.5 dark:bg-navy-700">npm run seed</code> para ver datos demo, o cargá uno desde Carga & Admin (Fase 4).
+            Cargá tu primer cierre con el botón <b>Nuevo cierre</b>, o corré{' '}
+            <code className="rounded bg-navy-100 px-1.5 py-0.5 dark:bg-navy-700">npm run seed</code> para datos demo.
           </p>
         </div>
       ) : (
@@ -50,6 +58,7 @@ export function VistaCierres() {
                   <th className={`${TH} text-right`}>Pagado ARS</th>
                   <th className={`${TH} text-right`}>Pendiente USD</th>
                   <th className={`${TH} text-center`}>Estado</th>
+                  <th className={`${TH} text-right`}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -61,6 +70,10 @@ export function VistaCierres() {
           </div>
         </Card>
       )}
+
+      <ZonaAdmin />
+
+      {nuevo && <CierreFormDialog open onClose={() => setNuevo(false)} />}
     </div>
   );
 }

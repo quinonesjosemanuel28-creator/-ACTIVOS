@@ -73,8 +73,8 @@ describe('Cierres · filtros, buscador y resumen', () => {
   it('busca por nombre/mail', () => {
     const { repos } = setupConDemo();
     const r = ucc.listarCierresConPagos(repos, { q: 'lucía' });
-    expect(r.length).toBe(1);
-    expect(r[0]!.cierre.clienteNombre).toContain('Lucía');
+    expect(r.length).toBeGreaterThanOrEqual(1);
+    expect(r.every((f) => f.cierre.clienteNombre.toLowerCase().includes('lucía'))).toBe(true);
   });
 
   it('resumen del mes: totales USD/ARS y cotización ponderada', () => {

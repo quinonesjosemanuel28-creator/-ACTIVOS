@@ -11,6 +11,7 @@ import { ZodError } from 'zod';
 import { getDb } from '../src/infrastructure/sqlite/db';
 import { crearRepositorios } from '../src/infrastructure/sqlite/repos';
 import { crearReposCierres } from '../src/infrastructure/sqlite/cierresRepos';
+import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
 import * as ucc from '../src/application/cierres/useCases';
 import type { Programa } from '../src/domain/types';
@@ -18,7 +19,10 @@ import type { Filtro } from '../src/application/ports';
 import type { FiltrosCierres } from '../src/application/cierres/ports';
 
 const db = getDb();
+// Repo legacy: egresos, funnel, parámetros, cierre_mes e importación.
 const repos = crearRepositorios(db);
+// Repo del dashboard: ventas/cobros provienen de cierres/pagos (adaptador).
+const reposDash = crearRepositoriosDashboard(db);
 const reposCierres = crearReposCierres(db);
 const app = express();
 app.use(cors());
@@ -51,21 +55,22 @@ const h =
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-app.get('/api/meses', h(() => uc.obtenerMeses(repos)));
+// Lecturas del dashboard: usan el adaptador (cierres/pagos → Venta/Cobro).
+app.get('/api/meses', h(() => uc.obtenerMeses(reposDash)));
 
 app.get(
   '/api/dashboard/:mes',
   h((req) =>
-    uc.obtenerDashboardDelMes(repos, param(req, 'mes'), {
+    uc.obtenerDashboardDelMes(reposDash, param(req, 'mes'), {
       filtro: filtroDe(req.query),
       programa: (req.query.programa as 'TODOS' | Programa) ?? 'TODOS',
     }),
   ),
 );
 
-app.get('/api/historico', h((req) => uc.obtenerHistorico(repos, filtroDe(req.query))));
+app.get('/api/historico', h((req) => uc.obtenerHistorico(reposDash, filtroDe(req.query))));
 
-app.get('/api/comparar/:mes', h((req) => uc.compararProgramas(repos, param(req, 'mes'), filtroDe(req.query))));
+app.get('/api/comparar/:mes', h((req) => uc.compararProgramas(reposDash, param(req, 'mes'), filtroDe(req.query))));
 
 app.get('/api/parametros', h(() => repos.parametros.obtener()));
 app.put('/api/parametros', h((req) => uc.guardarParametros(repos, req.body)));

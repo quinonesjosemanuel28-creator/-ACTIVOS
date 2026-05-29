@@ -1,134 +1,130 @@
 /**
  * CAPA 4 — INFRAESTRUCTURA · Seed demo del módulo Cierres y Clientes.
  *
- * Genera cierres con pagos en ARS y cotización creciente realista. Todos
- * los IDs llevan el prefijo DEMO- para que "Borrar datos de demostración"
- * los limpie con precisión sin tocar datos cargados a mano.
+ * Dataset rico multi-mes (Nov 2025 → May 2026). Como con el adaptador los
+ * cierres/pagos alimentan TAMBIÉN el dashboard, este seed está dimensionado
+ * para que el cash quede en escala sana frente a los egresos demo (márgenes,
+ * runway, etc. con sentido). Todos los pagos llevan ARS + cotización por mes.
+ *
+ * IDs con prefijo DEMO- para que "Borrar datos de demostración" sea preciso.
  */
-import type { Cierre, MedioPago, Pago, ProgramaCierre, TipoPago } from '../../domain/cierres/types';
+import type { Cierre, MedioPago, Pago, ProgramaCierre } from '../../domain/cierres/types';
 import type { ReposCierres } from '../../application/cierres/ports';
 import { DEMO_PREFIX } from '../sqlite/cierresRepos';
 
-interface PlanPago {
-  offsetMes: number; // 0 = mismo mes del cierre; 1 = mes siguiente (cohorte)
-  dia: number;
-  fraccionUsd: number; // fracción del ticket
-  tipo: TipoPago;
-  cuota?: string;
-  medio: MedioPago;
-}
+const MESES = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05'];
+const CLOSERS = ['Ana', 'Bruno', 'Caro'];
+const SETTERS = ['Diego', 'Eva'];
+const FUNNELS = ['IG Ads', 'Webinar', 'Referido'];
+const MEDIOS: MedioPago[] = ['Transferencia Lemon', 'Transferencia BBVA', 'Transferencia MP', 'CRYPTO', 'Hotmart', 'Dólares'];
 
-interface PlanCierre {
-  mes: string; // YYYY-MM
-  dia: number;
-  nombre: string;
-  programa: ProgramaCierre;
-  ticket: number;
-  closer: string;
-  setter: string;
-  funnel: string;
-  pagos: PlanPago[];
-}
-
-/** Cotización por mes (ARS por USD), creciente. */
+/** Cotización ARS/USD por mes (creciente y realista). */
 const COTIZACION: Record<string, number> = {
-  '2026-01': 1050,
+  '2025-11': 980,
+  '2025-12': 1010,
+  '2026-01': 1060,
   '2026-02': 1120,
   '2026-03': 1180,
   '2026-04': 1240,
   '2026-05': 1300,
 };
 
-const sumarMes = (mes: string, n: number): string => {
-  const [y, m] = mes.split('-').map(Number) as [number, number];
-  const d = new Date(Date.UTC(y, m - 1 + n, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-};
-
-const PLAN: PlanCierre[] = [
-  {
-    mes: '2026-03', dia: 4, nombre: 'Lucía Fernández', programa: 'Empresario', ticket: 3000,
-    closer: 'Ana', setter: 'Diego', funnel: 'IG Ads',
-    pagos: [
-      { offsetMes: 0, dia: 4, fraccionUsd: 0.4, tipo: 'Reserva/Seña', medio: 'Transferencia Lemon' },
-      { offsetMes: 0, dia: 18, fraccionUsd: 0.3, tipo: 'Cuota', cuota: '1/2', medio: 'Transferencia BBVA' },
-      { offsetMes: 1, dia: 10, fraccionUsd: 0.3, tipo: 'Cuota', cuota: '2/2', medio: 'Transferencia BBVA' },
-    ],
-  },
-  {
-    mes: '2026-03', dia: 9, nombre: 'Marcos Pérez', programa: 'Cero a Gestor', ticket: 1200,
-    closer: 'Bruno', setter: 'Eva', funnel: 'Webinar',
-    pagos: [{ offsetMes: 0, dia: 9, fraccionUsd: 1, tipo: 'Pago Completo', medio: 'CRYPTO' }],
-  },
-  {
-    mes: '2026-03', dia: 15, nombre: 'Sofía Gómez', programa: 'Cero a Gestor', ticket: 1200,
-    closer: 'Caro', setter: 'Diego', funnel: 'Referido',
-    pagos: [{ offsetMes: 0, dia: 15, fraccionUsd: 0.5, tipo: 'Reserva/Seña', medio: 'Transferencia MP' }],
-  },
-  {
-    mes: '2026-04', dia: 3, nombre: 'Diego Romero', programa: 'Empresario', ticket: 3200,
-    closer: 'Ana', setter: 'Eva', funnel: 'IG Ads',
-    pagos: [
-      { offsetMes: 0, dia: 3, fraccionUsd: 0.5, tipo: 'Reserva/Seña', medio: 'Dólares' },
-      { offsetMes: 0, dia: 22, fraccionUsd: 0.5, tipo: 'Pago Completo', medio: 'Transferencia Lemon' },
-    ],
-  },
-  {
-    mes: '2026-04', dia: 11, nombre: 'Valentina Díaz', programa: 'Cero a Gestor', ticket: 1300,
-    closer: 'Bruno', setter: 'Diego', funnel: 'Webinar',
-    pagos: [{ offsetMes: 0, dia: 11, fraccionUsd: 1, tipo: 'Pago Completo', medio: 'Hotmart' }],
-  },
-  {
-    mes: '2026-05', dia: 6, nombre: 'Tomás Acosta', programa: 'Empresario', ticket: 3500,
-    closer: 'Caro', setter: 'Eva', funnel: 'IG Ads',
-    pagos: [
-      { offsetMes: 0, dia: 6, fraccionUsd: 0.4, tipo: 'Reserva/Seña', medio: 'Transferencia Lemon' },
-      { offsetMes: 0, dia: 20, fraccionUsd: 0.3, tipo: 'Cuota', cuota: '1/2', medio: 'Transferencia BBVA' },
-    ],
-  },
-  {
-    mes: '2026-05', dia: 14, nombre: 'Camila Ruiz', programa: 'Cero a Gestor', ticket: 1300,
-    closer: 'Ana', setter: 'Diego', funnel: 'Referido',
-    pagos: [{ offsetMes: 0, dia: 14, fraccionUsd: 0.5, tipo: 'Reserva/Seña', medio: 'Transferencia MP' }],
-  },
+const NOMBRES = [
+  'Lucía Fernández', 'Marcos Pérez', 'Sofía Gómez', 'Diego Romero', 'Valentina Díaz', 'Tomás Acosta',
+  'Camila Ruiz', 'Joaquín Silva', 'Martina López', 'Nicolás Sosa', 'Julieta Castro', 'Federico Moyano',
+  'Agustina Vega', 'Ramiro Ledesma', 'Florencia Imoff', 'Bruno Cabrera', 'Carla Ponce', 'Iván Quiroga',
+  'Paula Méndez', 'Gonzalo Ferreyra', 'Daniela Ríos', 'Matías Bravo', 'Rocío Herrera', 'Lautaro Vidal',
+  'Micaela Suárez', 'Emiliano Paz', 'Brenda Ojeda', 'Santiago Núñez', 'Abril Medina', 'Franco Aguirre',
+  'Pilar Domínguez', 'Hernán Cáceres', 'Tatiana Vera', 'Maximiliano Roldán', 'Guadalupe Ferrari',
+  'Ezequiel Maidana', 'Antonella Pérez', 'Cristian Ávalos', 'Renata Salas', 'Bautista Correa',
 ];
 
+// PRNG determinista para reproducibilidad.
+function rng(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+}
+
+const TICKET: Record<ProgramaCierre, number> = { Empresario: 3000, 'Cero a Gestor': 1200 };
+
+const dosDec = (n: number) => Math.round(n * 100) / 100;
+
 export function generarCierresDemo(): { cierres: Cierre[]; pagos: Pago[] } {
+  const rand = rng(7);
   const cierres: Cierre[] = [];
   const pagos: Pago[] = [];
-  PLAN.forEach((p, i) => {
-    const idCierre = `${DEMO_PREFIX}CL-${i}`;
-    cierres.push({
-      idCierre,
-      fechaCierre: `${p.mes}-${String(p.dia).padStart(2, '0')}`,
-      clienteNombre: p.nombre,
-      clienteMail: `${p.nombre.toLowerCase().replace(/[^a-z]/g, '.')}@mail.com`,
-      clienteTelefono: `+54 9 11 ${1000 + i}-${2000 + i}`,
-      programa: p.programa,
-      ticketTotalUsd: p.ticket,
-      closer: p.closer,
-      setter: p.setter,
-      funnel: p.funnel,
-      unidadNegocio: 'ACADEMY',
-      estado: 'Activo',
-    });
-    p.pagos.forEach((pg, j) => {
-      const mesPago = sumarMes(p.mes, pg.offsetMes);
-      const cotiz = COTIZACION[mesPago] ?? 1300;
-      const montoUsd = Math.round(p.ticket * pg.fraccionUsd);
-      pagos.push({
-        idPago: `${DEMO_PREFIX}PG-${i}-${j}`,
-        idCierre,
-        fechaPago: `${mesPago}-${String(pg.dia).padStart(2, '0')}`,
-        montoUsd,
-        montoArs: montoUsd * cotiz,
-        cotizacion: cotiz,
-        tipoPago: pg.tipo,
-        numeroCuota: pg.cuota,
-        medioPago: pg.medio,
-      });
-    });
+  let nombreIdx = 0;
+
+  MESES.forEach((mes, idx) => {
+    const cotiz = COTIZACION[mes] ?? 1300;
+    const dia = (n: number) => `${mes}-${String((n % 27) + 1).padStart(2, '0')}`;
+    const cierresEmp = 3 + Math.floor(rand() * 2) + Math.floor(idx / 3); // 3..6
+    const cierresGes = 3 + Math.floor(rand() * 3); // 3..5
+
+    const generar = (programa: ProgramaCierre, cantidad: number) => {
+      for (let i = 0; i < cantidad; i++) {
+        const idCierre = `${DEMO_PREFIX}CL-${mes}-${programa[0]}${i}`;
+        const ticket = Math.round(TICKET[programa] * (0.85 + rand() * 0.4));
+        const closer = programa === 'Empresario' && idx < 2 ? 'Ana' : CLOSERS[Math.floor(rand() * CLOSERS.length)]!;
+        const nombre = NOMBRES[nombreIdx % NOMBRES.length]!;
+        nombreIdx++;
+        cierres.push({
+          idCierre,
+          fechaCierre: dia(i * 3 + 2),
+          clienteNombre: nombre,
+          clienteMail: `${nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]+/g, '.')}@mail.com`,
+          clienteTelefono: `+54 9 11 ${4000 + nombreIdx}-${5000 + i}`,
+          programa,
+          ticketTotalUsd: ticket,
+          closer,
+          setter: SETTERS[Math.floor(rand() * SETTERS.length)],
+          funnel: FUNNELS[Math.floor(rand() * FUNNELS.length)],
+          unidadNegocio: 'ACADEMY',
+          estado: 'Activo',
+        });
+
+        // Anticipo (cash nuevo, mismo mes)
+        const fracAnticipo = 0.5 + rand() * 0.2;
+        const anticipoUsd = Math.round(ticket * fracAnticipo);
+        const esCompleto = fracAnticipo > 0.66;
+        pagos.push({
+          idPago: `${DEMO_PREFIX}PG-${idCierre}-0`,
+          idCierre,
+          fechaPago: dia(i * 3 + 4),
+          montoUsd: anticipoUsd,
+          montoArs: dosDec(anticipoUsd * cotiz),
+          cotizacion: cotiz,
+          tipoPago: esCompleto ? 'Pago Completo' : 'Reserva/Seña',
+          medioPago: MEDIOS[Math.floor(rand() * MEDIOS.length)]!,
+        });
+
+        // Saldo en el mes siguiente (cohorte), a la cotización de ESE mes
+        const restoUsd = ticket - anticipoUsd;
+        const sig = MESES[idx + 1];
+        if (sig && restoUsd > 0) {
+          const cotizSig = COTIZACION[sig] ?? cotiz;
+          pagos.push({
+            idPago: `${DEMO_PREFIX}PG-${idCierre}-1`,
+            idCierre,
+            fechaPago: `${sig}-12`,
+            montoUsd: restoUsd,
+            montoArs: dosDec(restoUsd * cotizSig),
+            cotizacion: cotizSig,
+            tipoPago: 'Cuota',
+            numeroCuota: '2/2',
+            medioPago: MEDIOS[Math.floor(rand() * MEDIOS.length)]!,
+          });
+        }
+      }
+    };
+
+    generar('Empresario', cierresEmp);
+    generar('Cero a Gestor', cierresGes);
   });
+
   return { cierres, pagos };
 }
 

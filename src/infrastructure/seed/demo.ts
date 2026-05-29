@@ -137,3 +137,16 @@ export function sembrarDemo(repos: Repositorios): { ventas: number; cobros: numb
   repos.parametros.guardar(data.parametros);
   return { ventas: data.ventas.length, cobros: data.cobros.length, egresos: data.egresos.length };
 }
+
+/**
+ * Siembra SOLO la base que el modelo de cierres no incluye: egresos, funnel
+ * y parámetros. Se usa junto a sembrarCierresDemo cuando cierres/pagos son
+ * la fuente canónica del dashboard (no se siembran ventas/cobros legacy).
+ */
+export function sembrarBaseDemo(repos: Repositorios): { egresos: number } {
+  const data = generarDemo();
+  data.egresos.forEach((e) => repos.egresos.insertar(e));
+  data.funnels.forEach((f) => repos.funnel.guardar(f.mes, f.funnel));
+  repos.parametros.guardar(data.parametros);
+  return { egresos: data.egresos.length };
+}
