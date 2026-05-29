@@ -1,6 +1,6 @@
 /** Hooks de server-state (TanStack Query) sobre el cliente API. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from './lib/api';
+import { api, type FiltrosCierresUI } from './lib/api';
 import { useUI } from './store';
 
 export function useMeses() {
@@ -35,9 +35,24 @@ export function useParametros() {
 }
 
 // ───────────────────── Módulo "Cierres y Clientes" ─────────────────────
-// Fase 3: listado completo (sin filtros). Los filtros/buscador llegan en Fase 5.
+
+/** Listado completo sin filtros (también sirve para poblar opciones). */
 export function useCierres() {
-  return useQuery({ queryKey: ['cierres'], queryFn: () => api.cierres() });
+  return useQuery({ queryKey: ['cierres', 'todos'], queryFn: () => api.cierres() });
+}
+
+/** Listado filtrado (Fase 5). */
+export function useCierresFiltrados(filtros: FiltrosCierresUI) {
+  return useQuery({ queryKey: ['cierres', 'filtrados', filtros], queryFn: () => api.cierres(filtros) });
+}
+
+/** Resumen del mes (solo cuando hay un mes concreto seleccionado). */
+export function useResumenCierres(mes: string | undefined, filtros: Omit<FiltrosCierresUI, 'mes'>) {
+  return useQuery({
+    queryKey: ['cierres', 'resumen', mes, filtros],
+    queryFn: () => api.resumenCierres(mes!, filtros),
+    enabled: !!mes && mes !== 'TODOS',
+  });
 }
 
 /**
