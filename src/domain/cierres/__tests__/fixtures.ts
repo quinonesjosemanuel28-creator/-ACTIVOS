@@ -35,5 +35,7 @@ export function pago(p: Partial<Pago> = {}): Pago {
     comprobanteUrl: p.comprobanteUrl,
     comentarios: p.comentarios,
     closer: p.closer,
+    aplicaSetting: p.aplicaSetting,
+    setter: p.setter,
   };
 }

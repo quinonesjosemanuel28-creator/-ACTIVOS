@@ -12,7 +12,9 @@ import { getDb } from '../src/infrastructure/sqlite/db';
 import { crearRepositorios } from '../src/infrastructure/sqlite/repos';
 import { crearReposCierres } from '../src/infrastructure/sqlite/cierresRepos';
 import { crearEgresosAdminRepo } from '../src/infrastructure/sqlite/egresosRepos';
+import { crearLiquidacionRepo } from '../src/infrastructure/sqlite/comisionesRepos';
 import * as uce from '../src/application/egresos/useCases';
+import * as ucom from '../src/application/comisiones/useCases';
 import type { FiltrosEgresos } from '../src/application/egresos/useCases';
 import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
@@ -28,6 +30,7 @@ const repos = crearRepositorios(db);
 const reposDash = crearRepositoriosDashboard(db);
 const reposCierres = crearReposCierres(db);
 const reposEgresos = crearEgresosAdminRepo(db);
+const reposLiquidacion = crearLiquidacionRepo(db);
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -94,6 +97,14 @@ app.get('/api/egresos/resumen/:mes', h((req) => uce.resumenEgresos(reposEgresos,
 app.post('/api/egresos', h((req) => uce.crearEgreso(reposEgresos, req.body)));
 app.put('/api/egresos/:id', h((req) => uce.editarEgreso(reposEgresos, param(req, 'id'), req.body)));
 app.delete('/api/egresos/:id', h((req) => uce.eliminarEgreso(reposEgresos, param(req, 'id'))));
+
+// Comisiones (cálculo automático + liquidación idempotente)
+app.get('/api/comisiones/liquidaciones', h(() => ucom.listarLiquidaciones(reposLiquidacion)));
+app.get('/api/comisiones/:mes', h((req) => ucom.obtenerEstado(reposCierres, reposLiquidacion, param(req, 'mes'))));
+app.post('/api/comisiones/liquidar/:mes', h((req) =>
+  ucom.liquidarComisiones(reposCierres, reposEgresos, reposLiquidacion, param(req, 'mes'), { reemplazar: req.body?.reemplazar === true }),
+));
+app.delete('/api/comisiones/liquidar/:mes', h((req) => ucom.anularLiquidacion(reposEgresos, reposLiquidacion, param(req, 'mes'))));
 
 app.put('/api/funnel/:mes', h((req) => uc.guardarFunnel(repos, param(req, 'mes'), req.body, filtroDe(req.query))));
 

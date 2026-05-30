@@ -16,6 +16,7 @@ const TITULOS: Record<Vista, string> = {
   programas: 'Empresario vs Gestor',
   cierres: 'Cierres y Clientes',
   egresos: 'Egresos',
+  comisiones: 'Comisiones',
   datos: 'Carga & Admin',
 };
 

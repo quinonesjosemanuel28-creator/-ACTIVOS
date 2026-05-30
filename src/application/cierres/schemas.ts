@@ -94,6 +94,8 @@ export const pagoInputSchema = z
     comprobanteUrl: z.string().url('URL inválida').optional().or(z.literal('').transform(() => undefined)),
     comentarios: z.string().optional(),
     closer: z.string().optional(),
+    aplicaSetting: z.boolean().optional(),
+    setter: z.string().optional(),
   })
   .transform((p) => {
     // Resuelve la triada doble moneda. ARS + USD mandan: la cotización se

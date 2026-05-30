@@ -67,6 +67,10 @@ export interface Pago {
   comentarios?: string;
   /** Closer que cobró ESTE pago. Si falta, hereda el closer del cierre. */
   closer?: string;
+  /** Si true, este pago genera comisión de setting (2%). Manual, por pago. */
+  aplicaSetting?: boolean;
+  /** Setter que cobra el 2%. Si falta, hereda el setter del cierre. */
+  setter?: string;
 }
 
 /** Estado de saldo de un cierre, para el badge del listado. */

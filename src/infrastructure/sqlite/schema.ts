@@ -126,6 +126,19 @@ export function migrar(db: Database.Database): void {
   agregarColumnaSiFalta(db, 'egresos', 'recurrente', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'egresos', 'medio_pago', 'TEXT');
   agregarColumnaSiFalta(db, 'egresos', 'comentarios', 'TEXT');
+  // Comisiones: flags de setting a nivel de pago + registro de liquidaciones.
+  agregarColumnaSiFalta(db, 'pagos', 'aplica_setting', 'INTEGER NOT NULL DEFAULT 0');
+  agregarColumnaSiFalta(db, 'pagos', 'setter', 'TEXT');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comisiones_liquidacion (
+      mes               TEXT PRIMARY KEY,
+      fecha_liquidacion TEXT NOT NULL,
+      total_ars         REAL NOT NULL,
+      total_usd         REAL NOT NULL,
+      cotizacion        REAL,
+      id_egreso         TEXT NOT NULL
+    );
+  `);
 }
 
 function agregarColumnaSiFalta(db: Database.Database, tabla: string, columna: string, tipo: string): void {

@@ -109,7 +109,8 @@ export function generarDemo(): SeedData {
 
     const marketing = 1500 + idx * 250 + Math.round(rand() * 500);
     eg('mkt', 1, 'Marketing y publicidad', 'Pauta IG/Meta', marketing);
-    eg('com', 20, 'Comisiones', 'Comisiones closers (carga manual)', Math.round((cierresEmp + cierresGes) * 180));
+    // Comisiones: NO se siembran a mano; se generan al "Liquidar comisiones"
+    // desde la sección Comisiones (egreso COMI-<mes>), evitando doble conteo.
     eg('tec', 2, 'Infraestructura y tecnología', 'SaaS / CRM / hosting', 350);
     eg('sue', 3, 'Sueldos', 'Equipo', 4200);
     if (rand() > 0.5) eg('var', 12, 'Gastos variables', 'Viáticos / varios', 120 + Math.round(rand() * 200));

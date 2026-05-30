@@ -164,6 +164,8 @@ export function agregarPago(repos: ReposCierres, input: unknown): Pago {
     comprobanteUrl: p.comprobanteUrl,
     comentarios: p.comentarios,
     closer: p.closer, // closer del pago (si falta, hereda el del cierre al calcular)
+    aplicaSetting: p.aplicaSetting,
+    setter: p.setter,
   };
   repos.pagos.guardar(pago);
   return pago;

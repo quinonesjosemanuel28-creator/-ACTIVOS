@@ -64,6 +64,8 @@ export function PagoFormDialog({ open, onClose, idCierre, cliente, closerCierre,
       numeroCuota: (f.get('numeroCuota') as string) || undefined,
       medioPago: f.get('medioPago'),
       closer: (f.get('closer') as string) || undefined,
+      aplicaSetting: f.get('aplicaSetting') === 'on',
+      setter: (f.get('setter') as string) || undefined,
       comprobanteUrl: (f.get('comprobanteUrl') as string) || undefined,
       comentarios: (f.get('comentarios') as string) || undefined,
     };
@@ -115,6 +117,11 @@ export function PagoFormDialog({ open, onClose, idCierre, cliente, closerCierre,
           </Select>
         </Field>
         <Field label="Comprobante (URL, opcional)"><Input name="comprobanteUrl" defaultValue={pago?.comprobanteUrl} placeholder="https://…" /></Field>
+        <Field label="Setter (comisión 2%)"><Input name="setter" defaultValue={pago?.setter} placeholder="Hereda el del cierre" /></Field>
+        <label className="col-span-2 flex items-center gap-2 text-sm text-navy-700 dark:text-navy-100">
+          <input type="checkbox" name="aplicaSetting" defaultChecked={pago?.aplicaSetting} className="h-4 w-4 rounded border-navy-300" />
+          Aplica comisión de setting (2% al setter sobre este pago)
+        </label>
         <Field label="Comentarios (opcional)" full><Input name="comentarios" defaultValue={pago?.comentarios} /></Field>
 
         {error && <p className="col-span-2 text-sm text-signal-red">{error}</p>}

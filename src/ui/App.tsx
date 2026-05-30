@@ -13,6 +13,7 @@ import { VistaMarketing } from './views/VistaMarketing';
 import { VistaProgramas } from './views/VistaProgramas';
 import { VistaCierres } from './views/VistaCierres';
 import { VistaEgresos } from './views/VistaEgresos';
+import { VistaComisiones } from './views/VistaComisiones';
 import { VistaDatos } from './views/VistaDatos';
 
 export function App() {
@@ -46,6 +47,7 @@ export function App() {
               {vista === 'programas' && <VistaProgramas />}
               {vista === 'cierres' && <VistaCierres />}
               {vista === 'egresos' && <VistaEgresos />}
+              {vista === 'comisiones' && <VistaComisiones />}
               {vista === 'datos' && <VistaDatos />}
             </>
           )}

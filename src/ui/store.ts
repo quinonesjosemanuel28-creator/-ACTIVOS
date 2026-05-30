@@ -12,6 +12,7 @@ export type Vista =
   | 'programas'
   | 'cierres'
   | 'egresos'
+  | 'comisiones'
   | 'datos';
 
 export type FiltroPrograma = 'TODOS' | Programa;

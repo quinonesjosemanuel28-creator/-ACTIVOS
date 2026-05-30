@@ -8,6 +8,20 @@ import type { EstadoMes, Mes, Parametros, Programa } from '@domain/types';
 import type { Cierre, EstadoSaldo, Pago } from '@domain/cierres/types';
 import type { Egreso } from '@domain/types';
 import type { ResumenEgresos } from '@domain/egresos/metrics';
+import type { ComisionesDelMes } from '@domain/comisiones/calculo';
+
+export interface RegistroLiquidacion {
+  mes: string;
+  fechaLiquidacion: string;
+  totalArs: number;
+  totalUsd: number;
+  cotizacion?: number;
+  idEgreso: string;
+}
+export interface EstadoComisiones extends ComisionesDelMes {
+  liquidado: boolean;
+  liquidacion: RegistroLiquidacion | null;
+}
 
 export interface FiltrosEgresosUI {
   mes?: string;
@@ -144,6 +158,16 @@ export const api = {
   crearEgreso: (e: unknown) => req<Egreso>('/egresos', { method: 'POST', body: JSON.stringify(e) }),
   editarEgreso: (id: string, e: unknown) => req<Egreso>(`/egresos/${id}`, { method: 'PUT', body: JSON.stringify(e) }),
   eliminarEgreso: (id: string) => req(`/egresos/${id}`, { method: 'DELETE' }),
+
+  // Comisiones
+  comisiones: (mes: string) => req<EstadoComisiones>(`/comisiones/${mes}`),
+  liquidaciones: () => req<RegistroLiquidacion[]>('/comisiones/liquidaciones'),
+  liquidarComisiones: (mes: string, reemplazar = false) =>
+    req<{ mes: string; totalArs: number; totalUsd: number; idEgreso: string; reemplazado: boolean }>(
+      `/comisiones/liquidar/${mes}`,
+      { method: 'POST', body: JSON.stringify({ reemplazar }) },
+    ),
+  anularLiquidacion: (mes: string) => req(`/comisiones/liquidar/${mes}`, { method: 'DELETE' }),
   borrarDatosDemo: () => req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-demo', { method: 'DELETE' }),
   reiniciarCierres: (confirm: string) =>
     req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-reset', { method: 'POST', body: JSON.stringify({ confirm }) }),

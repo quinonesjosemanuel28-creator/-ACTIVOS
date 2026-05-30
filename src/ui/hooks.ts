@@ -143,6 +143,34 @@ export function useEliminarEgreso() {
   const inval = useInvalidarEgresos();
   return useMutation({ mutationFn: (id: string) => api.eliminarEgreso(id), onSuccess: inval });
 }
+
+// ───────────────────────── Módulo Comisiones ─────────────────────────
+export function useComisiones(mes: string | null) {
+  return useQuery({ queryKey: ['comisiones', mes], queryFn: () => api.comisiones(mes!), enabled: !!mes });
+}
+export function useLiquidaciones() {
+  return useQuery({ queryKey: ['comisiones', 'liquidaciones'], queryFn: () => api.liquidaciones() });
+}
+function useInvalidarComisiones() {
+  const qc = useQueryClient();
+  return () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ['comisiones'] }),
+      qc.invalidateQueries({ queryKey: ['egresos'] }),
+      qc.invalidateQueries({ queryKey: ['dashboard'] }),
+    ]);
+}
+export function useLiquidarComisiones() {
+  const inval = useInvalidarComisiones();
+  return useMutation({
+    mutationFn: (v: { mes: string; reemplazar?: boolean }) => api.liquidarComisiones(v.mes, v.reemplazar),
+    onSuccess: inval,
+  });
+}
+export function useAnularLiquidacion() {
+  const inval = useInvalidarComisiones();
+  return useMutation({ mutationFn: (mes: string) => api.anularLiquidacion(mes), onSuccess: inval });
+}
 export function useReiniciarCierres() {
   const inval = useInvalidarTodo();
   return useMutation({ mutationFn: (confirm: string) => api.reiniciarCierres(confirm), onSuccess: inval });

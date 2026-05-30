@@ -68,6 +68,8 @@ interface PagoRow {
   comprobante_url: string | null;
   comentarios: string | null;
   closer: string | null;
+  aplica_setting: number | null;
+  setter: string | null;
 }
 const toPago = (r: PagoRow): Pago => ({
   idPago: r.id_pago,
@@ -83,6 +85,8 @@ const toPago = (r: PagoRow): Pago => ({
   comprobanteUrl: r.comprobante_url ?? undefined,
   comentarios: r.comentarios ?? undefined,
   closer: r.closer ?? undefined,
+  aplicaSetting: r.aplica_setting === 1,
+  setter: r.setter ?? undefined,
 });
 
 export function crearReposCierres(db: Database.Database): ReposCierres {
@@ -171,9 +175,9 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
       db.prepare(
         `INSERT OR REPLACE INTO pagos
          (id_pago, id_cierre, fecha_pago, hora_pago, monto_usd, monto_ars, cotizacion,
-          tipo_pago, numero_cuota, medio_pago, comprobante_url, comentarios, closer)
+          tipo_pago, numero_cuota, medio_pago, comprobante_url, comentarios, closer, aplica_setting, setter)
          VALUES (@idPago,@idCierre,@fechaPago,@horaPago,@montoUsd,@montoArs,@cotizacion,
-          @tipoPago,@numeroCuota,@medioPago,@comprobanteUrl,@comentarios,@closer)`,
+          @tipoPago,@numeroCuota,@medioPago,@comprobanteUrl,@comentarios,@closer,@aplicaSetting,@setter)`,
       ).run({
         ...p,
         horaPago: p.horaPago ?? null,
@@ -183,6 +187,8 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         comprobanteUrl: p.comprobanteUrl ?? null,
         comentarios: p.comentarios ?? null,
         closer: p.closer ?? null,
+        aplicaSetting: p.aplicaSetting ? 1 : 0,
+        setter: p.setter ?? null,
       });
     },
     eliminar(id) {

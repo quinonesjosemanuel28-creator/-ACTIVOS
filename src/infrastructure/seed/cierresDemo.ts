@@ -165,6 +165,7 @@ export function generarCierresDemo(): { cierres: Cierre[]; pagos: Pago[] } {
       numeroCuota: '2/2',
       medioPago: 'Transferencia BBVA',
       closer: 'Ayrton', // ESTE pago lo cobró Ayrton
+      aplicaSetting: true, // demo: además genera 2% de setting (setter Diego del cierre)
     },
   );
 
