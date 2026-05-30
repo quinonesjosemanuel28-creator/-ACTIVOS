@@ -76,7 +76,15 @@ export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCi
     return true;
   });
 
-  const idsCierres = new Set(pagosMes.map((p) => p.idCierre));
+  // Cierres ÚNICOS NUEVOS del mes (DISTINCT id_cierre con fecha_cierre en el
+  // mes) entre los pagos contados. Los cobros de cohorte (cuotas de cierres de
+  // meses anteriores) suman a `pagos` pero NO a `cierres` → casi siempre M < N.
+  // Un cierre con varias cuotas el mismo mes cuenta 1 cierre / N pagos.
+  const idsCierresMes = new Set<string>();
+  for (const p of pagosMes) {
+    const cierre = cierrePorId.get(p.idCierre);
+    if (cierre && cierre.fechaCierre.slice(0, 7) === mes) idsCierresMes.add(cierre.idCierre);
+  }
   const sumUsd = pagosMes.reduce((a, p) => a + p.montoUsd, 0);
   const conArs = pagosMes.filter((p) => p.montoArs !== undefined && p.montoArs !== null);
   const sumArs = conArs.reduce((a, p) => a + (p.montoArs ?? 0), 0);
@@ -87,7 +95,7 @@ export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCi
     totalCobradoUsd: sumUsd,
     totalCobradoArs: sumArs,
     cotizacionPonderada: usdConArs > 0 ? sumArs / usdConArs : null,
-    cantidadCierres: idsCierres.size,
+    cantidadCierres: idsCierresMes.size,
     cantidadPagos: pagosMes.length,
   };
 }

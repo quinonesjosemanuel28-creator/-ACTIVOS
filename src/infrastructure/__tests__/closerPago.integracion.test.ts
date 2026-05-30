@@ -39,7 +39,8 @@ describe('Regresión Cristhian: closer a nivel de pago', () => {
     const r = ucc.resumenDelMes(repos, '2026-05', { closer: 'Ayrton' });
     expect(r.totalCobradoUsd).toBe(900);
     expect(r.cantidadPagos).toBe(1);
-    expect(r.cantidadCierres).toBe(1);
+    // C0113 cerró en marzo: en mayo cobró un pago pero NO es un cierre nuevo de mayo.
+    expect(r.cantidadCierres).toBe(0);
   });
 
   it('el total de mayo SIN filtrar no cambia (incluye los 900 una sola vez)', () => {
