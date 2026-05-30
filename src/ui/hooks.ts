@@ -1,6 +1,6 @@
 /** Hooks de server-state (TanStack Query) sobre el cliente API. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type FiltrosCierresUI } from './lib/api';
+import { api, type FiltrosCierresUI, type FiltrosEgresosUI } from './lib/api';
 import { useUI } from './store';
 
 export function useMeses() {
@@ -110,6 +110,38 @@ export function useImportarCierres() {
 export function useQuitarRevisar() {
   const inval = useInvalidarTodo();
   return useMutation({ mutationFn: (id: string) => api.quitarRevisar(id), onSuccess: inval });
+}
+
+// ───────────────────────── Módulo Egresos ─────────────────────────
+
+export function useEgresos(filtros: FiltrosEgresosUI) {
+  return useQuery({ queryKey: ['egresos', 'lista', filtros], queryFn: () => api.egresos(filtros) });
+}
+export function useResumenEgresos(mes: string, filtros: Omit<FiltrosEgresosUI, 'mes'>) {
+  return useQuery({ queryKey: ['egresos', 'resumen', mes, filtros], queryFn: () => api.resumenEgresos(mes, filtros) });
+}
+
+/** Las mutaciones de egresos invalidan egresos Y el dashboard (que lee egresos). */
+function useInvalidarEgresos() {
+  const qc = useQueryClient();
+  return () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ['egresos'] }),
+      qc.invalidateQueries({ queryKey: ['dashboard'] }),
+      qc.invalidateQueries({ queryKey: ['historico'] }),
+    ]);
+}
+export function useCrearEgreso() {
+  const inval = useInvalidarEgresos();
+  return useMutation({ mutationFn: (e: unknown) => api.crearEgreso(e), onSuccess: inval });
+}
+export function useEditarEgreso() {
+  const inval = useInvalidarEgresos();
+  return useMutation({ mutationFn: (v: { id: string; data: unknown }) => api.editarEgreso(v.id, v.data), onSuccess: inval });
+}
+export function useEliminarEgreso() {
+  const inval = useInvalidarEgresos();
+  return useMutation({ mutationFn: (id: string) => api.eliminarEgreso(id), onSuccess: inval });
 }
 export function useReiniciarCierres() {
   const inval = useInvalidarTodo();

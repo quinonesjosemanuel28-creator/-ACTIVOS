@@ -7,6 +7,7 @@
  */
 import type { Cobro, Egreso, FunnelMes, Mes, Parametros, Programa, Venta } from '../../domain/types';
 import type { Repositorios } from '../../application/ports';
+import { tipoPorCategoria } from '../../domain/egresos/categorias';
 
 const MESES: Mes[] = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05'];
 const CLOSERS = ['Ana', 'Bruno', 'Caro'];
@@ -95,17 +96,29 @@ export function generarDemo(): SeedData {
     generarVentas('Empresario', cierresEmp);
     generarVentas('Gestor', cierresGes);
 
-    // Egresos: Marketing (Directo), Comisiones (Directo), Estructura (Operativo), extraordinario ocasional
+    // Egresos con las 8 categorías del módulo + doble moneda (ARS a la
+    // cotización del mes). Montos mensuales ~iguales que antes para no alterar
+    // el dashboard. Algunos recurrentes (proyección) y un retiro (distribución).
+    const cotizEg = 980 + idx * 55; // ~980 (nov) → ~1310 (may)
+    const ars = (usd: number) => Math.round(usd * cotizEg);
+    const eg = (suf: string, d: number, categoria: string, concepto: string, montoUsd: number, recurrente = false) =>
+      egresos.push({
+        idEgreso: `E-${mes}-${suf}`, fecha: dia(d), mes, tipo: tipoPorCategoria(categoria), categoria, concepto,
+        montoUsd, montoArs: ars(montoUsd), cotizacion: cotizEg, recurrente, unidadNegocio: 'ACADEMY',
+      });
+
     const marketing = 1500 + idx * 250 + Math.round(rand() * 500);
-    egresos.push(
-      { idEgreso: `E-${mes}-mkt`, fecha: dia(1), mes, tipo: 'Directo', categoria: 'Marketing', concepto: 'Pauta IG/Meta', montoUsd: marketing, unidadNegocio: 'ACADEMY' },
-      { idEgreso: `E-${mes}-com`, fecha: dia(20), mes, tipo: 'Directo', categoria: 'Comisiones', concepto: 'Comisiones closers', montoUsd: Math.round((cierresEmp + cierresGes) * 180), unidadNegocio: 'ACADEMY' },
-      { idEgreso: `E-${mes}-her`, fecha: dia(2), mes, tipo: 'Operativo', categoria: 'Herramientas', concepto: 'SaaS / CRM', montoUsd: 350, unidadNegocio: 'ACADEMY' },
-      { idEgreso: `E-${mes}-est`, fecha: dia(3), mes, tipo: 'Operativo', categoria: 'Estructura', concepto: 'Sueldos + oficina', montoUsd: 4200, unidadNegocio: 'ACADEMY' },
-    );
-    if (idx === 3) {
-      egresos.push({ idEgreso: `E-${mes}-ext`, fecha: dia(15), mes, tipo: 'Extraordinario', categoria: 'Legal', concepto: 'Constitución sociedad', montoUsd: 1800, unidadNegocio: 'ACADEMY' });
-    }
+    eg('mkt', 1, 'Marketing y publicidad', 'Pauta IG/Meta', marketing);
+    eg('com', 20, 'Comisiones', 'Comisiones closers (carga manual)', Math.round((cierresEmp + cierresGes) * 180));
+    eg('tec', 2, 'Infraestructura y tecnología', 'SaaS / CRM / hosting', 350);
+    eg('sue', 3, 'Sueldos', 'Equipo', 4200);
+    if (rand() > 0.5) eg('var', 12, 'Gastos variables', 'Viáticos / varios', 120 + Math.round(rand() * 200));
+    if (idx === 3) eg('hon', 15, 'Honorarios profesionales', 'Contaduría y legal', 1800);
+    if (idx === 5) eg('ret', 25, 'Retiros de socios', 'Distribución de utilidades', 3000); // distribución, no operativo
+
+    // Recurrente (alquiler): una sola plantilla en el primer mes; el módulo
+    // Egresos la proyecta a todos los meses sin recargarla a mano.
+    if (idx === 0) eg('alq', 1, 'Gastos fijos', 'Alquiler oficina', 900, true);
 
     // Funnel coherente con los cierres del mes
     const cerrados = cierresEmp + cierresGes;

@@ -120,6 +120,12 @@ export function migrar(db: Database.Database): void {
   // no agrega columnas nuevas a tablas existentes).
   agregarColumnaSiFalta(db, 'cierres', 'revisar', 'TEXT');
   agregarColumnaSiFalta(db, 'pagos', 'closer', 'TEXT');
+  // Módulo Egresos: doble moneda + recurrente + medio/comentarios.
+  agregarColumnaSiFalta(db, 'egresos', 'monto_ars', 'REAL');
+  agregarColumnaSiFalta(db, 'egresos', 'cotizacion', 'REAL');
+  agregarColumnaSiFalta(db, 'egresos', 'recurrente', 'INTEGER NOT NULL DEFAULT 0');
+  agregarColumnaSiFalta(db, 'egresos', 'medio_pago', 'TEXT');
+  agregarColumnaSiFalta(db, 'egresos', 'comentarios', 'TEXT');
 }
 
 function agregarColumnaSiFalta(db: Database.Database, tabla: string, columna: string, tipo: string): void {

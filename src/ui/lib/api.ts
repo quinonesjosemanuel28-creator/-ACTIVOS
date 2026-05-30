@@ -6,6 +6,16 @@ import type { DashboardSnapshot } from '@domain/dashboard';
 import type { Alerta } from '@domain/alerts';
 import type { EstadoMes, Mes, Parametros, Programa } from '@domain/types';
 import type { Cierre, EstadoSaldo, Pago } from '@domain/cierres/types';
+import type { Egreso } from '@domain/types';
+import type { ResumenEgresos } from '@domain/egresos/metrics';
+
+export interface FiltrosEgresosUI {
+  mes?: string;
+  categoria?: string;
+  tipo?: string;
+  moneda?: string;
+  q?: string;
+}
 
 export interface DashboardResult {
   snapshot: DashboardSnapshot;
@@ -125,6 +135,15 @@ export const api = {
   importarCierresPagos: (payload: { cierres: unknown[]; pagos: unknown[] }) =>
     req<{ cierres: number; pagos: number }>('/cierres/importar', { method: 'POST', body: JSON.stringify(payload) }),
   quitarRevisar: (id: string) => req(`/cierres/${id}/revisar`, { method: 'DELETE' }),
+
+  // Egresos
+  egresos: (f: FiltrosEgresosUI = {}) =>
+    req<Egreso[]>(`/egresos${qs({ mes: f.mes, categoria: f.categoria, tipo: f.tipo, moneda: f.moneda, q: f.q })}`),
+  resumenEgresos: (mes: string, f: Omit<FiltrosEgresosUI, 'mes'> = {}) =>
+    req<ResumenEgresos>(`/egresos/resumen/${mes}${qs({ categoria: f.categoria, tipo: f.tipo, moneda: f.moneda, q: f.q })}`),
+  crearEgreso: (e: unknown) => req<Egreso>('/egresos', { method: 'POST', body: JSON.stringify(e) }),
+  editarEgreso: (id: string, e: unknown) => req<Egreso>(`/egresos/${id}`, { method: 'PUT', body: JSON.stringify(e) }),
+  eliminarEgreso: (id: string) => req(`/egresos/${id}`, { method: 'DELETE' }),
   borrarDatosDemo: () => req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-demo', { method: 'DELETE' }),
   reiniciarCierres: (confirm: string) =>
     req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-reset', { method: 'POST', body: JSON.stringify({ confirm }) }),

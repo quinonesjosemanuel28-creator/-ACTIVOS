@@ -62,6 +62,13 @@ export interface Egreso {
   montoUsd: number;
   programa?: Programa;
   unidadNegocio: UnidadNegocio;
+  // Campos del módulo Egresos (opcionales → compatibles con filas previas):
+  montoArs?: number;
+  cotizacion?: number;
+  /** RECURRENTE (se repite cada mes) vs PUNTUAL (pago único). */
+  recurrente?: boolean;
+  medioPago?: string;
+  comentarios?: string;
 }
 
 /** Parámetros / centro de control (metas, caja inicial, costos fijos). */

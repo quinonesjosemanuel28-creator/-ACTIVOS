@@ -177,9 +177,20 @@ export function crearRepositorios(db: Database.Database): Repositorios {
     insertar(e) {
       db.prepare(
         `INSERT OR REPLACE INTO egresos
-         (id_egreso, fecha, mes, tipo, categoria, concepto, monto_usd, programa, unidad_negocio)
-         VALUES (@idEgreso,@fecha,@mes,@tipo,@categoria,@concepto,@montoUsd,@programa,@unidadNegocio)`,
-      ).run({ ...e, concepto: e.concepto ?? null, programa: e.programa ?? null });
+         (id_egreso, fecha, mes, tipo, categoria, concepto, monto_usd, programa, unidad_negocio,
+          monto_ars, cotizacion, recurrente, medio_pago, comentarios)
+         VALUES (@idEgreso,@fecha,@mes,@tipo,@categoria,@concepto,@montoUsd,@programa,@unidadNegocio,
+          @montoArs,@cotizacion,@recurrente,@medioPago,@comentarios)`,
+      ).run({
+        ...e,
+        concepto: e.concepto ?? null,
+        programa: e.programa ?? null,
+        montoArs: e.montoArs ?? null,
+        cotizacion: e.cotizacion ?? null,
+        recurrente: e.recurrente ? 1 : 0,
+        medioPago: e.medioPago ?? null,
+        comentarios: e.comentarios ?? null,
+      });
     },
   };
 

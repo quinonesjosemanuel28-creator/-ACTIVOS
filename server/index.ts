@@ -11,6 +11,9 @@ import { ZodError } from 'zod';
 import { getDb } from '../src/infrastructure/sqlite/db';
 import { crearRepositorios } from '../src/infrastructure/sqlite/repos';
 import { crearReposCierres } from '../src/infrastructure/sqlite/cierresRepos';
+import { crearEgresosAdminRepo } from '../src/infrastructure/sqlite/egresosRepos';
+import * as uce from '../src/application/egresos/useCases';
+import type { FiltrosEgresos } from '../src/application/egresos/useCases';
 import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
 import * as ucc from '../src/application/cierres/useCases';
@@ -24,6 +27,7 @@ const repos = crearRepositorios(db);
 // Repo del dashboard: ventas/cobros provienen de cierres/pagos (adaptador).
 const reposDash = crearRepositoriosDashboard(db);
 const reposCierres = crearReposCierres(db);
+const reposEgresos = crearEgresosAdminRepo(db);
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -77,7 +81,19 @@ app.put('/api/parametros', h((req) => uc.guardarParametros(repos, req.body)));
 
 app.post('/api/ventas', h((req) => uc.agregarVenta(repos, req.body)));
 app.post('/api/cobros', h((req) => uc.agregarCobro(repos, req.body)));
-app.post('/api/egresos', h((req) => uc.agregarEgreso(repos, req.body)));
+// Módulo Egresos (CRUD + resumen). Una sola tabla `egresos` (la que lee el dashboard).
+const filtrosEgresosDe = (q: express.Request['query']): FiltrosEgresos => ({
+  mes: typeof q.mes === 'string' ? q.mes : undefined,
+  categoria: typeof q.categoria === 'string' ? q.categoria : undefined,
+  tipo: typeof q.tipo === 'string' ? q.tipo : undefined,
+  moneda: typeof q.moneda === 'string' ? q.moneda : undefined,
+  q: typeof q.q === 'string' ? q.q : undefined,
+});
+app.get('/api/egresos', h((req) => uce.listarEgresos(reposEgresos, filtrosEgresosDe(req.query))));
+app.get('/api/egresos/resumen/:mes', h((req) => uce.resumenEgresos(reposEgresos, param(req, 'mes'), filtrosEgresosDe(req.query))));
+app.post('/api/egresos', h((req) => uce.crearEgreso(reposEgresos, req.body)));
+app.put('/api/egresos/:id', h((req) => uce.editarEgreso(reposEgresos, param(req, 'id'), req.body)));
+app.delete('/api/egresos/:id', h((req) => uce.eliminarEgreso(reposEgresos, param(req, 'id'))));
 
 app.put('/api/funnel/:mes', h((req) => uc.guardarFunnel(repos, param(req, 'mes'), req.body, filtroDe(req.query))));
 
