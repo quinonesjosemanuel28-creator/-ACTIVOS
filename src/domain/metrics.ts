@@ -14,10 +14,19 @@ import { safeDiv, sumBy } from './money';
 
 // ───────────────────────── Helpers de filtrado ─────────────────────────
 
-/** Egresos de categoría Marketing (insumo de CAC / ROAS / MER). */
+/**
+ * Egresos de categoría Marketing (insumo de CAC / ROAS / MER).
+ * Matchea por inclusión de "marketing" para cubrir tanto la categoría
+ * canónica del módulo Egresos ("Marketing y publicidad") como datos legacy
+ * ("Marketing"). Es la misma fuente de egresos que usan utilidad y márgenes.
+ */
+export function esMarketing(categoria: string): boolean {
+  return categoria.toLowerCase().includes('marketing');
+}
+
 export function inversionMarketing(egresos: readonly Egreso[]): number {
   return sumBy(
-    egresos.filter((e) => e.categoria.toLowerCase() === 'marketing'),
+    egresos.filter((e) => esMarketing(e.categoria)),
     (e) => e.montoUsd,
   );
 }
