@@ -29,13 +29,14 @@ export function ResumenCierres({ mes, resumen }: { mes: string; resumen: Resumen
         <Stat label={`Cobrado USD · ${periodo}`} valor={fmtUsd(resumen.totalCobradoUsd)} hint={mes === 'TODOS' ? `${resumen.cantidadCierres} cierres` : 'incluye cohortes del mes'} />
         <Stat label={`Cobrado ARS · ${periodo}`} valor={fmtArs(resumen.totalCobradoArs)} acento hint="dinero real cobrado" />
         <Stat label="Cotización ponderada" valor={resumen.cotizacionPonderada ? fmtNum(Math.round(resumen.cotizacionPonderada)) : '—'} hint="Σ ARS / Σ USD" />
-        <Stat label="Pagos / cierres" valor={`${fmtNum(resumen.cantidadPagos)} / ${fmtNum(resumen.cantidadCierres)}`} hint="en el resultado" />
+        <Stat label="Pagos / Cierres con cobro" valor={`${fmtNum(resumen.cantidadPagos)} / ${fmtNum(resumen.cantidadCierres)}`} hint="cierres que cobraron este mes (incluye cohortes)" />
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {/* Mejora 1 — cierres nuevos por programa */}
         <Card className="p-4">
-          <p className="mb-2 text-xs font-600 uppercase tracking-wide text-navy-400">Cierres nuevos por programa</p>
+          <p className="text-xs font-600 uppercase tracking-wide text-navy-400">Cierres nuevos por programa</p>
+          <p className="mb-2 text-xs text-navy-400">cierres nacidos (cerrados) este mes</p>
           <div className="grid grid-cols-2 gap-3">
             <Programa icono={<GraduationCap size={16} />} label="De Cero a Gestor" n={resumen.cierresPorPrograma.ceroGestor} />
             <Programa icono={<Briefcase size={16} />} label="Prestamista Empresario" n={resumen.cierresPorPrograma.empresario} />
@@ -59,6 +60,11 @@ export function ResumenCierres({ mes, resumen }: { mes: string; resumen: Resumen
           </div>
         </Card>
       </div>
+
+      <p className="text-xs text-navy-400">
+        Nota: <b>“con cobro este mes”</b> cuenta cierres que recibieron un pago en el período (incluye cohortes de meses
+        anteriores); <b>“cierres nuevos”</b> cuenta los que se cerraron este mes. Por eso pueden no coincidir.
+      </p>
     </div>
   );
 }
