@@ -19,7 +19,7 @@
 import type Database from 'better-sqlite3';
 import type { Cierre, Pago } from '../../domain/cierres/types';
 import type { Cobro, Programa, Venta } from '../../domain/types';
-import type { CierreMesRepo, CobrosRepo, Filtro, Repositorios, VentasRepo } from '../../application/ports';
+import type { CierreMesRepo, CobrosRepo, Filtro, FunnelRepo, Repositorios, VentasRepo } from '../../application/ports';
 import { crearRepositorios } from '../sqlite/repos';
 import { crearReposCierres } from '../sqlite/cierresRepos';
 
@@ -113,11 +113,23 @@ export function crearRepositoriosDashboard(db: Database.Database): Repositorios 
     },
   };
 
+  // Funnel: agendas/shows del repo legacy (carga manual); `cerrados` se DERIVA
+  // de los cierres reales del mes → coincide con la sección Cierres y corrige
+  // la tasa de cierre del dashboard.
+  const funnel: FunnelRepo = {
+    obtener: (mes, filtro) => {
+      const manual = legacy.funnel.obtener(mes, filtro);
+      const cerrados = rc.cierres.listar({ mes, unidadNegocio: unidadDe(filtro) }).length;
+      return { agendas: manual.agendas, asistieron: manual.asistieron, cerrados };
+    },
+    guardar: (mes, f, filtro) => legacy.funnel.guardar(mes, f, filtro),
+  };
+
   return {
     ventas,
     cobros,
     egresos: legacy.egresos,
-    funnel: legacy.funnel,
+    funnel,
     parametros: legacy.parametros,
     cierre,
   };

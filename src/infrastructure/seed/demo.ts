@@ -121,11 +121,9 @@ export function generarDemo(): SeedData {
     // Egresos la proyecta a todos los meses sin recargarla a mano.
     if (idx === 0) eg('alq', 1, 'Gastos fijos', 'Alquiler oficina', 900, true);
 
-    // Funnel coherente con los cierres del mes
-    const cerrados = cierresEmp + cierresGes;
-    const asistieron = Math.round(cerrados / (0.18 + rand() * 0.06));
-    const agendas = Math.round(asistieron / (0.6 + rand() * 0.1));
-    funnels.push({ mes, funnel: { agendas, asistieron, cerrados } });
+    // Funnel: agendas/shows NO se inventan (carga manual real). Quedan en 0
+    // hasta que se carguen; "cerrados" se deriva de los cierres reales.
+    funnels.push({ mes, funnel: { agendas: 0, asistieron: 0, cerrados: 0 } });
   });
 
   const parametros: Parametros = {

@@ -63,5 +63,5 @@ export type ParametrosInput = z.infer<typeof parametrosInputSchema>;
 export const funnelInputSchema = z.object({
   agendas: z.number().int().nonnegative(),
   asistieron: z.number().int().nonnegative(),
-  cerrados: z.number().int().nonnegative(),
+  // cerrados NO se carga: se deriva de los cierres reales del mes.
 });

@@ -185,7 +185,8 @@ export function guardarParametros(repos: Repositorios, input: unknown): void {
 export function guardarFunnel(repos: Repositorios, mes: Mes, input: unknown, filtro?: Filtro): void {
   assertAbierto(repos, mes);
   const f = funnelInputSchema.parse(input);
-  repos.funnel.guardar(mes, f, filtro);
+  // cerrados se deriva (no se guarda); se persiste 0 y se ignora en lectura.
+  repos.funnel.guardar(mes, { agendas: f.agendas, asistieron: f.asistieron, cerrados: 0 }, filtro);
 }
 
 // ───────────────────────── Cierre de mes (R6) ─────────────────────────

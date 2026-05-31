@@ -15,6 +15,7 @@ import { crearEgresosAdminRepo } from '../src/infrastructure/sqlite/egresosRepos
 import { crearLiquidacionRepo } from '../src/infrastructure/sqlite/comisionesRepos';
 import * as uce from '../src/application/egresos/useCases';
 import * as ucom from '../src/application/comisiones/useCases';
+import * as ucf from '../src/application/funnel/useCases';
 import type { FiltrosEgresos } from '../src/application/egresos/useCases';
 import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
@@ -106,7 +107,8 @@ app.post('/api/comisiones/liquidar/:mes', h((req) =>
 ));
 app.delete('/api/comisiones/liquidar/:mes', h((req) => ucom.anularLiquidacion(reposEgresos, reposLiquidacion, param(req, 'mes'))));
 
-app.put('/api/funnel/:mes', h((req) => uc.guardarFunnel(repos, param(req, 'mes'), req.body, filtroDe(req.query))));
+app.get('/api/funnel/:mes', h((req) => ucf.obtenerFunnel(reposCierres, repos.funnel, param(req, 'mes'))));
+app.put('/api/funnel/:mes', h((req) => ucf.guardarFunnelManual(repos.funnel, param(req, 'mes'), req.body)));
 
 app.post('/api/cierre/:mes', h((req) => uc.cerrarMes(repos, param(req, 'mes'))));
 app.delete('/api/cierre/:mes', h((req) => uc.reabrirMes(repos, param(req, 'mes'))));

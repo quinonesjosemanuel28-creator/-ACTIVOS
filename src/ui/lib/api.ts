@@ -48,6 +48,27 @@ export interface PuntoHistorico {
   cierres: number;
 }
 
+export interface FunnelView {
+  mes: Mes;
+  agendas: number;
+  asistieron: number;
+  cerrados: number;
+  cargaManual: boolean;
+  tasaShow: number | null;
+  tasaCierre: number | null;
+  tasaGlobal: number | null;
+  varShow: number | null;
+  varCierre: number | null;
+  varGlobal: number | null;
+  cashNuevoUsd: number;
+  cashNuevoArs: number;
+  valorPorAgendaUsd: number | null;
+  valorPorAgendaArs: number | null;
+  valorPorShowUsd: number | null;
+  valorPorShowArs: number | null;
+  cierresPorPrograma: { empresario: number; ceroGestor: number };
+}
+
 export interface MesesResponse {
   meses: Mes[];
   actual: Mes | null;
@@ -126,6 +147,7 @@ export const api = {
   agregarVenta: (v: unknown) => req('/ventas', { method: 'POST', body: JSON.stringify(v) }),
   agregarCobro: (c: unknown) => req('/cobros', { method: 'POST', body: JSON.stringify(c) }),
   agregarEgreso: (e: unknown) => req('/egresos', { method: 'POST', body: JSON.stringify(e) }),
+  funnel: (mes: Mes) => req<FunnelView>(`/funnel/${mes}`),
   guardarFunnel: (mes: Mes, f: unknown) =>
     req(`/funnel/${mes}`, { method: 'PUT', body: JSON.stringify(f) }),
   cerrarMes: (mes: Mes) => req(`/cierre/${mes}`, { method: 'POST' }),

@@ -16,6 +16,22 @@ export function useDashboard() {
   });
 }
 
+export function useFunnel() {
+  const { mes } = useUI();
+  return useQuery({ queryKey: ['funnel', mes], queryFn: () => api.funnel(mes!), enabled: !!mes });
+}
+export function useGuardarFunnel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { mes: string; agendas: number; asistieron: number }) =>
+      api.guardarFunnel(v.mes, { agendas: v.agendas, asistieron: v.asistieron }),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['funnel'] }),
+      qc.invalidateQueries({ queryKey: ['dashboard'] }),
+    ]),
+  });
+}
+
 export function useHistorico() {
   const { unidad } = useUI();
   return useQuery({ queryKey: ['historico', unidad], queryFn: () => api.historico(unidad) });
