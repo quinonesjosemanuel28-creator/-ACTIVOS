@@ -88,6 +88,11 @@ interface EgresoRow {
   monto_usd: number;
   programa: string | null;
   unidad_negocio: string;
+  monto_ars: number | null;
+  cotizacion: number | null;
+  recurrente: number | null;
+  medio_pago: string | null;
+  comentarios: string | null;
 }
 const toEgreso = (r: EgresoRow): Egreso => ({
   idEgreso: r.id_egreso,
@@ -99,6 +104,11 @@ const toEgreso = (r: EgresoRow): Egreso => ({
   montoUsd: r.monto_usd,
   programa: (r.programa as Programa | null) ?? undefined,
   unidadNegocio: r.unidad_negocio as UnidadNegocio,
+  montoArs: r.monto_ars ?? undefined,
+  cotizacion: r.cotizacion ?? undefined,
+  recurrente: r.recurrente === 1,
+  medioPago: r.medio_pago ?? undefined,
+  comentarios: r.comentarios ?? undefined,
 });
 
 /** Cláusula WHERE de unidad (CONSOLIDADO = todas). */

@@ -8,6 +8,7 @@
 import { construirSnapshot, type DashboardSnapshot } from '../domain/dashboard';
 import { evaluarAlertas, type Alerta } from '../domain/alerts';
 import { filtrarPorPrograma } from '../domain/metrics';
+import * as em from '../domain/egresos/metrics';
 import type { DatosMes, EstadoMes, Mes, Programa } from '../domain/types';
 import type { Filtro, Repositorios } from './ports';
 import {
@@ -91,20 +92,35 @@ export interface PuntoHistorico {
   utilidad: number;
   cajaFinal: number;
   cierres: number;
+  // Salidas y cash flow neto del mes (USD). Egresos de la fuente real, con
+  // proyección de recurrentes (misma que la sección Egresos).
+  egresosOperativos: number; // categorías 1–7 (excluye retiros de socios)
+  egresosTotales: number; // incluye retiros de socios
+  netoOperativo: number; // cashCollected − egresos operativos
+  netoTotal: number; // cashCollected − egresos totales
 }
 
 export function obtenerHistorico(repos: Repositorios, filtro?: Filtro): PuntoHistorico[] {
   const meses = repos.cierre.mesesConDatos();
+  const todosEgresos = repos.egresos.listarTodos(filtro);
   return meses.map((mes) => {
     const { snapshot } = obtenerDashboardDelMes(repos, mes, { filtro });
+    const cashCollected = snapshot.cashCollected.valor ?? 0;
+    const egresosMes = em.egresosDelMes(todosEgresos, mes); // proyecta recurrentes
+    const egresosOperativos = em.costoOperativoUsd(egresosMes);
+    const egresosTotales = em.totalUsd(egresosMes);
     return {
       mes,
-      cashCollected: snapshot.cashCollected.valor ?? 0,
+      cashCollected,
       cashNuevo: snapshot.cashNuevo,
       cohortes: snapshot.cohortes,
       utilidad: snapshot.utilidadOperativa.valor ?? 0,
       cajaFinal: snapshot.cajaFinal.valor ?? 0,
       cierres: snapshot.cierres.valor ?? 0,
+      egresosOperativos,
+      egresosTotales,
+      netoOperativo: cashCollected - egresosOperativos,
+      netoTotal: cashCollected - egresosTotales,
     };
   });
 }

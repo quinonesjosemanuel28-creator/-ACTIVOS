@@ -46,6 +46,10 @@ export interface PuntoHistorico {
   utilidad: number;
   cajaFinal: number;
   cierres: number;
+  egresosOperativos: number;
+  egresosTotales: number;
+  netoOperativo: number;
+  netoTotal: number;
 }
 
 export interface FunnelView {
