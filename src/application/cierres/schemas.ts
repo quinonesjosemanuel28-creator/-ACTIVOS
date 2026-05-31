@@ -40,6 +40,8 @@ export const cierreInputSchema = z.object({
   unidadNegocio: unidadSchema.default('ACADEMY'),
   estado: estadoCierreSchema.default('Activo'),
   revisar: z.string().optional(),
+  // Plan de cuotas (1–4). Si falta, el cierre no entra al sistema de cobranza.
+  cantidadCuotas: z.number().int().min(1).max(4).optional(),
 });
 export type CierreInput = z.infer<typeof cierreInputSchema>;
 

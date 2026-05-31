@@ -17,6 +17,9 @@ export function cierre(p: Partial<Cierre> = {}): Cierre {
     comentarios: p.comentarios,
     unidadNegocio: p.unidadNegocio ?? 'ACADEMY',
     estado: p.estado ?? 'Activo',
+    revisar: p.revisar,
+    cantidadCuotas: p.cantidadCuotas,
+    montoCuotaUsd: p.montoCuotaUsd,
   };
 }
 

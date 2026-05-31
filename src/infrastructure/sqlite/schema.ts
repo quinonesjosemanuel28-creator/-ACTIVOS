@@ -119,6 +119,10 @@ export function migrar(db: Database.Database): void {
   // Migraciones aditivas para bases ya creadas (CREATE TABLE IF NOT EXISTS
   // no agrega columnas nuevas a tablas existentes).
   agregarColumnaSiFalta(db, 'cierres', 'revisar', 'TEXT');
+  // Plan de cuotas (solo ventas nuevas). Cierres existentes quedan sin plan
+  // = saldados/legacy, fuera del sistema de cobranza. La migración no los toca.
+  agregarColumnaSiFalta(db, 'cierres', 'cantidad_cuotas', 'INTEGER');
+  agregarColumnaSiFalta(db, 'cierres', 'monto_cuota_usd', 'REAL');
   agregarColumnaSiFalta(db, 'pagos', 'closer', 'TEXT');
   // Módulo Egresos: doble moneda + recurrente + medio/comentarios.
   agregarColumnaSiFalta(db, 'egresos', 'monto_ars', 'REAL');

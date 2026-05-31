@@ -44,6 +44,13 @@ export interface Cierre {
   estado: EstadoCierre;
   /** Si tiene texto, el cierre se muestra con badge "⚠ Revisar" (dato a completar). */
   revisar?: string;
+  /**
+   * Plan de cuotas (solo ventas nuevas). 1–4. Si falta, el cierre es legacy/
+   * saldado y queda FUERA del sistema de cobranza/morosidad.
+   */
+  cantidadCuotas?: number;
+  /** Monto de cada cuota en USD = ticketTotalUsd / cantidadCuotas. */
+  montoCuotaUsd?: number;
 }
 
 /**

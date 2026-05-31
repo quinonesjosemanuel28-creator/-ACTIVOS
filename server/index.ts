@@ -17,6 +17,7 @@ import { crearFunnelCanalRepo } from '../src/infrastructure/sqlite/funnelCanalRe
 import * as uce from '../src/application/egresos/useCases';
 import * as ucom from '../src/application/comisiones/useCases';
 import * as ucf from '../src/application/funnel/useCases';
+import * as ucob from '../src/application/cobranza/useCases';
 import type { FiltrosEgresos } from '../src/application/egresos/useCases';
 import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
@@ -142,6 +143,9 @@ app.delete('/api/cierres/:id', h((req) => ucc.eliminarCierre(reposCierres, param
 
 app.post('/api/cierres/importar', h((req) => ucc.importarCierresPagos(reposCierres, req.body)));
 app.delete('/api/cierres/:id/revisar', h((req) => ucc.quitarRevisar(reposCierres, param(req, 'id'))));
+
+// Cobranza y morosidad (deriva del plan de cuotas + pagos reales)
+app.get('/api/cobranza', h(() => ucob.obtenerCobranza(reposCierres)));
 
 app.post('/api/pagos', h((req) => ucc.agregarPago(reposCierres, req.body)));
 app.put('/api/pagos/:id', h((req) => ucc.editarPago(reposCierres, param(req, 'id'), req.body)));

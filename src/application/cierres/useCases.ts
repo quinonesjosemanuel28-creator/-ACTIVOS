@@ -166,6 +166,9 @@ export function crearCierre(repos: ReposCierres, input: unknown): Cierre {
     unidadNegocio: c.unidadNegocio,
     estado: c.estado,
     revisar: c.revisar,
+    cantidadCuotas: c.cantidadCuotas,
+    // Cuotas del mismo monto = total / cantidad (solo si hay plan).
+    montoCuotaUsd: c.cantidadCuotas ? Math.round((c.ticketTotalUsd / c.cantidadCuotas) * 100) / 100 : undefined,
   };
   repos.cierres.guardar(cierre);
   return cierre;
