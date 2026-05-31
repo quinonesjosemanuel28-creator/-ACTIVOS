@@ -219,6 +219,8 @@ export function crearRepositorios(db: Database.Database): Repositorios {
     topeCacUsd: 'tope_cac_usd',
     metaTasaCierre: 'meta_tasa_cierre',
     runwayMinimoMeses: 'runway_minimo_meses',
+    objetivoRoas: 'objetivo_roas',
+    objetivoMer: 'objetivo_mer',
   };
   const DEFAULTS: Parametros = {
     cajaInicialUsd: 0,
@@ -228,6 +230,8 @@ export function crearRepositorios(db: Database.Database): Repositorios {
     topeCacUsd: 350,
     metaTasaCierre: 0.2,
     runwayMinimoMeses: 3,
+    objetivoRoas: 3,
+    objetivoMer: 3,
   };
 
   const parametros: ParametrosRepo = {

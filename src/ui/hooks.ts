@@ -50,6 +50,17 @@ export function useParametros() {
   return useQuery({ queryKey: ['parametros'], queryFn: api.parametros });
 }
 
+export function useGuardarParametros() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: Record<string, number>) => api.guardarParametros(p),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['parametros'] }),
+      qc.invalidateQueries({ queryKey: ['dashboard'] }),
+    ]),
+  });
+}
+
 // ───────────────────── Módulo "Cierres y Clientes" ─────────────────────
 
 /** Listado completo sin filtros (también sirve para poblar opciones). */

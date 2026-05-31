@@ -162,6 +162,8 @@ function ParametrosCard({ onDone }: { onDone: () => void }) {
       topeCacUsd: Number(f.get('topeCac')),
       metaTasaCierre: Number(f.get('metaCierre')) / 100,
       runwayMinimoMeses: Number(f.get('runwayMin')),
+      objetivoRoas: Number(f.get('objRoas')),
+      objetivoMer: Number(f.get('objMer')),
     });
   };
   return (
@@ -176,6 +178,8 @@ function ParametrosCard({ onDone }: { onDone: () => void }) {
           <Field label="Tope CAC (USD)"><Input type="number" name="topeCac" step="any" defaultValue={data.topeCacUsd} /></Field>
           <Field label="Meta tasa cierre (%)"><Input type="number" name="metaCierre" step="any" defaultValue={data.metaTasaCierre * 100} /></Field>
           <Field label="Runway mínimo (meses)"><Input type="number" name="runwayMin" step="any" defaultValue={data.runwayMinimoMeses} /></Field>
+          <Field label="Objetivo ROAS (x)"><Input type="number" name="objRoas" step="any" defaultValue={data.objetivoRoas} /></Field>
+          <Field label="Objetivo MER (x)"><Input type="number" name="objMer" step="any" defaultValue={data.objetivoMer} /></Field>
           <div className="flex items-end"><Button type="submit" className="w-full" disabled={mut.isPending}>Guardar</Button></div>
         </form>
         <Mensaje m={msg} />

@@ -1,4 +1,5 @@
 /** Gauge semicircular SVG para métricas de marketing contra su meta/tope. */
+import { cumpleObjetivo } from '@domain/marketing/objetivos';
 import { cn } from '../lib/utils';
 
 interface GaugeProps {
@@ -15,7 +16,7 @@ interface GaugeProps {
 export function Gauge({ valor, referencia, menorEsMejor = false, max, etiqueta }: GaugeProps) {
   const pct = valor === null ? 0 : Math.min(Math.max(valor / max, 0), 1);
   const angulo = -90 + pct * 180;
-  const cumple = valor !== null && (menorEsMejor ? valor <= referencia : valor >= referencia);
+  const cumple = cumpleObjetivo(valor, referencia, menorEsMejor);
   const color = valor === null ? '#94a3b8' : cumple ? '#16a34a' : '#dc2626';
 
   // Arco de fondo (semicírculo r=80, centro 100,100)

@@ -134,6 +134,8 @@ export function generarDemo(): SeedData {
     topeCacUsd: 350,
     metaTasaCierre: 0.2,
     runwayMinimoMeses: 3,
+    objetivoRoas: 3,
+    objetivoMer: 3,
   };
 
   return { ventas, cobros, egresos, funnels, parametros };
