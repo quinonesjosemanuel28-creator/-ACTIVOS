@@ -1,5 +1,5 @@
 /** Navegación entre pantallas: sidebar en desktop, barra superior en mobile. */
-import { AlertTriangle, BarChart3, Database, Filter, LayoutDashboard, LineChart, Megaphone, Percent, Receipt, TrendingDown, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, CalendarClock, Database, Filter, LayoutDashboard, LineChart, Megaphone, Percent, Receipt, TrendingDown, Users } from 'lucide-react';
 import { useUI, type Vista } from '../store';
 import { cn } from '../lib/utils';
 
@@ -12,6 +12,7 @@ const ITEMS: { id: Vista; label: string; icono: typeof LayoutDashboard }[] = [
   { id: 'marketing', label: 'Marketing', icono: Megaphone },
   { id: 'programas', label: 'Empresario vs Gestor', icono: Users },
   { id: 'cierres', label: 'Cierres y Clientes', icono: Receipt },
+  { id: 'cobranza', label: 'Cobranza', icono: CalendarClock },
   { id: 'egresos', label: 'Egresos', icono: TrendingDown },
   { id: 'comisiones', label: 'Comisiones', icono: Percent },
   { id: 'datos', label: 'Carga & Admin', icono: Database },

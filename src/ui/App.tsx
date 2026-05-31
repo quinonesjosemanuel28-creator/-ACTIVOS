@@ -12,6 +12,7 @@ import { VistaHistorico } from './views/VistaHistorico';
 import { VistaMarketing } from './views/VistaMarketing';
 import { VistaProgramas } from './views/VistaProgramas';
 import { VistaCierres } from './views/VistaCierres';
+import { VistaCobranza } from './views/VistaCobranza';
 import { VistaEgresos } from './views/VistaEgresos';
 import { VistaComisiones } from './views/VistaComisiones';
 import { VistaDatos } from './views/VistaDatos';
@@ -46,6 +47,7 @@ export function App() {
               {vista === 'marketing' && <VistaMarketing />}
               {vista === 'programas' && <VistaProgramas />}
               {vista === 'cierres' && <VistaCierres />}
+              {vista === 'cobranza' && <VistaCobranza />}
               {vista === 'egresos' && <VistaEgresos />}
               {vista === 'comisiones' && <VistaComisiones />}
               {vista === 'datos' && <VistaDatos />}

@@ -52,6 +52,33 @@ export interface PuntoHistorico {
   netoTotal: number;
 }
 
+export interface CuotaDerivada {
+  numero: number;
+  montoUsd: number;
+  abonadoUsd: number;
+  completa: boolean;
+  fechaCompletada?: string;
+  vencimiento: string;
+  vencimientoEstimado: boolean;
+}
+export interface CobranzaCierreView {
+  idCierre: string;
+  cliente: string;
+  fechaCierre: string;
+  totalUsd: number;
+  abonadoUsd: number;
+  saldoPendienteUsd: number;
+  cuotas: CuotaDerivada[];
+  estado: 'Saldado' | 'Al día' | 'Atrasado' | 'Morosidad';
+  diasAtraso: number;
+}
+export interface CobranzaView {
+  hoy: string;
+  cierres: CobranzaCierreView[];
+  resumen: { alDia: number; atrasado: number; morosidad: number; saldoPendienteUsd: number; morosidadUsd: number };
+  proyeccion: { mes: string; montoUsd: number }[];
+}
+
 export interface FunnelView {
   mes: Mes;
   agendas: number;
@@ -200,6 +227,9 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ reemplazar }) },
     ),
   anularLiquidacion: (mes: string) => req(`/comisiones/liquidar/${mes}`, { method: 'DELETE' }),
+
+  // Cobranza
+  cobranza: () => req<CobranzaView>('/cobranza'),
   borrarDatosDemo: () => req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-demo', { method: 'DELETE' }),
   reiniciarCierres: (confirm: string) =>
     req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-reset', { method: 'POST', body: JSON.stringify({ confirm }) }),

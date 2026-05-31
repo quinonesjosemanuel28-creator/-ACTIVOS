@@ -16,6 +16,10 @@ export function useDashboard() {
   });
 }
 
+export function useCobranza() {
+  return useQuery({ queryKey: ['cobranza'], queryFn: () => api.cobranza() });
+}
+
 export function useFunnel() {
   const { mes } = useUI();
   return useQuery({ queryKey: ['funnel', mes], queryFn: () => api.funnel(mes!), enabled: !!mes });
