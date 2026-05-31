@@ -8,6 +8,7 @@
 import { getDb } from '../../src/infrastructure/sqlite/db';
 
 const db = getDb();
-const info = db.prepare('UPDATE funnel SET agendas = 0, asistieron = 0, cerrados = 0').run();
-console.log(`[clear:funnel] ${info.changes} mes(es) de funnel reseteados a 0 (agendas/shows).`);
+const legacy = db.prepare('UPDATE funnel SET agendas = 0, asistieron = 0, cerrados = 0').run();
+const canal = db.prepare('DELETE FROM funnel_canal').run();
+console.log(`[clear:funnel] ${legacy.changes} mes(es) legacy reseteados + ${canal.changes} fila(s) por canal borradas.`);
 console.log('[clear:funnel] Los cierres NO se tocaron. "Cerrados" se deriva de los cierres reales.');

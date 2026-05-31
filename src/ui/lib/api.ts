@@ -54,6 +54,7 @@ export interface FunnelView {
   asistieron: number;
   cerrados: number;
   cargaManual: boolean;
+  porCanal: { canal: string; agendas: number; asistieron: number; tasaShow: number | null }[];
   tasaShow: number | null;
   tasaCierre: number | null;
   tasaGlobal: number | null;

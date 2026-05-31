@@ -23,8 +23,8 @@ export function useFunnel() {
 export function useGuardarFunnel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { mes: string; agendas: number; asistieron: number }) =>
-      api.guardarFunnel(v.mes, { agendas: v.agendas, asistieron: v.asistieron }),
+    mutationFn: (v: { mes: string; canales: { canal: string; agendas: number; asistieron: number }[] }) =>
+      api.guardarFunnel(v.mes, { canales: v.canales }),
     onSuccess: () => Promise.all([
       qc.invalidateQueries({ queryKey: ['funnel'] }),
       qc.invalidateQueries({ queryKey: ['dashboard'] }),

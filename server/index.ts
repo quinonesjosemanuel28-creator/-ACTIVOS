@@ -13,6 +13,7 @@ import { crearRepositorios } from '../src/infrastructure/sqlite/repos';
 import { crearReposCierres } from '../src/infrastructure/sqlite/cierresRepos';
 import { crearEgresosAdminRepo } from '../src/infrastructure/sqlite/egresosRepos';
 import { crearLiquidacionRepo } from '../src/infrastructure/sqlite/comisionesRepos';
+import { crearFunnelCanalRepo } from '../src/infrastructure/sqlite/funnelCanalRepos';
 import * as uce from '../src/application/egresos/useCases';
 import * as ucom from '../src/application/comisiones/useCases';
 import * as ucf from '../src/application/funnel/useCases';
@@ -32,6 +33,7 @@ const reposDash = crearRepositoriosDashboard(db);
 const reposCierres = crearReposCierres(db);
 const reposEgresos = crearEgresosAdminRepo(db);
 const reposLiquidacion = crearLiquidacionRepo(db);
+const reposFunnelCanal = crearFunnelCanalRepo(db);
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -107,8 +109,8 @@ app.post('/api/comisiones/liquidar/:mes', h((req) =>
 ));
 app.delete('/api/comisiones/liquidar/:mes', h((req) => ucom.anularLiquidacion(reposEgresos, reposLiquidacion, param(req, 'mes'))));
 
-app.get('/api/funnel/:mes', h((req) => ucf.obtenerFunnel(reposCierres, repos.funnel, param(req, 'mes'))));
-app.put('/api/funnel/:mes', h((req) => ucf.guardarFunnelManual(repos.funnel, param(req, 'mes'), req.body)));
+app.get('/api/funnel/:mes', h((req) => ucf.obtenerFunnel(reposCierres, reposFunnelCanal, repos.funnel, param(req, 'mes'))));
+app.put('/api/funnel/:mes', h((req) => ucf.guardarFunnelCanales(reposFunnelCanal, param(req, 'mes'), req.body)));
 
 app.post('/api/cierre/:mes', h((req) => uc.cerrarMes(repos, param(req, 'mes'))));
 app.delete('/api/cierre/:mes', h((req) => uc.reabrirMes(repos, param(req, 'mes'))));

@@ -22,6 +22,7 @@ import type { Cobro, Programa, Venta } from '../../domain/types';
 import type { CierreMesRepo, CobrosRepo, Filtro, FunnelRepo, Repositorios, VentasRepo } from '../../application/ports';
 import { crearRepositorios } from '../sqlite/repos';
 import { crearReposCierres } from '../sqlite/cierresRepos';
+import { crearFunnelCanalRepo } from '../sqlite/funnelCanalRepos';
 
 const mesDe = (fechaIso: string): string => fechaIso.slice(0, 7);
 
@@ -113,14 +114,18 @@ export function crearRepositoriosDashboard(db: Database.Database): Repositorios 
     },
   };
 
-  // Funnel: agendas/shows del repo legacy (carga manual); `cerrados` se DERIVA
-  // de los cierres reales del mes → coincide con la sección Cierres y corrige
-  // la tasa de cierre del dashboard.
+  // Funnel: agendas/shows = suma de canales (funnel_canal), con fallback a los
+  // totales legacy ("Sin especificar"); `cerrados` se DERIVA de los cierres
+  // reales del mes → coincide con la sección Cierres y corrige el dashboard.
+  const canalRepo = crearFunnelCanalRepo(db);
   const funnel: FunnelRepo = {
     obtener: (mes, filtro) => {
-      const manual = legacy.funnel.obtener(mes, filtro);
+      const filas = canalRepo.listarPorMes(mes);
+      const base = filas.length
+        ? { agendas: filas.reduce((a, f) => a + f.agendas, 0), asistieron: filas.reduce((a, f) => a + f.asistieron, 0) }
+        : legacy.funnel.obtener(mes, filtro);
       const cerrados = rc.cierres.listar({ mes, unidadNegocio: unidadDe(filtro) }).length;
-      return { agendas: manual.agendas, asistieron: manual.asistieron, cerrados };
+      return { agendas: base.agendas, asistieron: base.asistieron, cerrados };
     },
     guardar: (mes, f, filtro) => legacy.funnel.guardar(mes, f, filtro),
   };

@@ -15,6 +15,8 @@ export interface FunnelMes {
 
 /** Tasa de show = asistieron / agendas. */
 export const tasaShow = (f: FunnelMes): number | null => safeDiv(f.asistieron, f.agendas);
+/** Tasa de show a partir de agendas/shows sueltos (p. ej. por canal). */
+export const tasaShowDe = (agendas: number, asistieron: number): number | null => safeDiv(asistieron, agendas);
 /** Tasa de cierre = cerrados / asistieron. */
 export const tasaCierre = (f: FunnelMes): number | null => safeDiv(f.cerrados, f.asistieron);
 /** Tasa global = cerrados / agendas. */

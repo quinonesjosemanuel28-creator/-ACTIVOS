@@ -139,6 +139,16 @@ export function migrar(db: Database.Database): void {
       id_egreso         TEXT NOT NULL
     );
   `);
+  // Funnel por canal: agendas/shows desglosados (el total = suma de canales).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS funnel_canal (
+      mes        TEXT NOT NULL,
+      canal      TEXT NOT NULL,
+      agendas    INTEGER NOT NULL DEFAULT 0,
+      asistieron INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (mes, canal)
+    );
+  `);
 }
 
 function agregarColumnaSiFalta(db: Database.Database, tabla: string, columna: string, tipo: string): void {
