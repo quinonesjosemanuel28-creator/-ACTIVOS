@@ -77,6 +77,11 @@ export interface ResumenCierres {
   cotizacionPonderada: number | null;
   cantidadCierres: number;
   cantidadPagos: number;
+  cashNuevoUsd: number;
+  cohortesUsd: number;
+  cashNuevoArs: number;
+  cohortesArs: number;
+  cierresPorPrograma: { empresario: number; ceroGestor: number };
 }
 
 export interface FiltrosCierresUI {

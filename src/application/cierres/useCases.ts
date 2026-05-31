@@ -45,6 +45,14 @@ export interface ResumenMes {
   cotizacionPonderada: number | null;
   cantidadCierres: number;
   cantidadPagos: number;
+  // Desglose del cash (misma definición que la Vista Ejecutiva: un pago es
+  // "nuevo" si su cierre cerró en el mismo mes; si no, es cohorte).
+  cashNuevoUsd: number;
+  cohortesUsd: number;
+  cashNuevoArs: number;
+  cohortesArs: number;
+  // Cierres nuevos del período por programa.
+  cierresPorPrograma: { empresario: number; ceroGestor: number };
 }
 
 /**
@@ -90,6 +98,30 @@ export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCi
   const sumArs = conArs.reduce((a, p) => a + (p.montoArs ?? 0), 0);
   const usdConArs = conArs.reduce((a, p) => a + p.montoUsd, 0);
 
+  // Cash nuevo vs cohortes: clasifica cada pago por el mes de su cierre (misma
+  // definición que la Vista Ejecutiva). cashNuevoUsd + cohortesUsd = total.
+  let cashNuevoUsd = 0, cohortesUsd = 0, cashNuevoArs = 0, cohortesArs = 0;
+  for (const p of pagosMes) {
+    const cierre = cierrePorId.get(p.idCierre);
+    const esNuevo = !!cierre && cierre.fechaCierre.slice(0, 7) === mes;
+    if (esNuevo) { cashNuevoUsd += p.montoUsd; cashNuevoArs += p.montoArs ?? 0; }
+    else { cohortesUsd += p.montoUsd; cohortesArs += p.montoArs ?? 0; }
+  }
+
+  // Cierres nuevos del período por programa (respeta los filtros del listado).
+  const cierresDelMes = repos.cierres.listar({
+    mes,
+    programa: filtros?.programa,
+    closer: filtros?.closer,
+    estado: filtros?.estado,
+    q: filtros?.q,
+    unidadNegocio: filtros?.unidadNegocio,
+  });
+  const cierresPorPrograma = {
+    empresario: cierresDelMes.filter((c) => c.programa === 'Empresario').length,
+    ceroGestor: cierresDelMes.filter((c) => c.programa === 'Cero a Gestor').length,
+  };
+
   return {
     mes,
     totalCobradoUsd: sumUsd,
@@ -97,6 +129,11 @@ export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCi
     cotizacionPonderada: usdConArs > 0 ? sumArs / usdConArs : null,
     cantidadCierres: idsCierresMes.size,
     cantidadPagos: pagosMes.length,
+    cashNuevoUsd,
+    cohortesUsd,
+    cashNuevoArs,
+    cohortesArs,
+    cierresPorPrograma,
   };
 }
 

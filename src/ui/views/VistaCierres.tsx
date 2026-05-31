@@ -67,16 +67,7 @@ export function VistaCierres() {
 
       <FiltrosBar filtros={filtros} onChange={setFiltros} meses={meses?.meses ?? []} closers={closers} />
 
-      {resumen && (
-        <ResumenCierres
-          mes={filtros.mes}
-          totalCobradoUsd={resumen.totalCobradoUsd}
-          totalCobradoArs={resumen.totalCobradoArs}
-          cotizacionPonderada={resumen.cotizacionPonderada}
-          cantidadCierres={resumen.cantidadCierres}
-          cantidadPagos={resumen.cantidadPagos}
-        />
-      )}
+      {resumen && <ResumenCierres mes={filtros.mes} resumen={resumen} />}
 
       {isLoading ? (
         <div className="flex min-h-[30vh] items-center justify-center"><Spinner className="h-8 w-8" /></div>
