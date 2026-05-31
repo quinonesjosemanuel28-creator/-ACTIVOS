@@ -18,6 +18,7 @@
  */
 import type { Cierre, Pago } from '../cierres/types';
 import type { Mes } from '../types';
+import { nivelCuota, peorNivel, type NivelSemaforo } from './semaforo';
 
 export const DIAS_CUOTA = 30;
 
@@ -33,6 +34,8 @@ export interface CuotaDerivada {
   /** Vencimiento. Real si la cuota previa está completa; estimado si no. */
   vencimiento: string;
   vencimientoEstimado: boolean;
+  /** Nivel del semáforo de esta cuota (null = completa o al día). */
+  nivel: NivelSemaforo | null;
 }
 
 export interface CobranzaCierre {
@@ -45,11 +48,25 @@ export interface CobranzaCierre {
   estado: EstadoCobranza;
   /** Días de atraso de la cuota vencida más antigua sin completar (0 si ninguna). */
   diasAtraso: number;
+  /** Color del semáforo del cierre = peor color entre sus cuotas pendientes. */
+  nivel: NivelSemaforo | null;
 }
 
 function addDias(fechaIso: string, dias: number): string {
   const d = new Date(`${fechaIso.slice(0, 10)}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Suma `meses` calendario a una fecha ISO, con clamp de fin de mes. */
+export function addMeses(fechaIso: string, meses: number): string {
+  const d = new Date(`${fechaIso.slice(0, 10)}T00:00:00Z`);
+  const dia = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + meses);
+  // Clamp: si el día original no existe en el mes destino, usa el último día.
+  const ultimoDia = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(dia, ultimoDia));
   return d.toISOString().slice(0, 10);
 }
 
@@ -82,6 +99,7 @@ export function cobranzaDeCierre(cierre: Cierre, pagosDelCierre: readonly Pago[]
       cuotas: [],
       estado: 'Saldado',
       diasAtraso: 0,
+      nivel: null,
     };
   }
 
@@ -110,13 +128,19 @@ export function cobranzaDeCierre(cierre: Cierre, pagosDelCierre: readonly Pago[]
     }
   }
 
-  // Vencimientos encadenados.
+  // Calendario de vencimientos.
+  // - Con fechaPrimeraCuota (planes +Activos, cuotas mensuales fijas): cuota N
+  //   vence en fechaPrimeraCuota + (N-1) meses. Fechas exactas, no estimadas.
+  // - Sin ella (plan manual): modelo encadenado de 30 días (compat).
+  const calendarioFijo = !!cierre.fechaPrimeraCuota;
   const cuotas: CuotaDerivada[] = [];
   for (let i = 0; i < n; i++) {
     const completa = completadaEn[i] !== undefined;
     let vencimiento: string;
     let estimado = false;
-    if (i === 0) {
+    if (calendarioFijo) {
+      vencimiento = addMeses(cierre.fechaPrimeraCuota!, i); // mensual fijo
+    } else if (i === 0) {
       vencimiento = addDias(cierre.fechaCierre, DIAS_CUOTA); // cuota 1: cierre + 30
     } else if (completadaEn[i - 1]) {
       vencimiento = addDias(completadaEn[i - 1]!, DIAS_CUOTA); // real: previa completada + 30
@@ -133,6 +157,7 @@ export function cobranzaDeCierre(cierre: Cierre, pagosDelCierre: readonly Pago[]
       fechaCompletada: completadaEn[i],
       vencimiento,
       vencimientoEstimado: estimado,
+      nivel: nivelCuota(vencimiento, completa, hoy),
     });
   }
 
@@ -150,7 +175,11 @@ export function cobranzaDeCierre(cierre: Cierre, pagosDelCierre: readonly Pago[]
   else if (diasAtraso >= 1) estado = 'Atrasado';
   else estado = 'Al día';
 
-  return { idCierre: cierre.idCierre, tieneePlan: true, totalUsd, abonadoUsd, saldoPendienteUsd, cuotas, estado, diasAtraso };
+  // Color del cierre = peor nivel entre cuotas pendientes (estimadas incluidas:
+  // tienen fecha y pueden estar por vencer/vencidas en la proyección visual).
+  const nivel = peorNivel(cuotas.map((c) => c.nivel));
+
+  return { idCierre: cierre.idCierre, tieneePlan: true, totalUsd, abonadoUsd, saldoPendienteUsd, cuotas, estado, diasAtraso, nivel };
 }
 
 /** Proyección de cobranza: monto pendiente por mes futuro (USD). SOLO visual. */

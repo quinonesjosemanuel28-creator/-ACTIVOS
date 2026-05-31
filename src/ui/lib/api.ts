@@ -52,6 +52,7 @@ export interface PuntoHistorico {
   netoTotal: number;
 }
 
+export type NivelSemaforo = 'verde' | 'amarillo' | 'naranja' | 'rojo';
 export interface CuotaDerivada {
   numero: number;
   montoUsd: number;
@@ -60,6 +61,7 @@ export interface CuotaDerivada {
   fechaCompletada?: string;
   vencimiento: string;
   vencimientoEstimado: boolean;
+  nivel: NivelSemaforo | null;
 }
 export interface CobranzaCierreView {
   idCierre: string;
@@ -71,11 +73,15 @@ export interface CobranzaCierreView {
   cuotas: CuotaDerivada[];
   estado: 'Saldado' | 'Al día' | 'Atrasado' | 'Morosidad';
   diasAtraso: number;
+  nivel: NivelSemaforo | null;
 }
 export interface CobranzaView {
   hoy: string;
   cierres: CobranzaCierreView[];
-  resumen: { alDia: number; atrasado: number; morosidad: number; saldoPendienteUsd: number; morosidadUsd: number };
+  resumen: {
+    alDia: number; atrasado: number; morosidad: number; saldoPendienteUsd: number; morosidadUsd: number;
+    semaforo: { verde: number; amarillo: number; naranja: number; rojo: number };
+  };
   proyeccion: { mes: string; montoUsd: number }[];
 }
 

@@ -123,6 +123,7 @@ export function migrar(db: Database.Database): void {
   // = saldados/legacy, fuera del sistema de cobranza. La migración no los toca.
   agregarColumnaSiFalta(db, 'cierres', 'cantidad_cuotas', 'INTEGER');
   agregarColumnaSiFalta(db, 'cierres', 'monto_cuota_usd', 'REAL');
+  agregarColumnaSiFalta(db, 'cierres', 'fecha_primera_cuota', 'TEXT');
   agregarColumnaSiFalta(db, 'pagos', 'closer', 'TEXT');
   // Módulo Egresos: doble moneda + recurrente + medio/comentarios.
   agregarColumnaSiFalta(db, 'egresos', 'monto_ars', 'REAL');

@@ -169,6 +169,9 @@ export function crearCierre(repos: ReposCierres, input: unknown): Cierre {
     cantidadCuotas: c.cantidadCuotas,
     // Cuotas del mismo monto = total / cantidad (solo si hay plan).
     montoCuotaUsd: c.cantidadCuotas ? Math.round((c.ticketTotalUsd / c.cantidadCuotas) * 100) / 100 : undefined,
+    // Vencimiento de la cuota 1 (default: fecha del cierre); habilita el
+    // calendario mensual fijo del semáforo.
+    fechaPrimeraCuota: c.cantidadCuotas ? (c.fechaPrimeraCuota ?? c.fechaCierre) : undefined,
   };
   repos.cierres.guardar(cierre);
   return cierre;
@@ -274,6 +277,9 @@ export function importarCierresPagos(repos: ReposCierres, input: unknown): Impor
       unidadNegocio: c.unidadNegocio,
       estado: c.estado,
       revisar: c.revisar,
+      cantidadCuotas: c.cantidadCuotas,
+      montoCuotaUsd: c.montoCuotaUsd,
+      fechaPrimeraCuota: c.fechaPrimeraCuota,
     });
   }
   for (const p of pagos) {

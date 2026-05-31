@@ -37,6 +37,7 @@ interface CierreRow {
   revisar: string | null;
   cantidad_cuotas: number | null;
   monto_cuota_usd: number | null;
+  fecha_primera_cuota: string | null;
 }
 const toCierre = (r: CierreRow): Cierre => ({
   idCierre: r.id_cierre,
@@ -56,6 +57,7 @@ const toCierre = (r: CierreRow): Cierre => ({
   revisar: r.revisar ?? undefined,
   cantidadCuotas: r.cantidad_cuotas ?? undefined,
   montoCuotaUsd: r.monto_cuota_usd ?? undefined,
+  fechaPrimeraCuota: r.fecha_primera_cuota ?? undefined,
 });
 
 interface PagoRow {
@@ -141,16 +143,17 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         `INSERT OR REPLACE INTO cierres
          (id_cierre, fecha_cierre, cliente_nombre, cliente_mail, cliente_telefono, programa,
           ticket_total_usd, closer, setter, funnel, referido, comentarios, unidad_negocio, estado, revisar,
-          cantidad_cuotas, monto_cuota_usd)
+          cantidad_cuotas, monto_cuota_usd, fecha_primera_cuota)
          VALUES (@idCierre,@fechaCierre,@clienteNombre,@clienteMail,@clienteTelefono,@programa,
           @ticketTotalUsd,@closer,@setter,@funnel,@referido,@comentarios,@unidadNegocio,@estado,@revisar,
-          @cantidadCuotas,@montoCuotaUsd)`,
+          @cantidadCuotas,@montoCuotaUsd,@fechaPrimeraCuota)`,
       ).run({
         ...c,
         clienteMail: c.clienteMail ?? null,
         clienteTelefono: c.clienteTelefono ?? null,
         cantidadCuotas: c.cantidadCuotas ?? null,
         montoCuotaUsd: c.montoCuotaUsd ?? null,
+        fechaPrimeraCuota: c.fechaPrimeraCuota ?? null,
         closer: c.closer ?? null,
         setter: c.setter ?? null,
         funnel: c.funnel ?? null,

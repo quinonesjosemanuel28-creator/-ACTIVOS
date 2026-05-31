@@ -20,6 +20,7 @@ export function cierre(p: Partial<Cierre> = {}): Cierre {
     revisar: p.revisar,
     cantidadCuotas: p.cantidadCuotas,
     montoCuotaUsd: p.montoCuotaUsd,
+    fechaPrimeraCuota: p.fechaPrimeraCuota,
   };
 }
 

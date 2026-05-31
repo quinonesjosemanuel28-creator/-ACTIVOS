@@ -16,6 +16,8 @@ export interface CobranzaView {
     morosidad: number;
     saldoPendienteUsd: number;
     morosidadUsd: number; // saldo pendiente de cierres en morosidad
+    /** Semáforo: cantidad de cierres por color (peor nivel del cierre). */
+    semaforo: { verde: number; amarillo: number; naranja: number; rojo: number };
   };
   /** Proyección de cobranza por mes (USD). SOLO visual, no es cash. */
   proyeccion: { mes: string; montoUsd: number }[];
@@ -41,6 +43,12 @@ export function obtenerCobranza(repos: ReposCierres, hoy: string = hoyIso()): Co
     morosidad: cuenta('Morosidad'),
     saldoPendienteUsd: round2(cobranzas.reduce((a, c) => a + c.saldoPendienteUsd, 0)),
     morosidadUsd: round2(cobranzas.filter((c) => c.estado === 'Morosidad').reduce((a, c) => a + c.saldoPendienteUsd, 0)),
+    semaforo: {
+      verde: cobranzas.filter((c) => c.nivel === 'verde').length,
+      amarillo: cobranzas.filter((c) => c.nivel === 'amarillo').length,
+      naranja: cobranzas.filter((c) => c.nivel === 'naranja').length,
+      rojo: cobranzas.filter((c) => c.nivel === 'rojo').length,
+    },
   };
 
   const proyMap = proyeccionPorMes(cobranzas);

@@ -23,6 +23,21 @@ const TONO: Record<CobranzaCierreView['estado'], 'green' | 'amber' | 'red' | 'ne
   Saldado: 'neutral',
 };
 
+const COLOR_NIVEL: Record<string, string> = {
+  verde: 'bg-signal-green',
+  amarillo: 'bg-yellow-400',
+  naranja: 'bg-orange-500',
+  rojo: 'bg-signal-red',
+  none: 'bg-navy-200 dark:bg-navy-600',
+};
+const ETIQUETA_NIVEL: Record<string, string> = {
+  verde: 'Próximo a vencer',
+  amarillo: 'Recién vencido',
+  naranja: 'Atrasado',
+  rojo: 'Moroso',
+  none: 'Sin alerta',
+};
+
 export function VistaCobranza() {
   const { data, isLoading, error } = useCobranza();
   if (isLoading) return <Centro><Spinner className="h-8 w-8" /></Centro>;
@@ -45,6 +60,14 @@ export function VistaCobranza() {
         </div>
       ) : (
         <>
+          {/* Semáforo de cobranza (cantidad de cierres por color) */}
+          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Semaforo color="bg-signal-green" label="Próximo a vencer" sub="faltan ≤5 días" n={resumen.semaforo.verde} />
+            <Semaforo color="bg-yellow-400" label="Recién vencido" sub="día 0 a 3" n={resumen.semaforo.amarillo} />
+            <Semaforo color="bg-orange-500" label="Atrasado" sub="día 4 a 8" n={resumen.semaforo.naranja} />
+            <Semaforo color="bg-signal-red" label="Moroso" sub="día 9+" n={resumen.semaforo.rojo} />
+          </div>
+
           {/* Resumen de estados */}
           <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat label="Al día" valor={String(resumen.alDia)} tono="green" />
@@ -111,7 +134,12 @@ function FilaCobranza({ c }: { c: CobranzaCierreView }) {
     <>
       <tr className="cursor-pointer border-t border-navy-100 hover:bg-navy-50 dark:border-navy-700 dark:hover:bg-navy-800/50" onClick={() => setAbierto((v) => !v)}>
         <td className={cn(TD, 'text-navy-400')}>{abierto ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</td>
-        <td className={cn(TD, 'font-600 text-navy-900 dark:text-navy-50')}>{c.cliente}</td>
+        <td className={cn(TD, 'font-600 text-navy-900 dark:text-navy-50')}>
+          <span className="inline-flex items-center gap-2">
+            <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', COLOR_NIVEL[c.nivel ?? 'none'])} title={ETIQUETA_NIVEL[c.nivel ?? 'none']} />
+            {c.cliente}
+          </span>
+        </td>
         <td className={cn(TD, 'whitespace-nowrap text-navy-500 dark:text-navy-300')}>{c.fechaCierre}</td>
         <td className={cn(TD, 'text-right tnum')}>{fmtUsd(c.totalUsd)}</td>
         <td className={cn(TD, 'text-right tnum text-navy-700 dark:text-navy-100')}>{fmtUsd(c.abonadoUsd)}</td>
@@ -146,9 +174,16 @@ function FilaCobranza({ c }: { c: CobranzaCierreView }) {
                         {q.vencimientoEstimado && <span className="ml-1 text-navy-400">(est.)</span>}
                       </td>
                       <td className="px-3 py-1.5">
-                        {q.completa
-                          ? <span className="text-signal-green">Completa</span>
-                          : <span className="text-navy-500 dark:text-navy-300">Pendiente</span>}
+                        {q.completa ? (
+                          <span className="text-signal-green">Completa</span>
+                        ) : q.nivel ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={cn('h-2 w-2 rounded-full', COLOR_NIVEL[q.nivel])} />
+                            {ETIQUETA_NIVEL[q.nivel]}
+                          </span>
+                        ) : (
+                          <span className="text-navy-500 dark:text-navy-300">Pendiente</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -159,6 +194,19 @@ function FilaCobranza({ c }: { c: CobranzaCierreView }) {
         </tr>
       )}
     </>
+  );
+}
+
+function Semaforo({ color, label, sub, n }: { color: string; label: string; sub: string; n: number }) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-2">
+        <span className={cn('h-3 w-3 rounded-full', color)} />
+        <p className="text-xs font-600 uppercase tracking-wide text-navy-400">{label}</p>
+      </div>
+      <p className="mt-1 font-display text-2xl font-700 tnum text-navy-900 dark:text-navy-50">{n}</p>
+      <p className="text-xs text-navy-400">{sub}</p>
+    </Card>
   );
 }
 

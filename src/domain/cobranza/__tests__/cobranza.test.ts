@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cobranzaDeCierre, proyeccionPorMes, DIAS_CUOTA } from '../calculo';
+import { cobranzaDeCierre, proyeccionPorMes, addMeses, DIAS_CUOTA } from '../calculo';
 import { cierre as mkCierre, pago as mkPago } from '../../cierres/__tests__/fixtures';
 
 const plan = (over = {}) =>
@@ -74,5 +74,30 @@ describe('Cobranza · proyección (solo visual)', () => {
     const proy = proyeccionPorMes([cb]);
     // 3 cuotas pendientes de 1000; la cuota 1 está completa
     expect(Object.values(proy).reduce((a, b) => a + b, 0)).toBe(3000);
+  });
+});
+
+describe('Cobranza · calendario mensual fijo (fechaPrimeraCuota)', () => {
+  it('addMeses suma meses con clamp de fin de mes', () => {
+    expect(addMeses('2026-01-15', 1)).toBe('2026-02-15');
+    expect(addMeses('2026-01-31', 1)).toBe('2026-02-28'); // clamp febrero
+    expect(addMeses('2026-05-10', 3)).toBe('2026-08-10');
+  });
+
+  it('cuota N vence en fechaPrimeraCuota + (N-1) meses (no estimado)', () => {
+    const c = plan({ fechaPrimeraCuota: '2026-05-10' });
+    const cb = cobranzaDeCierre(c, [], '2026-05-01');
+    expect(cb.cuotas[0]!.vencimiento).toBe('2026-05-10');
+    expect(cb.cuotas[1]!.vencimiento).toBe('2026-06-10');
+    expect(cb.cuotas[3]!.vencimiento).toBe('2026-08-10');
+    expect(cb.cuotas.every((q) => !q.vencimientoEstimado)).toBe(true);
+  });
+
+  it('color del cierre = peor nivel entre cuotas (una cuota morosa → cierre rojo)', () => {
+    // primera cuota vence 2026-05-10; hoy 2026-05-25 → 15 días de atraso → rojo
+    const c = plan({ fechaPrimeraCuota: '2026-05-10' });
+    const cb = cobranzaDeCierre(c, [], '2026-05-25');
+    expect(cb.cuotas[0]!.nivel).toBe('rojo');
+    expect(cb.nivel).toBe('rojo');
   });
 });

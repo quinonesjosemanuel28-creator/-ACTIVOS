@@ -51,6 +51,8 @@ export interface Cierre {
   cantidadCuotas?: number;
   /** Monto de cada cuota en USD = ticketTotalUsd / cantidadCuotas. */
   montoCuotaUsd?: number;
+  /** Vencimiento de la cuota 1. Si está, el calendario es mensual fijo. */
+  fechaPrimeraCuota?: string;
 }
 
 /**
