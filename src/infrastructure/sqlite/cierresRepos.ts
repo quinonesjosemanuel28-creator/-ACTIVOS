@@ -35,6 +35,10 @@ interface CierreRow {
   unidad_negocio: string;
   estado: string;
   revisar: string | null;
+  cantidad_cuotas: number | null;
+  monto_cuota_usd: number | null;
+  fecha_primera_cuota: string | null;
+  inactivo: number | null;
 }
 const toCierre = (r: CierreRow): Cierre => ({
   idCierre: r.id_cierre,
@@ -52,6 +56,10 @@ const toCierre = (r: CierreRow): Cierre => ({
   unidadNegocio: r.unidad_negocio as UnidadNegocio,
   estado: r.estado as EstadoCierre,
   revisar: r.revisar ?? undefined,
+  cantidadCuotas: r.cantidad_cuotas ?? undefined,
+  montoCuotaUsd: r.monto_cuota_usd ?? undefined,
+  fechaPrimeraCuota: r.fecha_primera_cuota ?? undefined,
+  inactivo: r.inactivo === 1,
 });
 
 interface PagoRow {
@@ -67,6 +75,9 @@ interface PagoRow {
   medio_pago: string;
   comprobante_url: string | null;
   comentarios: string | null;
+  closer: string | null;
+  aplica_setting: number | null;
+  setter: string | null;
 }
 const toPago = (r: PagoRow): Pago => ({
   idPago: r.id_pago,
@@ -81,6 +92,9 @@ const toPago = (r: PagoRow): Pago => ({
   medioPago: r.medio_pago as MedioPago,
   comprobanteUrl: r.comprobante_url ?? undefined,
   comentarios: r.comentarios ?? undefined,
+  closer: r.closer ?? undefined,
+  aplicaSetting: r.aplica_setting === 1,
+  setter: r.setter ?? undefined,
 });
 
 export function crearReposCierres(db: Database.Database): ReposCierres {
@@ -101,7 +115,11 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         params.push(filtros.programa);
       }
       if (filtros.closer) {
-        where.push('closer = ?');
+        // "Cierres donde ese closer cobró ≥1 pago" (closer efectivo del pago =
+        // pago.closer, o el del cierre si el pago no tiene closer propio).
+        where.push(
+          'EXISTS (SELECT 1 FROM pagos p WHERE p.id_cierre = cierres.id_cierre AND COALESCE(p.closer, cierres.closer) = ?)',
+        );
         params.push(filtros.closer);
       }
       if (filtros.estado) {
@@ -123,16 +141,34 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
       return rows.map(toCierre);
     },
     guardar(c) {
+      // UPSERT con ON CONFLICT DO UPDATE (no INSERT OR REPLACE): editar un
+      // cierre actualiza la fila EN SU LUGAR. REPLACE borraría la fila y, por
+      // el FK ON DELETE CASCADE de `pagos`, eliminaría sus pagos.
       db.prepare(
-        `INSERT OR REPLACE INTO cierres
+        `INSERT INTO cierres
          (id_cierre, fecha_cierre, cliente_nombre, cliente_mail, cliente_telefono, programa,
-          ticket_total_usd, closer, setter, funnel, referido, comentarios, unidad_negocio, estado, revisar)
+          ticket_total_usd, closer, setter, funnel, referido, comentarios, unidad_negocio, estado, revisar,
+          cantidad_cuotas, monto_cuota_usd, fecha_primera_cuota, inactivo)
          VALUES (@idCierre,@fechaCierre,@clienteNombre,@clienteMail,@clienteTelefono,@programa,
-          @ticketTotalUsd,@closer,@setter,@funnel,@referido,@comentarios,@unidadNegocio,@estado,@revisar)`,
+          @ticketTotalUsd,@closer,@setter,@funnel,@referido,@comentarios,@unidadNegocio,@estado,@revisar,
+          @cantidadCuotas,@montoCuotaUsd,@fechaPrimeraCuota,@inactivo)
+         ON CONFLICT(id_cierre) DO UPDATE SET
+          fecha_cierre=excluded.fecha_cierre, cliente_nombre=excluded.cliente_nombre,
+          cliente_mail=excluded.cliente_mail, cliente_telefono=excluded.cliente_telefono,
+          programa=excluded.programa, ticket_total_usd=excluded.ticket_total_usd,
+          closer=excluded.closer, setter=excluded.setter, funnel=excluded.funnel,
+          referido=excluded.referido, comentarios=excluded.comentarios,
+          unidad_negocio=excluded.unidad_negocio, estado=excluded.estado, revisar=excluded.revisar,
+          cantidad_cuotas=excluded.cantidad_cuotas, monto_cuota_usd=excluded.monto_cuota_usd,
+          fecha_primera_cuota=excluded.fecha_primera_cuota, inactivo=excluded.inactivo`,
       ).run({
         ...c,
         clienteMail: c.clienteMail ?? null,
         clienteTelefono: c.clienteTelefono ?? null,
+        cantidadCuotas: c.cantidadCuotas ?? null,
+        montoCuotaUsd: c.montoCuotaUsd ?? null,
+        fechaPrimeraCuota: c.fechaPrimeraCuota ?? null,
+        inactivo: c.inactivo ? 1 : 0,
         closer: c.closer ?? null,
         setter: c.setter ?? null,
         funnel: c.funnel ?? null,
@@ -165,9 +201,9 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
       db.prepare(
         `INSERT OR REPLACE INTO pagos
          (id_pago, id_cierre, fecha_pago, hora_pago, monto_usd, monto_ars, cotizacion,
-          tipo_pago, numero_cuota, medio_pago, comprobante_url, comentarios)
+          tipo_pago, numero_cuota, medio_pago, comprobante_url, comentarios, closer, aplica_setting, setter)
          VALUES (@idPago,@idCierre,@fechaPago,@horaPago,@montoUsd,@montoArs,@cotizacion,
-          @tipoPago,@numeroCuota,@medioPago,@comprobanteUrl,@comentarios)`,
+          @tipoPago,@numeroCuota,@medioPago,@comprobanteUrl,@comentarios,@closer,@aplicaSetting,@setter)`,
       ).run({
         ...p,
         horaPago: p.horaPago ?? null,
@@ -176,6 +212,9 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         numeroCuota: p.numeroCuota ?? null,
         comprobanteUrl: p.comprobanteUrl ?? null,
         comentarios: p.comentarios ?? null,
+        closer: p.closer ?? null,
+        aplicaSetting: p.aplicaSetting ? 1 : 0,
+        setter: p.setter ?? null,
       });
     },
     eliminar(id) {

@@ -39,6 +39,10 @@ describe('resumenDesdeFilas (modo Todos los meses)', () => {
 
   it('listado vacío → ceros y cotización null', () => {
     const r = resumenDesdeFilas([]);
-    expect(r).toEqual({ totalCobradoUsd: 0, totalCobradoArs: 0, cotizacionPonderada: null, cantidadCierres: 0, cantidadPagos: 0 });
+    expect(r).toEqual({
+      totalCobradoUsd: 0, totalCobradoArs: 0, cotizacionPonderada: null, cantidadCierres: 0, cantidadPagos: 0,
+      cashNuevoUsd: 0, cohortesUsd: 0, cashNuevoArs: 0, cohortesArs: 0,
+      cierresPorPrograma: { empresario: 0, ceroGestor: 0 },
+    });
   });
 });

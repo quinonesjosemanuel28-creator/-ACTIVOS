@@ -100,7 +100,8 @@ CREATE TABLE IF NOT EXISTS pagos (
   numero_cuota    TEXT,
   medio_pago      TEXT NOT NULL,
   comprobante_url TEXT,
-  comentarios     TEXT
+  comentarios     TEXT,
+  closer          TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_cierres_fecha ON cierres(fecha_cierre);
@@ -118,6 +119,42 @@ export function migrar(db: Database.Database): void {
   // Migraciones aditivas para bases ya creadas (CREATE TABLE IF NOT EXISTS
   // no agrega columnas nuevas a tablas existentes).
   agregarColumnaSiFalta(db, 'cierres', 'revisar', 'TEXT');
+  // Plan de cuotas (solo ventas nuevas). Cierres existentes quedan sin plan
+  // = saldados/legacy, fuera del sistema de cobranza. La migración no los toca.
+  agregarColumnaSiFalta(db, 'cierres', 'cantidad_cuotas', 'INTEGER');
+  agregarColumnaSiFalta(db, 'cierres', 'monto_cuota_usd', 'REAL');
+  agregarColumnaSiFalta(db, 'cierres', 'fecha_primera_cuota', 'TEXT');
+  agregarColumnaSiFalta(db, 'cierres', 'inactivo', 'INTEGER NOT NULL DEFAULT 0');
+  agregarColumnaSiFalta(db, 'pagos', 'closer', 'TEXT');
+  // Módulo Egresos: doble moneda + recurrente + medio/comentarios.
+  agregarColumnaSiFalta(db, 'egresos', 'monto_ars', 'REAL');
+  agregarColumnaSiFalta(db, 'egresos', 'cotizacion', 'REAL');
+  agregarColumnaSiFalta(db, 'egresos', 'recurrente', 'INTEGER NOT NULL DEFAULT 0');
+  agregarColumnaSiFalta(db, 'egresos', 'medio_pago', 'TEXT');
+  agregarColumnaSiFalta(db, 'egresos', 'comentarios', 'TEXT');
+  // Comisiones: flags de setting a nivel de pago + registro de liquidaciones.
+  agregarColumnaSiFalta(db, 'pagos', 'aplica_setting', 'INTEGER NOT NULL DEFAULT 0');
+  agregarColumnaSiFalta(db, 'pagos', 'setter', 'TEXT');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comisiones_liquidacion (
+      mes               TEXT PRIMARY KEY,
+      fecha_liquidacion TEXT NOT NULL,
+      total_ars         REAL NOT NULL,
+      total_usd         REAL NOT NULL,
+      cotizacion        REAL,
+      id_egreso         TEXT NOT NULL
+    );
+  `);
+  // Funnel por canal: agendas/shows desglosados (el total = suma de canales).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS funnel_canal (
+      mes        TEXT NOT NULL,
+      canal      TEXT NOT NULL,
+      agendas    INTEGER NOT NULL DEFAULT 0,
+      asistieron INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (mes, canal)
+    );
+  `);
 }
 
 function agregarColumnaSiFalta(db: Database.Database, tabla: string, columna: string, tipo: string): void {

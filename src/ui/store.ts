@@ -11,6 +11,9 @@ export type Vista =
   | 'marketing'
   | 'programas'
   | 'cierres'
+  | 'cobranza'
+  | 'egresos'
+  | 'comisiones'
   | 'datos';
 
 export type FiltroPrograma = 'TODOS' | Programa;

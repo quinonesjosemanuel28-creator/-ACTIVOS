@@ -13,6 +13,7 @@ import { useUI } from '../store';
 import { Button, Card, CardBody, CardHeader, CardTitle, Input, Select, Spinner } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import { ImportarDialog } from '../components/cierres/ImportarDialog';
+import { CATEGORIAS_EGRESO } from '@domain/egresos/categorias';
 import { fmtMes } from '../lib/format';
 
 function useInvalidar() {
@@ -113,7 +114,6 @@ function EgresoForm({ onDone }: { onDone: () => void }) {
     const f = new FormData(e.currentTarget);
     mut.mutate({
       fecha: f.get('fecha'),
-      tipo: f.get('tipo'),
       categoria: f.get('categoria'),
       concepto: f.get('concepto') || undefined,
       montoUsd: Number(f.get('monto')),
@@ -121,17 +121,19 @@ function EgresoForm({ onDone }: { onDone: () => void }) {
   };
   return (
     <Card>
-      <CardHeader><CardTitle>Nuevo egreso</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Nuevo egreso (rápido)</CardTitle></CardHeader>
       <CardBody>
+        <p className="mb-3 text-sm text-navy-500 dark:text-navy-300">Para el historial completo, doble moneda y recurrentes, usá la sección <b>Egresos</b>.</p>
         <form onSubmit={submit} className="grid grid-cols-2 gap-3">
           <Field label="Fecha"><Input type="date" name="fecha" required /></Field>
-          <Field label="Tipo">
-            <Select name="tipo"><option>Directo</option><option>Operativo</option><option>Extraordinario</option></Select>
+          <Field label="Categoría">
+            <Select name="categoria">
+              {CATEGORIAS_EGRESO.map((c) => <option key={c}>{c}</option>)}
+            </Select>
           </Field>
-          <Field label="Categoría"><Input name="categoria" placeholder="Marketing, Estructura…" required /></Field>
           <Field label="Concepto"><Input name="concepto" placeholder="Opcional" /></Field>
           <Field label="Monto (USD)"><Input type="number" name="monto" min="1" step="any" required /></Field>
-          <div className="flex items-end"><Button type="submit" className="w-full" disabled={mut.isPending}>Agregar</Button></div>
+          <div className="flex items-end col-span-2"><Button type="submit" className="w-full" disabled={mut.isPending}>Agregar</Button></div>
         </form>
         <Mensaje m={msg} />
       </CardBody>
@@ -160,6 +162,8 @@ function ParametrosCard({ onDone }: { onDone: () => void }) {
       topeCacUsd: Number(f.get('topeCac')),
       metaTasaCierre: Number(f.get('metaCierre')) / 100,
       runwayMinimoMeses: Number(f.get('runwayMin')),
+      objetivoRoas: Number(f.get('objRoas')),
+      objetivoMer: Number(f.get('objMer')),
     });
   };
   return (
@@ -174,6 +178,8 @@ function ParametrosCard({ onDone }: { onDone: () => void }) {
           <Field label="Tope CAC (USD)"><Input type="number" name="topeCac" step="any" defaultValue={data.topeCacUsd} /></Field>
           <Field label="Meta tasa cierre (%)"><Input type="number" name="metaCierre" step="any" defaultValue={data.metaTasaCierre * 100} /></Field>
           <Field label="Runway mínimo (meses)"><Input type="number" name="runwayMin" step="any" defaultValue={data.runwayMinimoMeses} /></Field>
+          <Field label="Objetivo ROAS (x)"><Input type="number" name="objRoas" step="any" defaultValue={data.objetivoRoas} /></Field>
+          <Field label="Objetivo MER (x)"><Input type="number" name="objMer" step="any" defaultValue={data.objetivoMer} /></Field>
           <div className="flex items-end"><Button type="submit" className="w-full" disabled={mut.isPending}>Guardar</Button></div>
         </form>
         <Mensaje m={msg} />

@@ -88,6 +88,11 @@ interface EgresoRow {
   monto_usd: number;
   programa: string | null;
   unidad_negocio: string;
+  monto_ars: number | null;
+  cotizacion: number | null;
+  recurrente: number | null;
+  medio_pago: string | null;
+  comentarios: string | null;
 }
 const toEgreso = (r: EgresoRow): Egreso => ({
   idEgreso: r.id_egreso,
@@ -99,6 +104,11 @@ const toEgreso = (r: EgresoRow): Egreso => ({
   montoUsd: r.monto_usd,
   programa: (r.programa as Programa | null) ?? undefined,
   unidadNegocio: r.unidad_negocio as UnidadNegocio,
+  montoArs: r.monto_ars ?? undefined,
+  cotizacion: r.cotizacion ?? undefined,
+  recurrente: r.recurrente === 1,
+  medioPago: r.medio_pago ?? undefined,
+  comentarios: r.comentarios ?? undefined,
 });
 
 /** Cláusula WHERE de unidad (CONSOLIDADO = todas). */
@@ -177,9 +187,20 @@ export function crearRepositorios(db: Database.Database): Repositorios {
     insertar(e) {
       db.prepare(
         `INSERT OR REPLACE INTO egresos
-         (id_egreso, fecha, mes, tipo, categoria, concepto, monto_usd, programa, unidad_negocio)
-         VALUES (@idEgreso,@fecha,@mes,@tipo,@categoria,@concepto,@montoUsd,@programa,@unidadNegocio)`,
-      ).run({ ...e, concepto: e.concepto ?? null, programa: e.programa ?? null });
+         (id_egreso, fecha, mes, tipo, categoria, concepto, monto_usd, programa, unidad_negocio,
+          monto_ars, cotizacion, recurrente, medio_pago, comentarios)
+         VALUES (@idEgreso,@fecha,@mes,@tipo,@categoria,@concepto,@montoUsd,@programa,@unidadNegocio,
+          @montoArs,@cotizacion,@recurrente,@medioPago,@comentarios)`,
+      ).run({
+        ...e,
+        concepto: e.concepto ?? null,
+        programa: e.programa ?? null,
+        montoArs: e.montoArs ?? null,
+        cotizacion: e.cotizacion ?? null,
+        recurrente: e.recurrente ? 1 : 0,
+        medioPago: e.medioPago ?? null,
+        comentarios: e.comentarios ?? null,
+      });
     },
   };
 
@@ -208,6 +229,8 @@ export function crearRepositorios(db: Database.Database): Repositorios {
     topeCacUsd: 'tope_cac_usd',
     metaTasaCierre: 'meta_tasa_cierre',
     runwayMinimoMeses: 'runway_minimo_meses',
+    objetivoRoas: 'objetivo_roas',
+    objetivoMer: 'objetivo_mer',
   };
   const DEFAULTS: Parametros = {
     cajaInicialUsd: 0,
@@ -217,6 +240,8 @@ export function crearRepositorios(db: Database.Database): Repositorios {
     topeCacUsd: 350,
     metaTasaCierre: 0.2,
     runwayMinimoMeses: 3,
+    objetivoRoas: 3,
+    objetivoMer: 3,
   };
 
   const parametros: ParametrosRepo = {

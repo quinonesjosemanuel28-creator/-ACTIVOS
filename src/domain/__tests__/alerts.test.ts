@@ -12,6 +12,8 @@ const parametros: Parametros = {
   topeCacUsd: 350,
   metaTasaCierre: 0.2,
   runwayMinimoMeses: 3,
+  objetivoRoas: 3,
+  objetivoMer: 3,
 };
 
 function ctxMes(over: Parameters<typeof construirSnapshot>[0]['datosMes']) {

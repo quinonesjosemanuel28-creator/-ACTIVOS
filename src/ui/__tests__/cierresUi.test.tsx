@@ -34,17 +34,27 @@ describe('Cierres · barra de resumen', () => {
   const html = renderToStaticMarkup(
     <ResumenCierres
       mes="2026-03"
-      totalCobradoUsd={18799}
-      totalCobradoArs={22182820}
-      cotizacionPonderada={1180}
-      cantidadCierres={7}
-      cantidadPagos={15}
+      resumen={{
+        totalCobradoUsd: 18799,
+        totalCobradoArs: 22182820,
+        cotizacionPonderada: 1180,
+        cantidadCierres: 7,
+        cantidadPagos: 15,
+        cashNuevoUsd: 13000,
+        cohortesUsd: 5799,
+        cashNuevoArs: 15000000,
+        cohortesArs: 7182820,
+        cierresPorPrograma: { empresario: 4, ceroGestor: 3 },
+      }}
     />,
   );
 
-  it('muestra cobrado USD/ARS y cotización ponderada', () => {
+  it('muestra cobrado, cotización, desglose nuevo/cohortes y cierres por programa', () => {
     expect(html).toContain('Cobrado USD');
-    expect(html).toContain('Cobrado ARS');
     expect(html).toContain('Cotización ponderada');
+    expect(html).toContain('Cash nuevo');
+    expect(html).toContain('Cohortes');
+    expect(html).toContain('De Cero a Gestor');
+    expect(html).toContain('Prestamista Empresario');
   });
 });

@@ -25,6 +25,9 @@ export function CierreFormDialog({ open, onClose, cierre }: Props) {
   const crear = useCrearCierre();
   const editar = useEditarCierre();
   const [error, setError] = useState<string | null>(null);
+  const [ticket, setTicket] = useState(cierre?.ticketTotalUsd != null ? String(cierre.ticketTotalUsd) : '');
+  const [cuotas, setCuotas] = useState('1');
+  const montoCuota = Number(ticket) > 0 && Number(cuotas) > 0 ? Number(ticket) / Number(cuotas) : null;
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -43,6 +46,8 @@ export function CierreFormDialog({ open, onClose, cierre }: Props) {
       referido: (f.get('referido') as string) || undefined,
       comentarios: (f.get('comentarios') as string) || undefined,
       estado: f.get('estado'),
+      // Plan de cuotas: solo en alta de ventas nuevas (no en edición de legacy).
+      cantidadCuotas: !esEdicion && f.get('cantidadCuotas') ? Number(f.get('cantidadCuotas')) : undefined,
     };
     const onOk = () => onClose();
     const onErr = (err: Error) => setError(err.message);
@@ -70,7 +75,7 @@ export function CierreFormDialog({ open, onClose, cierre }: Props) {
         <Field label="Mail"><Input type="email" name="clienteMail" defaultValue={cierre?.clienteMail} placeholder="Opcional" /></Field>
         <Field label="Teléfono"><Input name="clienteTelefono" defaultValue={cierre?.clienteTelefono} placeholder="Opcional" /></Field>
         <Field label="Ticket total (USD)">
-          <Input type="number" name="ticketTotalUsd" min="1" step="any" defaultValue={cierre?.ticketTotalUsd} required />
+          <Input type="number" name="ticketTotalUsd" min="1" step="any" value={ticket} onChange={(e) => setTicket(e.target.value)} required />
         </Field>
         <Field label="Estado">
           <Select name="estado" defaultValue={cierre?.estado ?? 'Activo'}>
@@ -78,6 +83,23 @@ export function CierreFormDialog({ open, onClose, cierre }: Props) {
             <option>No continúa</option>
           </Select>
         </Field>
+        {!esEdicion && (
+          <>
+            <Field label="Cantidad de cuotas (1–4)">
+              <Select name="cantidadCuotas" value={cuotas} onChange={(e) => setCuotas(e.target.value)}>
+                <option value="1">1 (pago único)</option>
+                <option value="2">2 cuotas</option>
+                <option value="3">3 cuotas</option>
+                <option value="4">4 cuotas</option>
+              </Select>
+            </Field>
+            <Field label="Monto por cuota (calculado)">
+              <div className="flex h-10 items-center rounded-xl bg-navy-50 px-3 text-sm font-600 tnum text-navy-900 dark:bg-navy-800 dark:text-navy-50">
+                {montoCuota !== null ? `$${(Math.round(montoCuota * 100) / 100).toLocaleString('es-AR')}` : '—'}
+              </div>
+            </Field>
+          </>
+        )}
         <Field label="Closer"><Input name="closer" defaultValue={cierre?.closer} placeholder="Opcional" /></Field>
         <Field label="Setter"><Input name="setter" defaultValue={cierre?.setter} placeholder="Opcional" /></Field>
         <Field label="Funnel"><Input name="funnel" defaultValue={cierre?.funnel} placeholder="Opcional" /></Field>

@@ -11,6 +11,8 @@ const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, '_');
 const COLUMNAS = [
   'id_cierre', 'fecha_pago', 'cliente_nombre', 'cliente_mail', 'programa', 'closer', 'funnel',
   'monto_usd', 'monto_ars', 'cotizacion', 'tipo_pago', 'numero_cuota', 'medio_pago', 'revisar', 'comentarios',
+  // Plan de cuotas (fila cabecera del cierre):
+  'cantidad_cuotas', 'monto_cuota_usd', 'fecha_primera_cuota', 'ticket_total_usd',
 ] as const;
 
 export async function leerExcelPagos(file: File): Promise<FilaPagoCruda[]> {

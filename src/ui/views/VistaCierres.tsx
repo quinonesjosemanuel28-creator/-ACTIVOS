@@ -40,9 +40,16 @@ export function VistaCierres() {
   const sinMes = { programa: filtros.programa, closer: filtros.closer, estado: filtros.estado, q: qDebounced };
   const { data: resumenMes } = useResumenCierres(filtros.mes, sinMes);
 
+  // Opciones de closer = closers efectivos (del cierre Y de los pagos), porque
+  // un pago puede tener un closer propio que no es el closer de ningún cierre.
   const closers = useMemo(() => {
     const set = new Set<string>();
-    (todos ?? []).forEach((f) => f.cierre.closer && set.add(f.cierre.closer));
+    (todos ?? []).forEach((f) => {
+      if (f.cierre.closer) set.add(f.cierre.closer);
+      f.pagos.forEach((p) => {
+        if (p.closer) set.add(p.closer);
+      });
+    });
     return [...set].sort();
   }, [todos]);
 
@@ -60,16 +67,7 @@ export function VistaCierres() {
 
       <FiltrosBar filtros={filtros} onChange={setFiltros} meses={meses?.meses ?? []} closers={closers} />
 
-      {resumen && (
-        <ResumenCierres
-          mes={filtros.mes}
-          totalCobradoUsd={resumen.totalCobradoUsd}
-          totalCobradoArs={resumen.totalCobradoArs}
-          cotizacionPonderada={resumen.cotizacionPonderada}
-          cantidadCierres={resumen.cantidadCierres}
-          cantidadPagos={resumen.cantidadPagos}
-        />
-      )}
+      {resumen && <ResumenCierres mes={filtros.mes} resumen={resumen} />}
 
       {isLoading ? (
         <div className="flex min-h-[30vh] items-center justify-center"><Spinner className="h-8 w-8" /></div>

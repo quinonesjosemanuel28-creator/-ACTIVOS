@@ -131,34 +131,50 @@ export function ventasNuevasUsd(cierres: readonly Cierre[], mes: Mes): number {
   );
 }
 
-// ─────────────── Acumulado ARS por closer / setter (base comisiones) ──────
+// ─────────────── Atribución por closer/setter (base comisiones) ──────
 
 /**
- * Acumulado de ARS realmente cobrado por persona en un mes, atribuido por
- * el closer/setter del cierre origen de cada pago. BASE FUTURA para
- * comisiones — se calcula y queda disponible; el % aún NO se aplica acá.
+ * Closer efectivo de un pago: el que cobró ESE pago; si no tiene closer
+ * propio, hereda el del cierre. Regla de negocio: quien cobra se lleva el
+ * crédito del pago.
  */
-function acumuladoArsPor(
+export function closerEfectivo(pago: Pago, cierre: Cierre | undefined): string | undefined {
+  return pago.closer ?? cierre?.closer;
+}
+
+/**
+ * Acumula un monto de los pagos del mes por persona. `rol` recibe el pago y
+ * su cierre, así el closer se toma del PAGO (efectivo) y el setter del cierre.
+ * BASE FUTURA para comisiones — se calcula y queda disponible; el % NO se
+ * aplica acá.
+ */
+function acumuladoPor(
   cierres: readonly Cierre[],
   pagos: readonly Pago[],
   mes: Mes,
-  rol: (c: Cierre) => string | undefined,
+  rol: (p: Pago, c: Cierre) => string | undefined,
+  monto: (p: Pago) => number,
 ): Record<string, number> {
   const cierrePorId = new Map(cierres.map((c) => [c.idCierre, c]));
   const acc: Record<string, number> = {};
   for (const p of pagosDelMes(pagos, mes)) {
     const cierre = cierrePorId.get(p.idCierre);
     if (!cierre) continue;
-    const persona = rol(cierre) ?? 'sin-asignar';
-    acc[persona] = (acc[persona] ?? 0) + (p.montoArs ?? 0);
+    const persona = rol(p, cierre) ?? 'sin-asignar';
+    acc[persona] = (acc[persona] ?? 0) + monto(p);
   }
   return acc;
 }
 
+/** ARS cobrado por closer DEL PAGO (efectivo) en el mes. */
 export const acumuladoArsPorCloser = (cierres: readonly Cierre[], pagos: readonly Pago[], mes: Mes) =>
-  acumuladoArsPor(cierres, pagos, mes, (c) => c.closer);
+  acumuladoPor(cierres, pagos, mes, (p, c) => closerEfectivo(p, c), (p) => p.montoArs ?? 0);
+/** ARS cobrado por setter del cierre en el mes (el setter sigue a nivel cierre). */
 export const acumuladoArsPorSetter = (cierres: readonly Cierre[], pagos: readonly Pago[], mes: Mes) =>
-  acumuladoArsPor(cierres, pagos, mes, (c) => c.setter);
+  acumuladoPor(cierres, pagos, mes, (_p, c) => c.setter, (p) => p.montoArs ?? 0);
+/** USD cobrado por closer DEL PAGO (efectivo) en el mes. */
+export const cashUsdPorCloser = (cierres: readonly Cierre[], pagos: readonly Pago[], mes: Mes) =>
+  acumuladoPor(cierres, pagos, mes, (p, c) => closerEfectivo(p, c), (p) => p.montoUsd);
 
 /** Cantidad de cierres nuevos del mes. */
 export function cierresNuevos(cierres: readonly Cierre[], mes: Mes): number {

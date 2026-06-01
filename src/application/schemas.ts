@@ -56,6 +56,8 @@ export const parametrosInputSchema = z
     topeCacUsd: z.number().nonnegative(),
     metaTasaCierre: z.number().min(0).max(1),
     runwayMinimoMeses: z.number().nonnegative(),
+    objetivoRoas: z.number().nonnegative(),
+    objetivoMer: z.number().nonnegative(),
   })
   .partial();
 export type ParametrosInput = z.infer<typeof parametrosInputSchema>;
@@ -63,5 +65,5 @@ export type ParametrosInput = z.infer<typeof parametrosInputSchema>;
 export const funnelInputSchema = z.object({
   agendas: z.number().int().nonnegative(),
   asistieron: z.number().int().nonnegative(),
-  cerrados: z.number().int().nonnegative(),
+  // cerrados NO se carga: se deriva de los cierres reales del mes.
 });

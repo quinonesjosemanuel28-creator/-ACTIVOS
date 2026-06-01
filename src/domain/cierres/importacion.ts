@@ -33,6 +33,13 @@ export interface FilaPagoCruda {
   medio_pago?: unknown;
   revisar?: unknown;
   comentarios?: unknown;
+  // Plan de cuotas (fila cabecera del cierre). Opcionales: sin ellas, el
+  // cierre queda legacy/saldado (no entra a Cobranza).
+  cantidad_cuotas?: unknown;
+  monto_cuota_usd?: unknown;
+  fecha_primera_cuota?: unknown;
+  /** Total comprometido (opcional): si se carga, deriva la cuota. */
+  ticket_total_usd?: unknown;
 }
 
 export interface ErrorFila {
@@ -65,6 +72,14 @@ const num = (v: unknown): number | undefined => {
   const n = Number(String(v).replace(/[^0-9.,-]/g, '').replace(/\.(?=.*\.)/g, '').replace(',', '.'));
   return Number.isFinite(n) ? n : undefined;
 };
+
+/** Entero positivo, o undefined. */
+const entero = (v: unknown): number | undefined => {
+  const n = num(v);
+  return n !== undefined && n >= 1 ? Math.round(n) : undefined;
+};
+
+const round2c = (n: number) => Math.round(n * 100) / 100;
 
 /** Normaliza una fecha a YYYY-MM-DD; null si no es interpretable. */
 const fecha = (v: unknown): string | null => {
@@ -159,6 +174,8 @@ export function construirImportacion(filas: readonly FilaPagoCruda[]): Resultado
         numeroCuota: txt(fila.numero_cuota),
         medioPago: medio(fila.medio_pago),
         comentarios: txt(fila.comentarios),
+        // Closer DE ESTA FILA: quien cobró este pago (puede diferir del cierre).
+        closer: txt(fila.closer),
       });
     }
 
@@ -167,18 +184,50 @@ export function construirImportacion(filas: readonly FilaPagoCruda[]): Resultado
     const motivoRevisar = filasGrupo.map(({ fila }) => txt(fila.revisar)).find((t) => t !== undefined);
     if (motivoRevisar) aRevisar += 1;
 
+    // Plan de cuotas (cabecera). "Lo que se pueda derivar, se deriva":
+    //  - cantidad + cuota → ticket comprometido = cantidad × cuota
+    //  - cantidad + total → cuota = total / cantidad
+    // Sin cantidad_cuotas → legacy/saldado: ticket = Σ pagos (compat).
+    const cantidadCuotas = entero(cabecera.cantidad_cuotas);
+    const montoCuotaCol = num(cabecera.monto_cuota_usd);
+    const totalCol = num(cabecera.ticket_total_usd);
+    const sumaPagos = pagosCierre.reduce((acc, p) => acc + p.montoUsd, 0);
+
+    let ticketTotalUsd = sumaPagos;
+    let montoCuotaUsd: number | undefined;
+    let fechaPrimeraCuota: string | undefined;
+    if (cantidadCuotas && cantidadCuotas >= 1) {
+      if (montoCuotaCol && montoCuotaCol > 0) {
+        montoCuotaUsd = round2c(montoCuotaCol);
+        ticketTotalUsd = round2c(cantidadCuotas * montoCuotaUsd); // comprometido
+      } else if (totalCol && totalCol > 0) {
+        ticketTotalUsd = round2c(totalCol);
+        montoCuotaUsd = round2c(totalCol / cantidadCuotas);
+      } else {
+        // Sin cuota ni total cargados: no se puede armar el plan → reporta y
+        // cae a legacy (ticket = Σ pagos), sin romper la importación.
+        errores.push({ fila: filasGrupo[0]!.nFila, idCierre, motivo: 'Plan de cuotas incompleto: falta monto_cuota_usd o ticket_total_usd.' });
+      }
+      const fpc = fecha(cabecera.fecha_primera_cuota);
+      if (fpc) fechaPrimeraCuota = fpc;
+    }
+    const conPlan = !!cantidadCuotas && cantidadCuotas >= 1 && montoCuotaUsd !== undefined;
+
     cierres.push({
       idCierre,
       fechaCierre: pagosCierre[0]!.fechaPago, // 1er pago define el mes del cierre
       clienteNombre: txt(cabecera.cliente_nombre) ?? 'Sin nombre',
       clienteMail: txt(cabecera.cliente_mail),
       programa: prog,
-      ticketTotalUsd: pagosCierre.reduce((acc, p) => acc + p.montoUsd, 0),
+      ticketTotalUsd,
       closer: txt(cabecera.closer),
       funnel: txt(cabecera.funnel),
       unidadNegocio: 'ACADEMY',
       estado: 'Activo',
       revisar: motivoRevisar,
+      cantidadCuotas: conPlan ? cantidadCuotas : undefined,
+      montoCuotaUsd: conPlan ? montoCuotaUsd : undefined,
+      fechaPrimeraCuota: conPlan ? fechaPrimeraCuota : undefined,
     });
     pagos.push(...pagosCierre);
   }

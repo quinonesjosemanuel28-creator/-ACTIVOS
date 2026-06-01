@@ -11,6 +11,14 @@ import { ZodError } from 'zod';
 import { getDb } from '../src/infrastructure/sqlite/db';
 import { crearRepositorios } from '../src/infrastructure/sqlite/repos';
 import { crearReposCierres } from '../src/infrastructure/sqlite/cierresRepos';
+import { crearEgresosAdminRepo } from '../src/infrastructure/sqlite/egresosRepos';
+import { crearLiquidacionRepo } from '../src/infrastructure/sqlite/comisionesRepos';
+import { crearFunnelCanalRepo } from '../src/infrastructure/sqlite/funnelCanalRepos';
+import * as uce from '../src/application/egresos/useCases';
+import * as ucom from '../src/application/comisiones/useCases';
+import * as ucf from '../src/application/funnel/useCases';
+import * as ucob from '../src/application/cobranza/useCases';
+import type { FiltrosEgresos } from '../src/application/egresos/useCases';
 import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
 import * as ucc from '../src/application/cierres/useCases';
@@ -24,6 +32,9 @@ const repos = crearRepositorios(db);
 // Repo del dashboard: ventas/cobros provienen de cierres/pagos (adaptador).
 const reposDash = crearRepositoriosDashboard(db);
 const reposCierres = crearReposCierres(db);
+const reposEgresos = crearEgresosAdminRepo(db);
+const reposLiquidacion = crearLiquidacionRepo(db);
+const reposFunnelCanal = crearFunnelCanalRepo(db);
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -77,9 +88,30 @@ app.put('/api/parametros', h((req) => uc.guardarParametros(repos, req.body)));
 
 app.post('/api/ventas', h((req) => uc.agregarVenta(repos, req.body)));
 app.post('/api/cobros', h((req) => uc.agregarCobro(repos, req.body)));
-app.post('/api/egresos', h((req) => uc.agregarEgreso(repos, req.body)));
+// Módulo Egresos (CRUD + resumen). Una sola tabla `egresos` (la que lee el dashboard).
+const filtrosEgresosDe = (q: express.Request['query']): FiltrosEgresos => ({
+  mes: typeof q.mes === 'string' ? q.mes : undefined,
+  categoria: typeof q.categoria === 'string' ? q.categoria : undefined,
+  tipo: typeof q.tipo === 'string' ? q.tipo : undefined,
+  moneda: typeof q.moneda === 'string' ? q.moneda : undefined,
+  q: typeof q.q === 'string' ? q.q : undefined,
+});
+app.get('/api/egresos', h((req) => uce.listarEgresos(reposEgresos, filtrosEgresosDe(req.query))));
+app.get('/api/egresos/resumen/:mes', h((req) => uce.resumenEgresos(reposEgresos, param(req, 'mes'), filtrosEgresosDe(req.query))));
+app.post('/api/egresos', h((req) => uce.crearEgreso(reposEgresos, req.body)));
+app.put('/api/egresos/:id', h((req) => uce.editarEgreso(reposEgresos, param(req, 'id'), req.body)));
+app.delete('/api/egresos/:id', h((req) => uce.eliminarEgreso(reposEgresos, param(req, 'id'))));
 
-app.put('/api/funnel/:mes', h((req) => uc.guardarFunnel(repos, param(req, 'mes'), req.body, filtroDe(req.query))));
+// Comisiones (cálculo automático + liquidación idempotente)
+app.get('/api/comisiones/liquidaciones', h(() => ucom.listarLiquidaciones(reposLiquidacion)));
+app.get('/api/comisiones/:mes', h((req) => ucom.obtenerEstado(reposCierres, reposLiquidacion, param(req, 'mes'))));
+app.post('/api/comisiones/liquidar/:mes', h((req) =>
+  ucom.liquidarComisiones(reposCierres, reposEgresos, reposLiquidacion, param(req, 'mes'), { reemplazar: req.body?.reemplazar === true }),
+));
+app.delete('/api/comisiones/liquidar/:mes', h((req) => ucom.anularLiquidacion(reposEgresos, reposLiquidacion, param(req, 'mes'))));
+
+app.get('/api/funnel/:mes', h((req) => ucf.obtenerFunnel(reposCierres, reposFunnelCanal, repos.funnel, param(req, 'mes'))));
+app.put('/api/funnel/:mes', h((req) => ucf.guardarFunnelCanales(reposFunnelCanal, param(req, 'mes'), req.body)));
 
 app.post('/api/cierre/:mes', h((req) => uc.cerrarMes(repos, param(req, 'mes'))));
 app.delete('/api/cierre/:mes', h((req) => uc.reabrirMes(repos, param(req, 'mes'))));
@@ -111,6 +143,11 @@ app.delete('/api/cierres/:id', h((req) => ucc.eliminarCierre(reposCierres, param
 
 app.post('/api/cierres/importar', h((req) => ucc.importarCierresPagos(reposCierres, req.body)));
 app.delete('/api/cierres/:id/revisar', h((req) => ucc.quitarRevisar(reposCierres, param(req, 'id'))));
+
+// Cobranza y morosidad (deriva del plan de cuotas + pagos reales)
+app.get('/api/cobranza', h(() => ucob.obtenerCobranza(reposCierres)));
+app.post('/api/cierres/:id/inactivar', h((req) => ucc.marcarInactivo(reposCierres, param(req, 'id'))));
+app.delete('/api/cierres/:id/inactivar', h((req) => ucc.reactivar(reposCierres, param(req, 'id'))));
 
 app.post('/api/pagos', h((req) => ucc.agregarPago(reposCierres, req.body)));
 app.put('/api/pagos/:id', h((req) => ucc.editarPago(reposCierres, param(req, 'id'), req.body)));

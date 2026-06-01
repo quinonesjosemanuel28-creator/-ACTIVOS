@@ -45,25 +45,95 @@ export interface ResumenMes {
   cotizacionPonderada: number | null;
   cantidadCierres: number;
   cantidadPagos: number;
+  // Desglose del cash (misma definición que la Vista Ejecutiva: un pago es
+  // "nuevo" si su cierre cerró en el mismo mes; si no, es cohorte).
+  cashNuevoUsd: number;
+  cohortesUsd: number;
+  cashNuevoArs: number;
+  cohortesArs: number;
+  // Cierres nuevos del período por programa.
+  cierresPorPrograma: { empresario: number; ceroGestor: number };
 }
 
 /**
- * Resumen del período para la barra superior del listado: total cobrado
- * USD/ARS de los pagos del mes (respetando los filtros aplicados a los
- * cierres) y la cotización promedio ponderada.
+ * Resumen del período (barra superior del listado). PAGO-CÉNTRICO: suma los
+ * pagos del mes atribuyéndolos por el closer DEL PAGO (efectivo = pago.closer
+ * ?? cierre.closer). Regla de negocio: quien cobra se lleva el crédito.
+ *
+ * - programa/estado/q filtran a nivel cierre (el cierre del pago debe matchear).
+ * - closer filtra a nivel pago (efectivo), no por el closer del cierre. Por eso
+ *   un cobro de Ayrton sobre un cierre cuya venta cerró Julian suma a Ayrton.
+ * - Sin filtro de closer, el total del mes es el cash real del mes (cohortes
+ *   incluidos) y coincide con el total sin filtrar.
  */
 export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCierres): ResumenMes {
-  const cierres = repos.cierres.listar({ ...filtros, mes: undefined });
-  const idsVisibles = new Set(cierres.map((c) => c.idCierre));
-  const pagosVisibles = repos.pagos.listarTodos().filter((p) => idsVisibles.has(p.idCierre));
-  const pagosMes = cm.pagosDelMes(pagosVisibles, mes);
+  // Cierres que matchean los filtros de cierre (programa/estado/q), sin filtro de mes.
+  const cierresMatch = repos.cierres.listar({
+    programa: filtros?.programa,
+    estado: filtros?.estado,
+    q: filtros?.q,
+    unidadNegocio: filtros?.unidadNegocio,
+  });
+  const cierrePorId = new Map(cierresMatch.map((c) => [c.idCierre, c]));
+
+  const closerFiltro = filtros?.closer;
+  const pagosMes = cm.pagosDelMes(repos.pagos.listarTodos(), mes).filter((p) => {
+    const cierre = cierrePorId.get(p.idCierre);
+    if (!cierre) return false; // el cierre no matchea programa/estado/q
+    if (closerFiltro && cm.closerEfectivo(p, cierre) !== closerFiltro) return false;
+    return true;
+  });
+
+  // Cierres ÚNICOS NUEVOS del mes (DISTINCT id_cierre con fecha_cierre en el
+  // mes) entre los pagos contados. Los cobros de cohorte (cuotas de cierres de
+  // meses anteriores) suman a `pagos` pero NO a `cierres` → casi siempre M < N.
+  // Un cierre con varias cuotas el mismo mes cuenta 1 cierre / N pagos.
+  const idsCierresMes = new Set<string>();
+  for (const p of pagosMes) {
+    const cierre = cierrePorId.get(p.idCierre);
+    if (cierre && cierre.fechaCierre.slice(0, 7) === mes) idsCierresMes.add(cierre.idCierre);
+  }
+  const sumUsd = pagosMes.reduce((a, p) => a + p.montoUsd, 0);
+  const conArs = pagosMes.filter((p) => p.montoArs !== undefined && p.montoArs !== null);
+  const sumArs = conArs.reduce((a, p) => a + (p.montoArs ?? 0), 0);
+  const usdConArs = conArs.reduce((a, p) => a + p.montoUsd, 0);
+
+  // Cash nuevo vs cohortes: clasifica cada pago por el mes de su cierre (misma
+  // definición que la Vista Ejecutiva). cashNuevoUsd + cohortesUsd = total.
+  let cashNuevoUsd = 0, cohortesUsd = 0, cashNuevoArs = 0, cohortesArs = 0;
+  for (const p of pagosMes) {
+    const cierre = cierrePorId.get(p.idCierre);
+    const esNuevo = !!cierre && cierre.fechaCierre.slice(0, 7) === mes;
+    if (esNuevo) { cashNuevoUsd += p.montoUsd; cashNuevoArs += p.montoArs ?? 0; }
+    else { cohortesUsd += p.montoUsd; cohortesArs += p.montoArs ?? 0; }
+  }
+
+  // Cierres nuevos del período por programa (respeta los filtros del listado).
+  const cierresDelMes = repos.cierres.listar({
+    mes,
+    programa: filtros?.programa,
+    closer: filtros?.closer,
+    estado: filtros?.estado,
+    q: filtros?.q,
+    unidadNegocio: filtros?.unidadNegocio,
+  });
+  const cierresPorPrograma = {
+    empresario: cierresDelMes.filter((c) => c.programa === 'Empresario').length,
+    ceroGestor: cierresDelMes.filter((c) => c.programa === 'Cero a Gestor').length,
+  };
+
   return {
     mes,
-    totalCobradoUsd: cm.cashCollectedUsd(pagosMes, mes),
-    totalCobradoArs: cm.cashCollectedArs(pagosMes, mes),
-    cotizacionPonderada: cm.cotizacionPonderada(pagosMes),
-    cantidadCierres: cm.cierresNuevos(cierres, mes),
+    totalCobradoUsd: sumUsd,
+    totalCobradoArs: sumArs,
+    cotizacionPonderada: usdConArs > 0 ? sumArs / usdConArs : null,
+    cantidadCierres: idsCierresMes.size,
     cantidadPagos: pagosMes.length,
+    cashNuevoUsd,
+    cohortesUsd,
+    cashNuevoArs,
+    cohortesArs,
+    cierresPorPrograma,
   };
 }
 
@@ -96,6 +166,12 @@ export function crearCierre(repos: ReposCierres, input: unknown): Cierre {
     unidadNegocio: c.unidadNegocio,
     estado: c.estado,
     revisar: c.revisar,
+    cantidadCuotas: c.cantidadCuotas,
+    // Cuotas del mismo monto = total / cantidad (solo si hay plan).
+    montoCuotaUsd: c.cantidadCuotas ? Math.round((c.ticketTotalUsd / c.cantidadCuotas) * 100) / 100 : undefined,
+    // Vencimiento de la cuota 1 (default: fecha del cierre); habilita el
+    // calendario mensual fijo del semáforo.
+    fechaPrimeraCuota: c.cantidadCuotas ? (c.fechaPrimeraCuota ?? c.fechaCierre) : undefined,
   };
   repos.cierres.guardar(cierre);
   return cierre;
@@ -130,6 +206,9 @@ export function agregarPago(repos: ReposCierres, input: unknown): Pago {
     medioPago: p.medioPago,
     comprobanteUrl: p.comprobanteUrl,
     comentarios: p.comentarios,
+    closer: p.closer, // closer del pago (si falta, hereda el del cierre al calcular)
+    aplicaSetting: p.aplicaSetting,
+    setter: p.setter,
   };
   repos.pagos.guardar(pago);
   return pago;
@@ -198,6 +277,9 @@ export function importarCierresPagos(repos: ReposCierres, input: unknown): Impor
       unidadNegocio: c.unidadNegocio,
       estado: c.estado,
       revisar: c.revisar,
+      cantidadCuotas: c.cantidadCuotas,
+      montoCuotaUsd: c.montoCuotaUsd,
+      fechaPrimeraCuota: c.fechaPrimeraCuota,
     });
   }
   for (const p of pagos) {
@@ -212,6 +294,7 @@ export function importarCierresPagos(repos: ReposCierres, input: unknown): Impor
       numeroCuota: p.numeroCuota,
       medioPago: p.medioPago,
       comentarios: p.comentarios,
+      closer: p.closer,
     });
   }
   return { cierres: cierres.length, pagos: pagos.length };
@@ -222,4 +305,21 @@ export function quitarRevisar(repos: ReposCierres, id: string): void {
   const cierre = repos.cierres.obtener(id);
   if (!cierre) throw new Error(`No existe el cierre ${id}.`);
   repos.cierres.guardar({ ...cierre, revisar: undefined });
+}
+
+/**
+ * Marca un cierre como INACTIVO (manual). El plan original se conserva (el
+ * ajuste de ticket a lo pagado se deriva en cobranza); es reversible.
+ */
+export function marcarInactivo(repos: ReposCierres, id: string): void {
+  const cierre = repos.cierres.obtener(id);
+  if (!cierre) throw new Error(`No existe el cierre ${id}.`);
+  repos.cierres.guardar({ ...cierre, inactivo: true });
+}
+
+/** Reactiva un cierre marcado inactivo (vuelve a su plan original). */
+export function reactivar(repos: ReposCierres, id: string): void {
+  const cierre = repos.cierres.obtener(id);
+  if (!cierre) throw new Error(`No existe el cierre ${id}.`);
+  repos.cierres.guardar({ ...cierre, inactivo: false });
 }

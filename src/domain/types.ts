@@ -62,6 +62,13 @@ export interface Egreso {
   montoUsd: number;
   programa?: Programa;
   unidadNegocio: UnidadNegocio;
+  // Campos del módulo Egresos (opcionales → compatibles con filas previas):
+  montoArs?: number;
+  cotizacion?: number;
+  /** RECURRENTE (se repite cada mes) vs PUNTUAL (pago único). */
+  recurrente?: boolean;
+  medioPago?: string;
+  comentarios?: string;
 }
 
 /** Parámetros / centro de control (metas, caja inicial, costos fijos). */
@@ -73,6 +80,8 @@ export interface Parametros {
   topeCacUsd: number; // ej. 350
   metaTasaCierre: number; // fracción, ej. 0.20
   runwayMinimoMeses: number; // ej. 3
+  objetivoRoas: number; // múltiplo, ej. 3 (≥3x)
+  objetivoMer: number; // múltiplo, ej. 3 (≥3x)
 }
 
 /** Datos crudos de un mes, ya filtrados (e.g. por unidad/programa). */

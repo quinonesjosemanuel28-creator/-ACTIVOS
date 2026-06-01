@@ -125,6 +125,50 @@ export function generarCierresDemo(): { cierres: Cierre[]; pagos: Pago[] } {
     generar('Cero a Gestor', cierresGes);
   });
 
+  // Ejemplo MIXTO (estilo Cristhian Marín): un cierre cuyos pagos los cobran
+  // closers distintos. La seña la cobra Julian; la cuota de mayo, Ayrton.
+  // Sirve para ver la atribución por closer del PAGO (no del cierre).
+  const idMix = `${DEMO_PREFIX}CL-MIX-01`;
+  cierres.push({
+    idCierre: idMix,
+    fechaCierre: '2026-03-31',
+    clienteNombre: 'Cristhian Marín',
+    clienteMail: 'cristhian.marin@mail.com',
+    programa: 'Empresario',
+    ticketTotalUsd: 1000,
+    closer: 'Julian', // closer de la VENTA (default)
+    setter: 'Diego',
+    funnel: 'Referido',
+    unidadNegocio: 'ACADEMY',
+    estado: 'Activo',
+  });
+  pagos.push(
+    {
+      idPago: `${DEMO_PREFIX}PG-MIX-01-0`,
+      idCierre: idMix,
+      fechaPago: '2026-03-31',
+      montoUsd: 100,
+      montoArs: dosDec(100 * (COTIZACION['2026-03'] ?? 1180)),
+      cotizacion: COTIZACION['2026-03'],
+      tipoPago: 'Reserva/Seña',
+      medioPago: 'Transferencia Lemon',
+      // sin closer propio → hereda Julian (cobró la seña)
+    },
+    {
+      idPago: `${DEMO_PREFIX}PG-MIX-01-1`,
+      idCierre: idMix,
+      fechaPago: '2026-05-04',
+      montoUsd: 900,
+      montoArs: dosDec(900 * (COTIZACION['2026-05'] ?? 1300)),
+      cotizacion: COTIZACION['2026-05'],
+      tipoPago: 'Cuota',
+      numeroCuota: '2/2',
+      medioPago: 'Transferencia BBVA',
+      closer: 'Ayrton', // ESTE pago lo cobró Ayrton
+      aplicaSetting: true, // demo: además genera 2% de setting (setter Diego del cierre)
+    },
+  );
+
   return { cierres, pagos };
 }
 

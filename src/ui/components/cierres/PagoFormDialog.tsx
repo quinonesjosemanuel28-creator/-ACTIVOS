@@ -12,6 +12,8 @@ interface Props {
   onClose: () => void;
   idCierre: string;
   cliente?: string;
+  /** Closer de la venta: default del campo cuando el pago no tiene closer propio. */
+  closerCierre?: string;
   pago?: Pago; // si viene, es edición
 }
 
@@ -31,7 +33,7 @@ const numOrUndef = (s: string): number | undefined => {
   return s.trim() !== '' && Number.isFinite(n) ? n : undefined;
 };
 
-export function PagoFormDialog({ open, onClose, idCierre, cliente, pago }: Props) {
+export function PagoFormDialog({ open, onClose, idCierre, cliente, closerCierre, pago }: Props) {
   const esEdicion = !!pago;
   const agregar = useAgregarPago();
   const editar = useEditarPago();
@@ -61,6 +63,9 @@ export function PagoFormDialog({ open, onClose, idCierre, cliente, pago }: Props
       tipoPago: f.get('tipoPago'),
       numeroCuota: (f.get('numeroCuota') as string) || undefined,
       medioPago: f.get('medioPago'),
+      closer: (f.get('closer') as string) || undefined,
+      aplicaSetting: f.get('aplicaSetting') === 'on',
+      setter: (f.get('setter') as string) || undefined,
       comprobanteUrl: (f.get('comprobanteUrl') as string) || undefined,
       comentarios: (f.get('comentarios') as string) || undefined,
     };
@@ -103,12 +108,20 @@ export function PagoFormDialog({ open, onClose, idCierre, cliente, pago }: Props
           </Select>
         </Field>
         <Field label="N° de cuota (opcional)"><Input name="numeroCuota" defaultValue={pago?.numeroCuota} placeholder="1/2, 2/3…" /></Field>
+        <Field label="Closer (quién cobró este pago)">
+          <Input name="closer" defaultValue={pago?.closer ?? closerCierre} placeholder={closerCierre ? `${closerCierre} (del cierre)` : 'Closer'} />
+        </Field>
         <Field label="Medio de pago">
           <Select name="medioPago" defaultValue={pago?.medioPago ?? 'Transferencia Lemon'}>
             {MEDIOS.map((m) => <option key={m}>{m}</option>)}
           </Select>
         </Field>
         <Field label="Comprobante (URL, opcional)"><Input name="comprobanteUrl" defaultValue={pago?.comprobanteUrl} placeholder="https://…" /></Field>
+        <Field label="Setter (comisión 2%)"><Input name="setter" defaultValue={pago?.setter} placeholder="Hereda el del cierre" /></Field>
+        <label className="col-span-2 flex items-center gap-2 text-sm text-navy-700 dark:text-navy-100">
+          <input type="checkbox" name="aplicaSetting" defaultChecked={pago?.aplicaSetting} className="h-4 w-4 rounded border-navy-300" />
+          Aplica comisión de setting (2% al setter sobre este pago)
+        </label>
         <Field label="Comentarios (opcional)" full><Input name="comentarios" defaultValue={pago?.comentarios} /></Field>
 
         {error && <p className="col-span-2 text-sm text-signal-red">{error}</p>}

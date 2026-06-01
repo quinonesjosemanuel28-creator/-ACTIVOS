@@ -40,6 +40,9 @@ export const cierreInputSchema = z.object({
   unidadNegocio: unidadSchema.default('ACADEMY'),
   estado: estadoCierreSchema.default('Activo'),
   revisar: z.string().optional(),
+  // Plan de cuotas (1–4). Si falta, el cierre no entra al sistema de cobranza.
+  cantidadCuotas: z.number().int().min(1).max(4).optional(),
+  fechaPrimeraCuota: z.string().optional(),
 });
 export type CierreInput = z.infer<typeof cierreInputSchema>;
 
@@ -57,6 +60,9 @@ const cierreImportSchema = z.object({
   unidadNegocio: unidadSchema.default('ACADEMY'),
   estado: estadoCierreSchema.default('Activo'),
   revisar: z.string().optional(),
+  cantidadCuotas: z.number().int().min(1).optional(),
+  montoCuotaUsd: z.number().positive().optional(),
+  fechaPrimeraCuota: z.string().optional(),
 });
 
 const pagoImportSchema = z.object({
@@ -70,6 +76,7 @@ const pagoImportSchema = z.object({
   numeroCuota: z.string().optional(),
   medioPago: medioPagoSchema,
   comentarios: z.string().optional(),
+  closer: z.string().optional(),
 });
 
 export const importPayloadSchema = z.object({
@@ -92,6 +99,9 @@ export const pagoInputSchema = z
     medioPago: medioPagoSchema,
     comprobanteUrl: z.string().url('URL inválida').optional().or(z.literal('').transform(() => undefined)),
     comentarios: z.string().optional(),
+    closer: z.string().optional(),
+    aplicaSetting: z.boolean().optional(),
+    setter: z.string().optional(),
   })
   .transform((p) => {
     // Resuelve la triada doble moneda. ARS + USD mandan: la cotización se
