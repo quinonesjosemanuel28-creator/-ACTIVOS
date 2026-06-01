@@ -52,7 +52,7 @@ export interface PuntoHistorico {
   netoTotal: number;
 }
 
-export type NivelSemaforo = 'verde' | 'amarillo' | 'naranja' | 'rojo';
+export type NivelSemaforo = 'verde' | 'amarillo' | 'naranja' | 'rojo' | 'negro';
 export interface CuotaDerivada {
   numero: number;
   montoUsd: number;
@@ -71,16 +71,19 @@ export interface CobranzaCierreView {
   abonadoUsd: number;
   saldoPendienteUsd: number;
   cuotas: CuotaDerivada[];
-  estado: 'Saldado' | 'Al día' | 'Atrasado' | 'Morosidad';
+  estado: 'Saldado' | 'Al día' | 'Atrasado' | 'Morosidad' | 'Inactivo';
   diasAtraso: number;
   nivel: NivelSemaforo | null;
+  inactivo: boolean;
 }
 export interface CobranzaView {
   hoy: string;
   cierres: CobranzaCierreView[];
+  listaNegra: CobranzaCierreView[];
+  inactivos: CobranzaCierreView[];
   resumen: {
     alDia: number; atrasado: number; morosidad: number; saldoPendienteUsd: number; morosidadUsd: number;
-    semaforo: { verde: number; amarillo: number; naranja: number; rojo: number };
+    semaforo: { verde: number; amarillo: number; naranja: number; rojo: number; negro: number };
   };
   proyeccion: { mes: string; montoUsd: number }[];
 }
@@ -236,6 +239,8 @@ export const api = {
 
   // Cobranza
   cobranza: () => req<CobranzaView>('/cobranza'),
+  marcarInactivo: (id: string) => req(`/cierres/${id}/inactivar`, { method: 'POST' }),
+  reactivar: (id: string) => req(`/cierres/${id}/inactivar`, { method: 'DELETE' }),
   borrarDatosDemo: () => req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-demo', { method: 'DELETE' }),
   reiniciarCierres: (confirm: string) =>
     req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-reset', { method: 'POST', body: JSON.stringify({ confirm }) }),

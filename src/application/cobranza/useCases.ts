@@ -6,10 +6,16 @@
 import { cobranzaDeCierre, proyeccionPorMes, type CobranzaCierre, type EstadoCobranza } from '../../domain/cobranza/calculo';
 import type { ReposCierres } from '../cierres/ports';
 
+export type FilaCobranza = CobranzaCierre & { cliente: string; fechaCierre: string; inactivo: boolean };
+
 export interface CobranzaView {
   hoy: string;
-  /** Cierres CON plan de cuotas (las ventas nuevas). */
-  cierres: (CobranzaCierre & { cliente: string; fechaCierre: string })[];
+  /** Cierres ACTIVOS con plan de cuotas. */
+  cierres: FilaCobranza[];
+  /** Lista negra: cierres activos con alguna cuota a +60 días (nivel negro). */
+  listaNegra: FilaCobranza[];
+  /** Cierres marcados como Inactivo (facturación consolidada). */
+  inactivos: FilaCobranza[];
   resumen: {
     alDia: number;
     atrasado: number;
@@ -17,7 +23,7 @@ export interface CobranzaView {
     saldoPendienteUsd: number;
     morosidadUsd: number; // saldo pendiente de cierres en morosidad
     /** Semáforo: cantidad de cierres por color (peor nivel del cierre). */
-    semaforo: { verde: number; amarillo: number; naranja: number; rojo: number };
+    semaforo: { verde: number; amarillo: number; naranja: number; rojo: number; negro: number };
   };
   /** Proyección de cobranza por mes (USD). SOLO visual, no es cash. */
   proyeccion: { mes: string; montoUsd: number }[];
@@ -30,11 +36,16 @@ export function obtenerCobranza(repos: ReposCierres, hoy: string = hoyIso()): Co
   const todosPagos = repos.pagos.listarTodos();
 
   const conPlan = todosCierres.filter((c) => !!c.cantidadCuotas && c.cantidadCuotas > 0);
-  const cobranzas = conPlan.map((c) => {
+  const todas: FilaCobranza[] = conPlan.map((c) => {
     const pagos = todosPagos.filter((p) => p.idCierre === c.idCierre);
     const cb = cobranzaDeCierre(c, pagos, hoy);
-    return { ...cb, cliente: c.clienteNombre, fechaCierre: c.fechaCierre };
+    return { ...cb, cliente: c.clienteNombre, fechaCierre: c.fechaCierre, inactivo: !!c.inactivo };
   });
+
+  // Inactivos quedan fuera de cobranza/morosidad/lista negra/proyección.
+  const inactivos = todas.filter((c) => c.inactivo);
+  const cobranzas = todas.filter((c) => !c.inactivo);
+  const listaNegra = cobranzas.filter((c) => c.nivel === 'negro');
 
   const cuenta = (e: EstadoCobranza) => cobranzas.filter((c) => c.estado === e).length;
   const resumen = {
@@ -48,6 +59,7 @@ export function obtenerCobranza(repos: ReposCierres, hoy: string = hoyIso()): Co
       amarillo: cobranzas.filter((c) => c.nivel === 'amarillo').length,
       naranja: cobranzas.filter((c) => c.nivel === 'naranja').length,
       rojo: cobranzas.filter((c) => c.nivel === 'rojo').length,
+      negro: cobranzas.filter((c) => c.nivel === 'negro').length,
     },
   };
 
@@ -56,7 +68,7 @@ export function obtenerCobranza(repos: ReposCierres, hoy: string = hoyIso()): Co
     .sort()
     .map((mes) => ({ mes, montoUsd: proyMap[mes]! }));
 
-  return { hoy, cierres: cobranzas, resumen, proyeccion };
+  return { hoy, cierres: cobranzas, listaNegra, inactivos, resumen, proyeccion };
 }
 
 function round2(n: number): number {

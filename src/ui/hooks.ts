@@ -19,6 +19,16 @@ export function useDashboard() {
 export function useCobranza() {
   return useQuery({ queryKey: ['cobranza'], queryFn: () => api.cobranza() });
 }
+export function useMarcarInactivo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; inactivo: boolean }) => (v.inactivo ? api.marcarInactivo(v.id) : api.reactivar(v.id)),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['cobranza'] }),
+      qc.invalidateQueries({ queryKey: ['cierres'] }),
+    ]),
+  });
+}
 
 export function useFunnel() {
   const { mes } = useUI();

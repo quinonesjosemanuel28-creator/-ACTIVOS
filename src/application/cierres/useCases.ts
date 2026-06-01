@@ -306,3 +306,20 @@ export function quitarRevisar(repos: ReposCierres, id: string): void {
   if (!cierre) throw new Error(`No existe el cierre ${id}.`);
   repos.cierres.guardar({ ...cierre, revisar: undefined });
 }
+
+/**
+ * Marca un cierre como INACTIVO (manual). El plan original se conserva (el
+ * ajuste de ticket a lo pagado se deriva en cobranza); es reversible.
+ */
+export function marcarInactivo(repos: ReposCierres, id: string): void {
+  const cierre = repos.cierres.obtener(id);
+  if (!cierre) throw new Error(`No existe el cierre ${id}.`);
+  repos.cierres.guardar({ ...cierre, inactivo: true });
+}
+
+/** Reactiva un cierre marcado inactivo (vuelve a su plan original). */
+export function reactivar(repos: ReposCierres, id: string): void {
+  const cierre = repos.cierres.obtener(id);
+  if (!cierre) throw new Error(`No existe el cierre ${id}.`);
+  repos.cierres.guardar({ ...cierre, inactivo: false });
+}

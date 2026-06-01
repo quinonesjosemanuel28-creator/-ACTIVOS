@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cobranzaDeCierre, proyeccionPorMes, addMeses, DIAS_CUOTA } from '../calculo';
+import { cobranzaDeCierre, proyeccionPorMes, addMeses, ticketComprometido, DIAS_CUOTA } from '../calculo';
 import { cierre as mkCierre, pago as mkPago } from '../../cierres/__tests__/fixtures';
 
 const plan = (over = {}) =>
@@ -99,5 +99,41 @@ describe('Cobranza · calendario mensual fijo (fechaPrimeraCuota)', () => {
     const cb = cobranzaDeCierre(c, [], '2026-05-25');
     expect(cb.cuotas[0]!.nivel).toBe('rojo');
     expect(cb.nivel).toBe('rojo');
+  });
+});
+
+describe('Cobranza · estado negro y marcado Inactivo', () => {
+  it('cuota a +61 días → cierre negro (lista negra)', () => {
+    // cuota 1 vence 2026-05-10; hoy 2026-07-12 → 63 días de atraso → negro
+    const c = plan({ fechaPrimeraCuota: '2026-05-10' });
+    const cb = cobranzaDeCierre(c, [], '2026-07-12');
+    expect(cb.cuotas[0]!.nivel).toBe('negro');
+    expect(cb.nivel).toBe('negro');
+  });
+
+  it('ticketComprometido: activo = ticket original; inactivo = lo pagado', () => {
+    const activo = plan();
+    expect(ticketComprometido(activo, 1500)).toBe(4000); // ticket original
+    const inactivo = plan({ inactivo: true });
+    expect(ticketComprometido(inactivo, 1500)).toBe(1500); // ajustado a lo pagado
+  });
+
+  it('marcar Inactivo: ticket = pagado, saldo 0, estado Inactivo, sin semáforo', () => {
+    const c = plan({ fechaPrimeraCuota: '2026-05-10', inactivo: true });
+    const cb = cobranzaDeCierre(c, [mkPago({ idCierre: 'V', montoUsd: 1500, fechaPago: '2026-05-02' })], '2026-08-01');
+    expect(cb.estado).toBe('Inactivo');
+    expect(cb.totalUsd).toBe(1500); // comprometido ajustado a lo pagado
+    expect(cb.abonadoUsd).toBe(1500);
+    expect(cb.saldoPendienteUsd).toBe(0); // pendiente cancelado
+    expect(cb.nivel).toBeNull(); // fuera del semáforo
+    expect(cb.cuotas).toHaveLength(0);
+  });
+
+  it('reactivar (inactivo=false) vuelve al plan original', () => {
+    const c = plan({ fechaPrimeraCuota: '2026-05-10', inactivo: false });
+    const cb = cobranzaDeCierre(c, [mkPago({ idCierre: 'V', montoUsd: 1500, fechaPago: '2026-05-02' })], '2026-08-01');
+    expect(cb.estado).not.toBe('Inactivo');
+    expect(cb.totalUsd).toBe(4000); // ticket original restaurado
+    expect(cb.saldoPendienteUsd).toBe(2500);
   });
 });

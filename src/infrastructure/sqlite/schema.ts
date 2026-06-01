@@ -124,6 +124,7 @@ export function migrar(db: Database.Database): void {
   agregarColumnaSiFalta(db, 'cierres', 'cantidad_cuotas', 'INTEGER');
   agregarColumnaSiFalta(db, 'cierres', 'monto_cuota_usd', 'REAL');
   agregarColumnaSiFalta(db, 'cierres', 'fecha_primera_cuota', 'TEXT');
+  agregarColumnaSiFalta(db, 'cierres', 'inactivo', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'pagos', 'closer', 'TEXT');
   // Módulo Egresos: doble moneda + recurrente + medio/comentarios.
   agregarColumnaSiFalta(db, 'egresos', 'monto_ars', 'REAL');

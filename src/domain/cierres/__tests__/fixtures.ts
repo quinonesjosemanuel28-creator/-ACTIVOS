@@ -21,6 +21,7 @@ export function cierre(p: Partial<Cierre> = {}): Cierre {
     cantidadCuotas: p.cantidadCuotas,
     montoCuotaUsd: p.montoCuotaUsd,
     fechaPrimeraCuota: p.fechaPrimeraCuota,
+    inactivo: p.inactivo,
   };
 }
 

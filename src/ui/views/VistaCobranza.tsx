@@ -5,9 +5,9 @@
  * dominio: cash/comisiones leen de pagos reales).
  */
 import { useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useCobranza } from '../hooks';
-import { Badge, Card, CardBody, CardHeader, CardTitle, Spinner } from '../components/ui/primitives';
+import { Ban, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
+import { useCobranza, useMarcarInactivo } from '../hooks';
+import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Spinner } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import type { CobranzaCierreView } from '../lib/api';
 import { fmtMes, fmtUsd } from '../lib/format';
@@ -21,6 +21,7 @@ const TONO: Record<CobranzaCierreView['estado'], 'green' | 'amber' | 'red' | 'ne
   Atrasado: 'amber',
   Morosidad: 'red',
   Saldado: 'neutral',
+  Inactivo: 'neutral',
 };
 
 const COLOR_NIVEL: Record<string, string> = {
@@ -28,6 +29,7 @@ const COLOR_NIVEL: Record<string, string> = {
   amarillo: 'bg-yellow-400',
   naranja: 'bg-orange-500',
   rojo: 'bg-signal-red',
+  negro: 'bg-navy-950 dark:bg-black',
   none: 'bg-navy-200 dark:bg-navy-600',
 };
 const ETIQUETA_NIVEL: Record<string, string> = {
@@ -35,6 +37,7 @@ const ETIQUETA_NIVEL: Record<string, string> = {
   amarillo: 'Recién vencido',
   naranja: 'Atrasado',
   rojo: 'Moroso',
+  negro: 'Lista negra',
   none: 'Sin alerta',
 };
 
@@ -44,7 +47,7 @@ export function VistaCobranza() {
   if (error) return <Centro><p className="text-signal-red">Error: {(error as Error).message}</p></Centro>;
   if (!data) return null;
 
-  const { resumen, cierres, proyeccion } = data;
+  const { resumen, cierres, listaNegra, inactivos, proyeccion } = data;
 
   return (
     <div>
@@ -53,7 +56,7 @@ export function VistaCobranza() {
         descripcion="Ventas nuevas con plan de cuotas. Las cuotas pendientes son proyección, no cash."
       />
 
-      {cierres.length === 0 ? (
+      {cierres.length === 0 && inactivos.length === 0 ? (
         <div className="rounded-xl bg-navy-100 px-4 py-3 text-sm text-navy-600 dark:bg-navy-800 dark:text-navy-200">
           Todavía no hay ventas nuevas con plan de cuotas. Los cierres anteriores quedan saldados y fuera de cobranza.
           Cargá una venta con cuotas desde <b>Cierres y Clientes → Nuevo cierre</b>.
@@ -61,11 +64,12 @@ export function VistaCobranza() {
       ) : (
         <>
           {/* Semáforo de cobranza (cantidad de cierres por color) */}
-          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
             <Semaforo color="bg-signal-green" label="Próximo a vencer" sub="faltan ≤5 días" n={resumen.semaforo.verde} />
             <Semaforo color="bg-yellow-400" label="Recién vencido" sub="día 0 a 3" n={resumen.semaforo.amarillo} />
             <Semaforo color="bg-orange-500" label="Atrasado" sub="día 4 a 8" n={resumen.semaforo.naranja} />
-            <Semaforo color="bg-signal-red" label="Moroso" sub="día 9+" n={resumen.semaforo.rojo} />
+            <Semaforo color="bg-signal-red" label="Moroso" sub="día 9 a 60" n={resumen.semaforo.rojo} />
+            <Semaforo color="bg-navy-950 dark:bg-black" label="Lista negra" sub="día 61+" n={resumen.semaforo.negro} />
           </div>
 
           {/* Resumen de estados */}
@@ -92,6 +96,7 @@ export function VistaCobranza() {
                         <th className={`${TH} text-right`}>Pagado</th>
                         <th className={`${TH} text-right`}>Pendiente</th>
                         <th className={`${TH} text-center`}>Estado</th>
+                        <th className={`${TH} text-right`}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -122,6 +127,42 @@ export function VistaCobranza() {
               </CardBody>
             </Card>
           </div>
+
+          {/* Lista negra: clientes con cuota a +60 días */}
+          {listaNegra.length > 0 && (
+            <Card className="mt-4 overflow-hidden border-navy-300 dark:border-navy-600">
+              <CardHeader>
+                <CardTitle>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-navy-950 dark:bg-black" /> Lista negra ({listaNegra.length})
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardBody className="px-0 pb-0">
+                <p className="px-4 pb-2 text-xs text-navy-400">Cuotas con más de 60 días de atraso. Revisar para marcar Inactivo si el cliente no continúa.</p>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {listaNegra.map((c) => <FilaCobranza key={c.idCierre} c={c} />)}
+                  </tbody>
+                </table>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Inactivos: facturación consolidada (fuera de cobranza) */}
+          {inactivos.length > 0 && (
+            <Card className="mt-4 overflow-hidden">
+              <CardHeader><CardTitle>Inactivos ({inactivos.length}) · facturación consolidada</CardTitle></CardHeader>
+              <CardBody className="px-0 pb-0">
+                <p className="px-4 pb-2 text-xs text-navy-400">Marcados manualmente. El ticket quedó ajustado a lo pagado; fuera de morosidad y proyección. Reversible.</p>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {inactivos.map((c) => <FilaCobranza key={c.idCierre} c={c} />)}
+                  </tbody>
+                </table>
+              </CardBody>
+            </Card>
+          )}
         </>
       )}
     </div>
@@ -130,6 +171,8 @@ export function VistaCobranza() {
 
 function FilaCobranza({ c }: { c: CobranzaCierreView }) {
   const [abierto, setAbierto] = useState(false);
+  const inactivar = useMarcarInactivo();
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   return (
     <>
       <tr className="cursor-pointer border-t border-navy-100 hover:bg-navy-50 dark:border-navy-700 dark:hover:bg-navy-800/50" onClick={() => setAbierto((v) => !v)}>
@@ -145,13 +188,28 @@ function FilaCobranza({ c }: { c: CobranzaCierreView }) {
         <td className={cn(TD, 'text-right tnum text-navy-700 dark:text-navy-100')}>{fmtUsd(c.abonadoUsd)}</td>
         <td className={cn(TD, 'text-right tnum', c.saldoPendienteUsd > 0 ? 'text-signal-amber' : 'text-signal-green')}>{fmtUsd(c.saldoPendienteUsd)}</td>
         <td className={cn(TD, 'text-center')}>
-          <Badge tone={TONO[c.estado]}>{c.estado}{c.estado === 'Morosidad' ? ` · ${c.diasAtraso}d` : ''}</Badge>
+          {c.inactivo
+            ? <Badge tone="neutral">Inactivo</Badge>
+            : <Badge tone={TONO[c.estado]}>{c.estado}{c.estado === 'Morosidad' ? ` · ${c.diasAtraso}d` : ''}</Badge>}
+        </td>
+        <td className={cn(TD, 'text-right')}>
+          {c.inactivo ? (
+            <Button variant="ghost" size="sm" title="Reactivar" disabled={inactivar.isPending}
+              onClick={stop(() => inactivar.mutate({ id: c.idCierre, inactivo: false }))}>
+              <RotateCcw size={14} /> Reactivar
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" title="Marcar como Inactivo" disabled={inactivar.isPending}
+              onClick={stop(() => { if (confirm(`Marcar a ${c.cliente} como Inactivo? El ticket se ajusta a lo pagado (${fmtUsd(c.abonadoUsd)}) y sale de cobranza. Es reversible.`)) inactivar.mutate({ id: c.idCierre, inactivo: true }); })}>
+              <Ban size={14} /> Inactivar
+            </Button>
+          )}
         </td>
       </tr>
       {abierto && (
         <tr className="bg-navy-50/60 dark:bg-navy-900/40">
           <td />
-          <td colSpan={6} className="px-4 py-3">
+          <td colSpan={7} className="px-4 py-3">
             <div className="overflow-hidden rounded-xl border border-navy-100 dark:border-navy-700">
               <table className="w-full text-xs">
                 <thead className="bg-navy-100/70 text-navy-500 dark:bg-navy-800">

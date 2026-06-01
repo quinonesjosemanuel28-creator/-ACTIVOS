@@ -25,9 +25,17 @@ describe('Semáforo · nivelPorAtraso (bordes exactos)', () => {
     expect(nivelPorAtraso(8)).toBe('naranja');
     expect(nivelPorAtraso(9)).toBe('rojo');
   });
-  it('rojo: día 9 en adelante', () => {
+  it('rojo: día 9 al día 60', () => {
     expect(nivelPorAtraso(9)).toBe('rojo');
-    expect(nivelPorAtraso(100)).toBe('rojo');
+    expect(nivelPorAtraso(60)).toBe('rojo');
+  });
+  it('borde día 60→61: rojo → negro (lista negra)', () => {
+    expect(nivelPorAtraso(60)).toBe('rojo');
+    expect(nivelPorAtraso(61)).toBe('negro');
+  });
+  it('negro: día 61 en adelante', () => {
+    expect(nivelPorAtraso(61)).toBe('negro');
+    expect(nivelPorAtraso(365)).toBe('negro');
   });
 });
 
@@ -51,6 +59,10 @@ describe('Semáforo · peorNivel (color del cierre)', () => {
     expect(peorNivel(['verde', 'rojo', 'amarillo'])).toBe('rojo');
     expect(peorNivel(['amarillo', 'naranja'])).toBe('naranja');
     expect(peorNivel(['verde', null])).toBe('verde');
+  });
+  it('negro es el peor de todos', () => {
+    expect(peorNivel(['rojo', 'negro', 'amarillo'])).toBe('negro');
+    expect(peorNivel(['verde', 'negro'])).toBe('negro');
   });
   it('null si ninguna tiene alerta', () => {
     expect(peorNivel([null, null])).toBeNull();

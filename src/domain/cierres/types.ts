@@ -53,6 +53,12 @@ export interface Cierre {
   montoCuotaUsd?: number;
   /** Vencimiento de la cuota 1. Si está, el calendario es mensual fijo. */
   fechaPrimeraCuota?: string;
+  /**
+   * Marcado MANUAL de inactivo (cliente que no continúa). Ajusta el ticket
+   * comprometido a lo pagado, sale de cobranza/morosidad/proyección.
+   * Reversible (no borra el plan original). NO es automático.
+   */
+  inactivo?: boolean;
 }
 
 /**

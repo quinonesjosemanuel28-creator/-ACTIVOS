@@ -6,12 +6,13 @@
  *   - verde   "Próximo a vencer": faltan 1–5 días (atraso −5..−1)
  *   - amarillo "Recién vencido":  día 0 (vence hoy) a día 3 de atraso
  *   - naranja "Atrasado":         día 4 a día 8 de atraso
- *   - rojo    "Moroso":           día 9 de atraso en adelante
+ *   - rojo    "Moroso":           día 9 a día 60 de atraso
+ *   - negro   "Lista negra":      día 61 de atraso en adelante
  *   - null    sin alerta:         faltan más de 5 días (al día)
  * Solo cuotas PENDIENTES entran al semáforo.
  * El color del cierre = el PEOR color entre sus cuotas pendientes.
  */
-export type NivelSemaforo = 'verde' | 'amarillo' | 'naranja' | 'rojo';
+export type NivelSemaforo = 'verde' | 'amarillo' | 'naranja' | 'rojo' | 'negro';
 
 /** Días entre dos fechas ISO (hasta − desde), en días enteros UTC. */
 export function diasEntre(desdeIso: string, hastaIso: string): number {
@@ -22,7 +23,8 @@ export function diasEntre(desdeIso: string, hastaIso: string): number {
 
 /** Nivel del semáforo dado el atraso en días (positivo = vencido). */
 export function nivelPorAtraso(atrasoDias: number): NivelSemaforo | null {
-  if (atrasoDias >= 9) return 'rojo';
+  if (atrasoDias >= 61) return 'negro'; // lista negra
+  if (atrasoDias >= 9) return 'rojo'; // 9..60
   if (atrasoDias >= 4) return 'naranja'; // 4..8
   if (atrasoDias >= 0) return 'amarillo'; // 0..3 (día 0 = vencido)
   if (atrasoDias >= -5) return 'verde'; // -5..-1 (faltan 1..5 días)
@@ -35,7 +37,7 @@ export function nivelCuota(vencimiento: string, completa: boolean, hoy: string):
   return nivelPorAtraso(diasEntre(vencimiento, hoy));
 }
 
-const PESO: Record<NivelSemaforo, number> = { rojo: 4, naranja: 3, amarillo: 2, verde: 1 };
+const PESO: Record<NivelSemaforo, number> = { negro: 5, rojo: 4, naranja: 3, amarillo: 2, verde: 1 };
 
 /** Peor nivel (más severo) de un conjunto; null si ninguno tiene alerta. */
 export function peorNivel(niveles: readonly (NivelSemaforo | null)[]): NivelSemaforo | null {

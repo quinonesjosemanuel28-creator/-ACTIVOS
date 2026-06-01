@@ -17,6 +17,16 @@ function setupConDemo() {
 }
 
 describe('Cierres · CRUD y cascade', () => {
+  it('editar un cierre NO borra sus pagos (upsert in-place, no REPLACE)', () => {
+    const { repos } = setup();
+    const c = ucc.crearCierre(repos, { fechaCierre: '2026-03-10', clienteNombre: 'Test', programa: 'Empresario', ticketTotalUsd: 3000, closer: 'Ana' });
+    ucc.agregarPago(repos, { idCierre: c.idCierre, fechaPago: '2026-03-10', montoUsd: 1000, tipoPago: 'Reserva/Seña', medioPago: 'Otro' });
+    // Cualquier guardado del cierre (editar/quitarRevisar/marcarInactivo)
+    ucc.editarCierre(repos, c.idCierre, { fechaCierre: '2026-03-10', clienteNombre: 'Test EDIT', programa: 'Empresario', ticketTotalUsd: 3000 });
+    expect(repos.pagos.listarPorCierre(c.idCierre)).toHaveLength(1); // los pagos sobreviven
+    expect(repos.cierres.obtener(c.idCierre)!.clienteNombre).toBe('Test EDIT');
+  });
+
   it('crea un cierre y le agrega pagos', () => {
     const { repos } = setup();
     const c = ucc.crearCierre(repos, {

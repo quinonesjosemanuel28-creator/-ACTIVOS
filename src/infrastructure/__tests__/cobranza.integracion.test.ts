@@ -79,3 +79,31 @@ describe('Cobranza · migración (legacy intactos) + plan', () => {
     expect(totalProy).toBe(3000); // 3 cuotas pendientes
   });
 });
+
+describe('Cobranza · marcar Inactivo (integración)', () => {
+  it('inactivar saca de cobranza/lista negra y ajusta ticket; reactivar lo restaura, sin perder pagos', () => {
+    const db = setup();
+    const repos = crearReposCierres(db);
+    ucc.crearCierre(repos, { idCierre: 'INA', fechaCierre: '2026-01-02', clienteNombre: 'X', programa: 'Empresario', ticketTotalUsd: 4000, cantidadCuotas: 4, fechaPrimeraCuota: '2026-01-10', closer: 'Ana' });
+    ucc.agregarPago(repos, { idCierre: 'INA', fechaPago: '2026-01-05', montoUsd: 1000, montoArs: 1_300_000, tipoPago: 'Reserva/Seña', medioPago: 'Otro' });
+
+    let cob = ucob.obtenerCobranza(repos, '2026-06-01');
+    expect(cob.cierres.find((c) => c.idCierre === 'INA')!.nivel).toBe('negro'); // +60d
+    expect(cob.listaNegra.some((c) => c.idCierre === 'INA')).toBe(true);
+
+    ucc.marcarInactivo(repos, 'INA');
+    expect(repos.pagos.listarPorCierre('INA')).toHaveLength(1); // pagos preservados
+    cob = ucob.obtenerCobranza(repos, '2026-06-01');
+    expect(cob.cierres.some((c) => c.idCierre === 'INA')).toBe(false); // fuera de cobranza
+    expect(cob.listaNegra.some((c) => c.idCierre === 'INA')).toBe(false);
+    const inac = cob.inactivos.find((c) => c.idCierre === 'INA')!;
+    expect(inac.totalUsd).toBe(1000); // ticket ajustado a lo pagado
+    expect(inac.saldoPendienteUsd).toBe(0);
+
+    ucc.reactivar(repos, 'INA');
+    cob = ucob.obtenerCobranza(repos, '2026-06-01');
+    const reac = cob.cierres.find((c) => c.idCierre === 'INA')!;
+    expect(reac.totalUsd).toBe(4000); // plan original restaurado
+    expect(reac.saldoPendienteUsd).toBe(3000);
+  });
+});

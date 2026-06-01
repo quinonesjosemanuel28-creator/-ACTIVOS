@@ -146,6 +146,8 @@ app.delete('/api/cierres/:id/revisar', h((req) => ucc.quitarRevisar(reposCierres
 
 // Cobranza y morosidad (deriva del plan de cuotas + pagos reales)
 app.get('/api/cobranza', h(() => ucob.obtenerCobranza(reposCierres)));
+app.post('/api/cierres/:id/inactivar', h((req) => ucc.marcarInactivo(reposCierres, param(req, 'id'))));
+app.delete('/api/cierres/:id/inactivar', h((req) => ucc.reactivar(reposCierres, param(req, 'id'))));
 
 app.post('/api/pagos', h((req) => ucc.agregarPago(reposCierres, req.body)));
 app.put('/api/pagos/:id', h((req) => ucc.editarPago(reposCierres, param(req, 'id'), req.body)));

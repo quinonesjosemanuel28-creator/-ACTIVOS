@@ -22,7 +22,7 @@ import { nivelCuota, peorNivel, type NivelSemaforo } from './semaforo';
 
 export const DIAS_CUOTA = 30;
 
-export type EstadoCobranza = 'Saldado' | 'Al día' | 'Atrasado' | 'Morosidad';
+export type EstadoCobranza = 'Saldado' | 'Al día' | 'Atrasado' | 'Morosidad' | 'Inactivo';
 
 export interface CuotaDerivada {
   numero: number; // 1-based
@@ -79,14 +79,40 @@ function diffDias(desdeIso: string, hastaIso: string): number {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
+ * Ticket comprometido efectivo. Si el cierre está marcado INACTIVO, se ajusta
+ * a lo efectivamente pagado (las cuotas pendientes se cancelan → saldo 0). Si
+ * está activo, es el ticket original. Función pura, testeada.
+ */
+export function ticketComprometido(cierre: Cierre, pagadoUsd: number): number {
+  return cierre.inactivo ? round2(pagadoUsd) : round2(cierre.ticketTotalUsd);
+}
+
+/**
  * Deriva el estado de cobranza de un cierre a una fecha de referencia (hoy).
  * `pagosDelCierre` deben ser los pagos reales de ESE cierre.
  */
 export function cobranzaDeCierre(cierre: Cierre, pagosDelCierre: readonly Pago[], hoy: string): CobranzaCierre {
   const tieneePlan = !!cierre.cantidadCuotas && cierre.cantidadCuotas > 0;
-  const totalUsd = round2(cierre.ticketTotalUsd);
   const abonadoUsd = round2(pagosDelCierre.reduce((a, p) => a + p.montoUsd, 0));
+  // Ticket comprometido EFECTIVO: si está inactivo se ajusta a lo pagado.
+  const totalUsd = ticketComprometido(cierre, abonadoUsd);
   const saldoPendienteUsd = round2(Math.max(totalUsd - abonadoUsd, 0));
+
+  if (cierre.inactivo) {
+    // Marcado manual: facturación consolidada en lo pagado. Sin cuotas
+    // pendientes, sin semáforo, fuera de morosidad/proyección.
+    return {
+      idCierre: cierre.idCierre,
+      tieneePlan,
+      totalUsd,
+      abonadoUsd,
+      saldoPendienteUsd: 0,
+      cuotas: [],
+      estado: 'Inactivo',
+      diasAtraso: 0,
+      nivel: null,
+    };
+  }
 
   if (!tieneePlan) {
     // Legacy / saldado: fuera del sistema de cuotas.
