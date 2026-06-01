@@ -1,5 +1,5 @@
 /** Navegación entre pantallas: sidebar en desktop, barra superior en mobile. */
-import { AlertTriangle, BarChart3, CalendarClock, Database, Filter, LayoutDashboard, LineChart, Megaphone, Percent, Receipt, TrendingDown, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, CalendarClock, Database, Filter, LayoutDashboard, LineChart, Megaphone, Percent, Receipt, Sparkles, TrendingDown, Users } from 'lucide-react';
 import { useUI, type Vista } from '../store';
 import { cn } from '../lib/utils';
 
@@ -15,6 +15,7 @@ const ITEMS: { id: Vista; label: string; icono: typeof LayoutDashboard }[] = [
   { id: 'cobranza', label: 'Cobranza', icono: CalendarClock },
   { id: 'egresos', label: 'Egresos', icono: TrendingDown },
   { id: 'comisiones', label: 'Comisiones', icono: Percent },
+  { id: 'asistente', label: 'Asistente IA', icono: Sparkles },
   { id: 'datos', label: 'Carga & Admin', icono: Database },
 ];
 

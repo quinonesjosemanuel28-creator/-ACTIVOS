@@ -19,6 +19,14 @@ export function useDashboard() {
 export function useCobranza() {
   return useQuery({ queryKey: ['cobranza'], queryFn: () => api.cobranza() });
 }
+
+// ───────────────────────── Asistente IA ─────────────────────────
+export function useAsistenteEstado() {
+  return useQuery({ queryKey: ['asistente', 'estado'], queryFn: () => api.asistenteEstado() });
+}
+export function usePreguntarAsistente() {
+  return useMutation({ mutationFn: (pregunta: string) => api.asistentePreguntar(pregunta) });
+}
 export function useMarcarInactivo() {
   const qc = useQueryClient();
   return useMutation({

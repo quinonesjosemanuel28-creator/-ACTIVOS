@@ -14,6 +14,7 @@ export type Vista =
   | 'cobranza'
   | 'egresos'
   | 'comisiones'
+  | 'asistente'
   | 'datos';
 
 export type FiltroPrograma = 'TODOS' | Programa;

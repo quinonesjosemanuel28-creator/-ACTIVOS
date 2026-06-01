@@ -76,6 +76,15 @@ export interface CobranzaCierreView {
   nivel: NivelSemaforo | null;
   inactivo: boolean;
 }
+export interface RespuestaAsistente {
+  disponible: boolean;
+  ok: boolean;
+  respuesta: string;
+  sql?: string;
+  columnas?: string[];
+  filas?: unknown[][];
+}
+
 export interface CobranzaView {
   hoy: string;
   cierres: CobranzaCierreView[];
@@ -236,6 +245,11 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ reemplazar }) },
     ),
   anularLiquidacion: (mes: string) => req(`/comisiones/liquidar/${mes}`, { method: 'DELETE' }),
+
+  // Asistente IA
+  asistenteEstado: () => req<{ disponible: boolean }>('/asistente/estado'),
+  asistentePreguntar: (pregunta: string) =>
+    req<RespuestaAsistente>('/asistente', { method: 'POST', body: JSON.stringify({ pregunta }) }),
 
   // Cobranza
   cobranza: () => req<CobranzaView>('/cobranza'),

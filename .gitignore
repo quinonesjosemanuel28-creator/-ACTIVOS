@@ -4,6 +4,11 @@ dist-ssr
 *.local
 .DS_Store
 
+# Secrets — la API key NO va a git (.env.example sí, como plantilla)
+.env
+.env.*
+!.env.example
+
 # Base de datos local (se regenera con `npm run seed`)
 data/
 data/*.db

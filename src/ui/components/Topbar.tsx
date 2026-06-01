@@ -18,6 +18,7 @@ const TITULOS: Record<Vista, string> = {
   cobranza: 'Cobranza',
   egresos: 'Egresos',
   comisiones: 'Comisiones',
+  asistente: 'Asistente IA',
   datos: 'Carga & Admin',
 };
 

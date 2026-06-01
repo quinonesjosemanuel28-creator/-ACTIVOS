@@ -14,6 +14,7 @@ import { VistaProgramas } from './views/VistaProgramas';
 import { VistaCierres } from './views/VistaCierres';
 import { VistaCobranza } from './views/VistaCobranza';
 import { VistaEgresos } from './views/VistaEgresos';
+import { VistaAsistente } from './views/VistaAsistente';
 import { VistaComisiones } from './views/VistaComisiones';
 import { VistaDatos } from './views/VistaDatos';
 
@@ -50,6 +51,7 @@ export function App() {
               {vista === 'cobranza' && <VistaCobranza />}
               {vista === 'egresos' && <VistaEgresos />}
               {vista === 'comisiones' && <VistaComisiones />}
+              {vista === 'asistente' && <VistaAsistente />}
               {vista === 'datos' && <VistaDatos />}
             </>
           )}

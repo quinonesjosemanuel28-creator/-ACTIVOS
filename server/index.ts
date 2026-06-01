@@ -5,6 +5,7 @@
  * Este archivo es el ÚNICO lugar donde se conocen Express + better-sqlite3
  * a la vez. El dominio sigue sin saber que existen.
  */
+import 'dotenv/config'; // carga .env (ANTHROPIC_API_KEY, etc.) antes de todo
 import express from 'express';
 import cors from 'cors';
 import { ZodError } from 'zod';
@@ -18,6 +19,8 @@ import * as uce from '../src/application/egresos/useCases';
 import * as ucom from '../src/application/comisiones/useCases';
 import * as ucf from '../src/application/funnel/useCases';
 import * as ucob from '../src/application/cobranza/useCases';
+import * as ucia from '../src/application/asistente/useCases';
+import { asistenteDisponible } from '../src/infrastructure/anthropic/cliente';
 import type { FiltrosEgresos } from '../src/application/egresos/useCases';
 import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
@@ -143,6 +146,15 @@ app.delete('/api/cierres/:id', h((req) => ucc.eliminarCierre(reposCierres, param
 
 app.post('/api/cierres/importar', h((req) => ucc.importarCierresPagos(reposCierres, req.body)));
 app.delete('/api/cierres/:id/revisar', h((req) => ucc.quitarRevisar(reposCierres, param(req, 'id'))));
+
+// Asistente IA (text-to-SQL de solo lectura). La pregunta se procesa async.
+app.get('/api/asistente/estado', (_req, res) => res.json({ disponible: asistenteDisponible() }));
+app.post('/api/asistente', (req, res) => {
+  ucia
+    .responderPregunta(req.body?.pregunta)
+    .then((r) => res.json(r))
+    .catch((e) => res.status(500).json({ disponible: true, ok: false, respuesta: e instanceof Error ? e.message : 'Error' }));
+});
 
 // Cobranza y morosidad (deriva del plan de cuotas + pagos reales)
 app.get('/api/cobranza', h(() => ucob.obtenerCobranza(reposCierres)));
