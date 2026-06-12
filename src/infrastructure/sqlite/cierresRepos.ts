@@ -99,11 +99,11 @@ const toPago = (r: PagoRow): Pago => ({
 
 export function crearReposCierres(db: Database.Database): ReposCierres {
   const cierres: CierresRepo = {
-    obtener(id) {
+    async obtener(id) {
       const row = db.prepare('SELECT * FROM cierres WHERE id_cierre = ?').get(id) as CierreRow | undefined;
       return row ? toCierre(row) : null;
     },
-    listar(filtros: FiltrosCierres = {}) {
+    async listar(filtros: FiltrosCierres = {}) {
       const where: string[] = ['1=1'];
       const params: unknown[] = [];
       if (filtros.mes) {
@@ -140,7 +140,7 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         .all(...params) as CierreRow[];
       return rows.map(toCierre);
     },
-    guardar(c) {
+    async guardar(c) {
       // UPSERT con ON CONFLICT DO UPDATE (no INSERT OR REPLACE): editar un
       // cierre actualiza la fila EN SU LUGAR. REPLACE borraría la fila y, por
       // el FK ON DELETE CASCADE de `pagos`, eliminaría sus pagos.
@@ -177,27 +177,27 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         revisar: c.revisar ?? null,
       });
     },
-    eliminar(id) {
+    async eliminar(id) {
       db.prepare('DELETE FROM cierres WHERE id_cierre = ?').run(id);
     },
-    borrarDemo() {
+    async borrarDemo() {
       return db.prepare(`DELETE FROM cierres WHERE id_cierre LIKE '${DEMO_PREFIX}%'`).run().changes;
     },
-    vaciar() {
+    async vaciar() {
       return db.prepare('DELETE FROM cierres').run().changes;
     },
   };
 
   const pagos: PagosRepo = {
-    listarPorCierre(idCierre) {
+    async listarPorCierre(idCierre) {
       return (
         db.prepare('SELECT * FROM pagos WHERE id_cierre = ? ORDER BY fecha_pago').all(idCierre) as PagoRow[]
       ).map(toPago);
     },
-    listarTodos() {
+    async listarTodos() {
       return (db.prepare('SELECT * FROM pagos ORDER BY fecha_pago').all() as PagoRow[]).map(toPago);
     },
-    guardar(p) {
+    async guardar(p) {
       db.prepare(
         `INSERT OR REPLACE INTO pagos
          (id_pago, id_cierre, fecha_pago, hora_pago, monto_usd, monto_ars, cotizacion,
@@ -217,15 +217,15 @@ export function crearReposCierres(db: Database.Database): ReposCierres {
         setter: p.setter ?? null,
       });
     },
-    eliminar(id) {
+    async eliminar(id) {
       db.prepare('DELETE FROM pagos WHERE id_pago = ?').run(id);
     },
-    borrarDemo() {
+    async borrarDemo() {
       return db
         .prepare(`DELETE FROM pagos WHERE id_pago LIKE '${DEMO_PREFIX}%' OR id_cierre LIKE '${DEMO_PREFIX}%'`)
         .run().changes;
     },
-    vaciar() {
+    async vaciar() {
       return db.prepare('DELETE FROM pagos').run().changes;
     },
   };

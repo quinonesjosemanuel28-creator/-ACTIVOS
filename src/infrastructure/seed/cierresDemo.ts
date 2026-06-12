@@ -173,9 +173,9 @@ export function generarCierresDemo(): { cierres: Cierre[]; pagos: Pago[] } {
 }
 
 /** Carga idempotente del demo de cierres/pagos. */
-export function sembrarCierresDemo(repos: ReposCierres): { cierres: number; pagos: number } {
+export async function sembrarCierresDemo(repos: ReposCierres): Promise<{ cierres: number; pagos: number }> {
   const { cierres, pagos } = generarCierresDemo();
-  cierres.forEach((c) => repos.cierres.guardar(c));
-  pagos.forEach((p) => repos.pagos.guardar(p));
+  for (const c of cierres) await repos.cierres.guardar(c);
+  for (const p of pagos) await repos.pagos.guardar(p);
   return { cierres: cierres.length, pagos: pagos.length };
 }

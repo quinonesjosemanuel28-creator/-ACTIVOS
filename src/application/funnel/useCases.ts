@@ -32,10 +32,10 @@ const totalDeCanales = (filas: readonly CanalFila[]) => ({
  * totales (datos previos sin canal), se exponen como "Sin especificar" (sin
  * inventar atribución) hasta que se recarguen por canal.
  */
-function canalesDelMes(canalRepo: FunnelCanalRepo, legacy: FunnelRepo, mes: Mes): CanalFila[] {
-  const filas = canalRepo.listarPorMes(mes);
+async function canalesDelMes(canalRepo: FunnelCanalRepo, legacy: FunnelRepo, mes: Mes): Promise<CanalFila[]> {
+  const filas = await canalRepo.listarPorMes(mes);
   if (filas.length > 0) return filas;
-  const t = legacy.obtener(mes);
+  const t = await legacy.obtener(mes);
   if (t.agendas > 0 || t.asistieron > 0) {
     return [{ canal: CANAL_SIN_ESPECIFICAR, agendas: t.agendas, asistieron: t.asistieron }];
   }
@@ -68,16 +68,16 @@ export interface FunnelView {
   cierresPorPrograma: { empresario: number; ceroGestor: number };
 }
 
-export function obtenerFunnel(
+export async function obtenerFunnel(
   reposCierres: ReposCierres,
   canalRepo: FunnelCanalRepo,
   legacy: FunnelRepo,
   mes: Mes,
-): FunnelView {
-  const cierres = reposCierres.cierres.listar();
-  const pagos = reposCierres.pagos.listarTodos();
+): Promise<FunnelView> {
+  const cierres = await reposCierres.cierres.listar();
+  const pagos = await reposCierres.pagos.listarTodos();
 
-  const filasCanal = canalesDelMes(canalRepo, legacy, mes);
+  const filasCanal = await canalesDelMes(canalRepo, legacy, mes);
   const tot = totalDeCanales(filasCanal);
   const f = { agendas: tot.agendas, asistieron: tot.asistieron, cerrados: cierresNuevos(cierres, mes) };
 
@@ -99,7 +99,7 @@ export function obtenerFunnel(
 
   // M/M (totales del mes anterior).
   const prevMes = mesAnterior(mes);
-  const prevTot = totalDeCanales(canalesDelMes(canalRepo, legacy, prevMes));
+  const prevTot = totalDeCanales(await canalesDelMes(canalRepo, legacy, prevMes));
   const prev = { agendas: prevTot.agendas, asistieron: prevTot.asistieron, cerrados: cierresNuevos(cierres, prevMes) };
   const mm = (a: number | null, p: number | null) => (a === null || p === null ? null : variacionMM(a, p));
 
@@ -142,17 +142,17 @@ const canalInputSchema = z.object({
 });
 
 /** Guarda las agendas/shows por canal del mes. Cerrados nunca se guarda. */
-export function guardarFunnelCanales(canalRepo: FunnelCanalRepo, mes: Mes, input: unknown): void {
+export async function guardarFunnelCanales(canalRepo: FunnelCanalRepo, mes: Mes, input: unknown): Promise<void> {
   const { canales } = canalInputSchema.parse(input);
-  canalRepo.guardarMes(mes, canales);
+  await canalRepo.guardarMes(mes, canales);
 }
 
 /** Total agendas/shows del mes desde canales (con fallback legacy). Para el adaptador. */
-export function totalFunnelDelMes(canalRepo: FunnelCanalRepo, legacy: FunnelRepo, mes: Mes) {
-  return totalDeCanales(canalesDelMes(canalRepo, legacy, mes));
+export async function totalFunnelDelMes(canalRepo: FunnelCanalRepo, legacy: FunnelRepo, mes: Mes) {
+  return totalDeCanales(await canalesDelMes(canalRepo, legacy, mes));
 }
 
 /** Cantidad de cierres nuevos reales del mes (debe igualar "cerrados"). */
-export function cerradosReales(reposCierres: ReposCierres, mes: Mes): number {
-  return cierresNuevos(reposCierres.cierres.listar(), mes);
+export async function cerradosReales(reposCierres: ReposCierres, mes: Mes): Promise<number> {
+  return cierresNuevos(await reposCierres.cierres.listar(), mes);
 }

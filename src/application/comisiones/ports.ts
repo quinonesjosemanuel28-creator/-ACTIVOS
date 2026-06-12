@@ -9,8 +9,8 @@ export interface RegistroLiquidacion {
 }
 
 export interface LiquidacionRepo {
-  obtener(mes: string): RegistroLiquidacion | null;
-  listar(): RegistroLiquidacion[];
-  guardar(registro: RegistroLiquidacion): void;
-  eliminar(mes: string): void;
+  obtener(mes: string): Promise<RegistroLiquidacion | null>;
+  listar(): Promise<RegistroLiquidacion[]>;
+  guardar(registro: RegistroLiquidacion): Promise<void>;
+  eliminar(mes: string): Promise<void>;
 }

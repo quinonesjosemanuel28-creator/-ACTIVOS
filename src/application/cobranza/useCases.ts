@@ -31,9 +31,9 @@ export interface CobranzaView {
 
 const hoyIso = () => new Date().toISOString().slice(0, 10);
 
-export function obtenerCobranza(repos: ReposCierres, hoy: string = hoyIso()): CobranzaView {
-  const todosCierres = repos.cierres.listar();
-  const todosPagos = repos.pagos.listarTodos();
+export async function obtenerCobranza(repos: ReposCierres, hoy: string = hoyIso()): Promise<CobranzaView> {
+  const todosCierres = await repos.cierres.listar();
+  const todosPagos = await repos.pagos.listarTodos();
 
   const conPlan = todosCierres.filter((c) => !!c.cantidadCuotas && c.cantidadCuotas > 0);
   const todas: FilaCobranza[] = conPlan.map((c) => {

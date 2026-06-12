@@ -20,21 +20,21 @@ export interface FiltrosCierres {
 }
 
 export interface CierresRepo {
-  obtener(idCierre: string): Cierre | null;
-  listar(filtros?: FiltrosCierres): Cierre[];
-  guardar(cierre: Cierre): void; // upsert
-  eliminar(idCierre: string): void; // cascade borra sus pagos
-  borrarDemo(): number; // borra solo filas sembradas (prefijo DEMO-); devuelve count
-  vaciar(): number; // vacía toda la tabla; devuelve count
+  obtener(idCierre: string): Promise<Cierre | null>;
+  listar(filtros?: FiltrosCierres): Promise<Cierre[]>;
+  guardar(cierre: Cierre): Promise<void>; // upsert
+  eliminar(idCierre: string): Promise<void>; // cascade borra sus pagos
+  borrarDemo(): Promise<number>; // borra solo filas sembradas (prefijo DEMO-); devuelve count
+  vaciar(): Promise<number>; // vacía toda la tabla; devuelve count
 }
 
 export interface PagosRepo {
-  listarPorCierre(idCierre: string): Pago[];
-  listarTodos(): Pago[];
-  guardar(pago: Pago): void; // upsert
-  eliminar(idPago: string): void;
-  borrarDemo(): number;
-  vaciar(): number;
+  listarPorCierre(idCierre: string): Promise<Pago[]>;
+  listarTodos(): Promise<Pago[]>;
+  guardar(pago: Pago): Promise<void>; // upsert
+  eliminar(idPago: string): Promise<void>;
+  borrarDemo(): Promise<number>;
+  vaciar(): Promise<number>;
 }
 
 export interface ReposCierres {

@@ -142,13 +142,13 @@ export function generarDemo(): SeedData {
 }
 
 /** Carga idempotente del demo en los repositorios. */
-export function sembrarDemo(repos: Repositorios): { ventas: number; cobros: number; egresos: number } {
+export async function sembrarDemo(repos: Repositorios): Promise<{ ventas: number; cobros: number; egresos: number }> {
   const data = generarDemo();
-  data.ventas.forEach((v) => repos.ventas.insertar(v));
-  data.cobros.forEach((c) => repos.cobros.insertar(c));
-  data.egresos.forEach((e) => repos.egresos.insertar(e));
-  data.funnels.forEach((f) => repos.funnel.guardar(f.mes, f.funnel));
-  repos.parametros.guardar(data.parametros);
+  for (const v of data.ventas) await repos.ventas.insertar(v);
+  for (const c of data.cobros) await repos.cobros.insertar(c);
+  for (const e of data.egresos) await repos.egresos.insertar(e);
+  for (const f of data.funnels) await repos.funnel.guardar(f.mes, f.funnel);
+  await repos.parametros.guardar(data.parametros);
   return { ventas: data.ventas.length, cobros: data.cobros.length, egresos: data.egresos.length };
 }
 
@@ -157,10 +157,10 @@ export function sembrarDemo(repos: Repositorios): { ventas: number; cobros: numb
  * y parámetros. Se usa junto a sembrarCierresDemo cuando cierres/pagos son
  * la fuente canónica del dashboard (no se siembran ventas/cobros legacy).
  */
-export function sembrarBaseDemo(repos: Repositorios): { egresos: number } {
+export async function sembrarBaseDemo(repos: Repositorios): Promise<{ egresos: number }> {
   const data = generarDemo();
-  data.egresos.forEach((e) => repos.egresos.insertar(e));
-  data.funnels.forEach((f) => repos.funnel.guardar(f.mes, f.funnel));
-  repos.parametros.guardar(data.parametros);
+  for (const e of data.egresos) await repos.egresos.insertar(e);
+  for (const f of data.funnels) await repos.funnel.guardar(f.mes, f.funnel);
+  await repos.parametros.guardar(data.parametros);
   return { egresos: data.egresos.length };
 }

@@ -30,12 +30,12 @@ function mesAnterior(mes: Mes): Mes {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-function datosDeMes(repos: Repositorios, mes: Mes, filtro?: Filtro): DatosMes {
+async function datosDeMes(repos: Repositorios, mes: Mes, filtro?: Filtro): Promise<DatosMes> {
   return {
     mes,
-    ventas: repos.ventas.listarPorMes(mes, filtro),
-    cobros: repos.cobros.listarPorMes(mes, filtro),
-    egresos: repos.egresos.listarPorMes(mes, filtro),
+    ventas: await repos.ventas.listarPorMes(mes, filtro),
+    cobros: await repos.cobros.listarPorMes(mes, filtro),
+    egresos: await repos.egresos.listarPorMes(mes, filtro),
   };
 }
 
@@ -47,16 +47,16 @@ export interface DashboardResult {
 }
 
 /** Caso de uso central: arma el dashboard del mes (recalcula todo). */
-export function obtenerDashboardDelMes(
+export async function obtenerDashboardDelMes(
   repos: Repositorios,
   mes: Mes,
   opciones: { filtro?: Filtro; programa?: 'TODOS' | Programa } = {},
-): DashboardResult {
+): Promise<DashboardResult> {
   const { filtro, programa = 'TODOS' } = opciones;
   const previo = mesAnterior(mes);
 
-  let datosMes = datosDeMes(repos, mes, filtro);
-  let datosPrev: DatosMes | null = datosDeMes(repos, previo, filtro);
+  let datosMes = await datosDeMes(repos, mes, filtro);
+  let datosPrev: DatosMes | null = await datosDeMes(repos, previo, filtro);
   if (datosPrev.ventas.length === 0 && datosPrev.cobros.length === 0 && datosPrev.egresos.length === 0) {
     datosPrev = null;
   }
@@ -66,21 +66,21 @@ export function obtenerDashboardDelMes(
     if (datosPrev) datosPrev = filtrarPorPrograma(datosPrev, programa);
   }
 
-  const parametros = repos.parametros.obtener();
+  const parametros = await repos.parametros.obtener();
   const snapshot = construirSnapshot({
     mes,
     datosMes,
     datosMesAnterior: datosPrev,
-    cobrosHistoricos: repos.cobros.listarTodos(filtro),
-    egresosHistoricos: repos.egresos.listarTodos(filtro),
-    ventasHistoricas: repos.ventas.listarTodas(filtro),
-    funnel: repos.funnel.obtener(mes, filtro),
-    funnelAnterior: repos.funnel.obtener(previo, filtro),
+    cobrosHistoricos: await repos.cobros.listarTodos(filtro),
+    egresosHistoricos: await repos.egresos.listarTodos(filtro),
+    ventasHistoricas: await repos.ventas.listarTodas(filtro),
+    funnel: await repos.funnel.obtener(mes, filtro),
+    funnelAnterior: await repos.funnel.obtener(previo, filtro),
     parametros,
   });
 
   const alertas = evaluarAlertas({ snapshot, datosMes, parametros });
-  return { snapshot, alertas, estadoMes: repos.cierre.estado(mes), programa };
+  return { snapshot, alertas, estadoMes: await repos.cierre.estado(mes), programa };
 }
 
 /** Serie histórica para la pantalla de evolución (6+ meses). */
@@ -100,16 +100,17 @@ export interface PuntoHistorico {
   netoTotal: number; // cashCollected − egresos totales
 }
 
-export function obtenerHistorico(repos: Repositorios, filtro?: Filtro): PuntoHistorico[] {
-  const meses = repos.cierre.mesesConDatos();
-  const todosEgresos = repos.egresos.listarTodos(filtro);
-  return meses.map((mes) => {
-    const { snapshot } = obtenerDashboardDelMes(repos, mes, { filtro });
+export async function obtenerHistorico(repos: Repositorios, filtro?: Filtro): Promise<PuntoHistorico[]> {
+  const meses = await repos.cierre.mesesConDatos();
+  const todosEgresos = await repos.egresos.listarTodos(filtro);
+  const puntos: PuntoHistorico[] = [];
+  for (const mes of meses) {
+    const { snapshot } = await obtenerDashboardDelMes(repos, mes, { filtro });
     const cashCollected = snapshot.cashCollected.valor ?? 0;
     const egresosMes = em.egresosDelMes(todosEgresos, mes); // proyecta recurrentes
     const egresosOperativos = em.costoOperativoUsd(egresosMes);
     const egresosTotales = em.totalUsd(egresosMes);
-    return {
+    puntos.push({
       mes,
       cashCollected,
       cashNuevo: snapshot.cashNuevo,
@@ -121,31 +122,32 @@ export function obtenerHistorico(repos: Repositorios, filtro?: Filtro): PuntoHis
       egresosTotales,
       netoOperativo: cashCollected - egresosOperativos,
       netoTotal: cashCollected - egresosTotales,
-    };
-  });
+    });
+  }
+  return puntos;
 }
 
 /** Comparativa Empresario vs Gestor (R8). */
-export function compararProgramas(repos: Repositorios, mes: Mes, filtro?: Filtro) {
+export async function compararProgramas(repos: Repositorios, mes: Mes, filtro?: Filtro) {
   return {
-    empresario: obtenerDashboardDelMes(repos, mes, { filtro, programa: 'Empresario' }).snapshot,
-    gestor: obtenerDashboardDelMes(repos, mes, { filtro, programa: 'Gestor' }).snapshot,
+    empresario: (await obtenerDashboardDelMes(repos, mes, { filtro, programa: 'Empresario' })).snapshot,
+    gestor: (await obtenerDashboardDelMes(repos, mes, { filtro, programa: 'Gestor' })).snapshot,
   };
 }
 
 // ───────────────────────── Carga de datos (R6: respeta cierre) ─────────────
 
-function assertAbierto(repos: Repositorios, mes: Mes): void {
-  if (repos.cierre.estado(mes) === 'Cerrado') {
+async function assertAbierto(repos: Repositorios, mes: Mes): Promise<void> {
+  if ((await repos.cierre.estado(mes)) === 'Cerrado') {
     throw new Error(`El mes ${mes} está cerrado y no admite ediciones (R6).`);
   }
 }
 
-export function agregarVenta(repos: Repositorios, input: unknown): void {
+export async function agregarVenta(repos: Repositorios, input: unknown): Promise<void> {
   const v = ventaInputSchema.parse(input);
   const mes = v.fechaVenta.slice(0, 7);
-  assertAbierto(repos, mes);
-  repos.ventas.insertar({
+  await assertAbierto(repos, mes);
+  await repos.ventas.insertar({
     idVenta: v.idVenta ?? `V-${mes}-${Date.now()}`,
     fechaVenta: v.fechaVenta,
     mesVenta: mes,
@@ -160,11 +162,11 @@ export function agregarVenta(repos: Repositorios, input: unknown): void {
   });
 }
 
-export function agregarCobro(repos: Repositorios, input: unknown): void {
+export async function agregarCobro(repos: Repositorios, input: unknown): Promise<void> {
   const c: CobroInput = cobroInputSchema.parse(input);
   const mesCobro = c.fechaCobro.slice(0, 7);
-  assertAbierto(repos, mesCobro);
-  repos.cobros.insertar({
+  await assertAbierto(repos, mesCobro);
+  await repos.cobros.insertar({
     idCobro: c.idCobro ?? `C-${mesCobro}-${Date.now()}`,
     idVentaOrigen: c.idVentaOrigen,
     fechaCobro: c.fechaCobro,
@@ -176,11 +178,11 @@ export function agregarCobro(repos: Repositorios, input: unknown): void {
   });
 }
 
-export function agregarEgreso(repos: Repositorios, input: unknown): void {
+export async function agregarEgreso(repos: Repositorios, input: unknown): Promise<void> {
   const e: EgresoInput = egresoInputSchema.parse(input);
   const mes = e.fecha.slice(0, 7);
-  assertAbierto(repos, mes);
-  repos.egresos.insertar({
+  await assertAbierto(repos, mes);
+  await repos.egresos.insertar({
     idEgreso: e.idEgreso ?? `E-${mes}-${Date.now()}`,
     fecha: e.fecha,
     mes,
@@ -193,25 +195,25 @@ export function agregarEgreso(repos: Repositorios, input: unknown): void {
   });
 }
 
-export function guardarParametros(repos: Repositorios, input: unknown): void {
+export async function guardarParametros(repos: Repositorios, input: unknown): Promise<void> {
   const p: ParametrosInput = parametrosInputSchema.parse(input);
-  repos.parametros.guardar(p);
+  await repos.parametros.guardar(p);
 }
 
-export function guardarFunnel(repos: Repositorios, mes: Mes, input: unknown, filtro?: Filtro): void {
-  assertAbierto(repos, mes);
+export async function guardarFunnel(repos: Repositorios, mes: Mes, input: unknown, filtro?: Filtro): Promise<void> {
+  await assertAbierto(repos, mes);
   const f = funnelInputSchema.parse(input);
   // cerrados se deriva (no se guarda); se persiste 0 y se ignora en lectura.
-  repos.funnel.guardar(mes, { agendas: f.agendas, asistieron: f.asistieron, cerrados: 0 }, filtro);
+  await repos.funnel.guardar(mes, { agendas: f.agendas, asistieron: f.asistieron, cerrados: 0 }, filtro);
 }
 
 // ───────────────────────── Cierre de mes (R6) ─────────────────────────
 
-export function cerrarMes(repos: Repositorios, mes: Mes): void {
-  repos.cierre.cerrar(mes);
+export async function cerrarMes(repos: Repositorios, mes: Mes): Promise<void> {
+  await repos.cierre.cerrar(mes);
 }
-export function reabrirMes(repos: Repositorios, mes: Mes): void {
-  repos.cierre.reabrir(mes);
+export async function reabrirMes(repos: Repositorios, mes: Mes): Promise<void> {
+  await repos.cierre.reabrir(mes);
 }
 
 // ───────────────────────── Importación de Excel (idempotente) ─────────────
@@ -223,11 +225,11 @@ export interface ImportResult {
   advertencias: string[];
 }
 
-export function importarExcel(repos: Repositorios, buffer: Buffer): ImportResult {
+export async function importarExcel(repos: Repositorios, buffer: Buffer): Promise<ImportResult> {
   const r = parsearTablero(buffer);
-  r.ventas.forEach((v) => repos.ventas.insertar(v));
-  r.cobros.forEach((c) => repos.cobros.insertar(c));
-  r.egresos.forEach((e) => repos.egresos.insertar(e));
+  for (const v of r.ventas) await repos.ventas.insertar(v);
+  for (const c of r.cobros) await repos.cobros.insertar(c);
+  for (const e of r.egresos) await repos.egresos.insertar(e);
 
   // Parámetros: mapear claves conocidas del Excel.
   const p = r.parametros;
@@ -238,13 +240,13 @@ export function importarExcel(repos: Repositorios, buffer: Buffer): ImportResult
     mapped.costosFijosMensualesUsd = p.costos_fijos ?? p.costos_fijos_mensuales;
   if (p.meta_cash !== undefined || p.meta_cash_collected !== undefined)
     mapped.metaCashCollectedUsd = p.meta_cash ?? p.meta_cash_collected;
-  if (Object.keys(mapped).length) repos.parametros.guardar(mapped);
+  if (Object.keys(mapped).length) await repos.parametros.guardar(mapped);
 
   return { ventas: r.ventas.length, cobros: r.cobros.length, egresos: r.egresos.length, advertencias: r.advertencias };
 }
 
 /** Lista de meses disponibles + el más reciente (driver maestro por defecto). */
-export function obtenerMeses(repos: Repositorios): { meses: Mes[]; actual: Mes | null } {
-  const meses = repos.cierre.mesesConDatos();
+export async function obtenerMeses(repos: Repositorios): Promise<{ meses: Mes[]; actual: Mes | null }> {
+  const meses = await repos.cierre.mesesConDatos();
   return { meses, actual: meses.length ? meses[meses.length - 1]! : null };
 }

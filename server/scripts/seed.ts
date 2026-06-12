@@ -13,9 +13,9 @@ import { sembrarBaseDemo } from '../../src/infrastructure/seed/demo';
 import { sembrarCierresDemo } from '../../src/infrastructure/seed/cierresDemo';
 
 const db = getDb();
-const base = sembrarBaseDemo(crearRepositorios(db));
+const base = await sembrarBaseDemo(crearRepositorios(db));
 console.log(`[seed] Base demo → ${base.egresos} egresos + funnel + parámetros.`);
 
-const c = sembrarCierresDemo(crearReposCierres(db));
+const c = await sembrarCierresDemo(crearReposCierres(db));
 console.log(`[seed] Cierres y Clientes → ${c.cierres} cierres, ${c.pagos} pagos (con ARS, prefijo DEMO-).`);
 console.log('[seed] El dashboard lee cierres/pagos vía adaptador.');

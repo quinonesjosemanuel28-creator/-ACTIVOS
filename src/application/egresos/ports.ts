@@ -6,8 +6,8 @@
 import type { Egreso } from '../../domain/types';
 
 export interface EgresosAdminRepo {
-  obtener(id: string): Egreso | null;
-  listarTodos(): Egreso[];
-  guardar(egreso: Egreso): void; // upsert
-  eliminar(id: string): void;
+  obtener(id: string): Promise<Egreso | null>;
+  listarTodos(): Promise<Egreso[]>;
+  guardar(egreso: Egreso): Promise<void>; // upsert
+  eliminar(id: string): Promise<void>;
 }

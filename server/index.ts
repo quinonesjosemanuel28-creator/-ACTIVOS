@@ -51,12 +51,12 @@ const filtroDe = (q: express.Request['query']): Filtro | undefined => {
 /** Lee un parámetro de ruta garantizando string (noUncheckedIndexedAccess). */
 const param = (req: express.Request, nombre: string): string => req.params[nombre] ?? '';
 
-// Wrapper para capturar errores y mapear Zod → 400.
+// Wrapper para capturar errores (sync y async) y mapear Zod → 400.
 const h =
   (fn: (req: express.Request, res: express.Response) => unknown) =>
-  (req: express.Request, res: express.Response) => {
+  async (req: express.Request, res: express.Response) => {
     try {
-      const out = fn(req, res);
+      const out = await fn(req, res);
       if (!res.headersSent) res.json(out ?? { ok: true });
     } catch (err) {
       if (err instanceof ZodError) {

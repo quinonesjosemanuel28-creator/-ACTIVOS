@@ -6,8 +6,8 @@ export interface CanalFila {
 }
 
 export interface FunnelCanalRepo {
-  listarPorMes(mes: string): CanalFila[];
+  listarPorMes(mes: string): Promise<CanalFila[]>;
   /** Upsert de las filas de canal de un mes. */
-  guardarMes(mes: string, filas: CanalFila[]): void;
-  vaciar(): number;
+  guardarMes(mes: string, filas: CanalFila[]): Promise<void>;
+  vaciar(): Promise<number>;
 }

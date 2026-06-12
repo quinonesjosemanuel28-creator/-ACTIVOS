@@ -22,38 +22,38 @@ export interface Filtro {
 }
 
 export interface VentasRepo {
-  listarPorMes(mes: Mes, filtro?: Filtro): Venta[];
-  listarTodas(filtro?: Filtro): Venta[];
-  insertar(venta: Venta): void;
+  listarPorMes(mes: Mes, filtro?: Filtro): Promise<Venta[]>;
+  listarTodas(filtro?: Filtro): Promise<Venta[]>;
+  insertar(venta: Venta): Promise<void>;
 }
 
 export interface CobrosRepo {
-  listarPorMes(mes: Mes, filtro?: Filtro): Cobro[];
-  listarTodos(filtro?: Filtro): Cobro[];
-  insertar(cobro: Cobro): void;
+  listarPorMes(mes: Mes, filtro?: Filtro): Promise<Cobro[]>;
+  listarTodos(filtro?: Filtro): Promise<Cobro[]>;
+  insertar(cobro: Cobro): Promise<void>;
 }
 
 export interface EgresosRepo {
-  listarPorMes(mes: Mes, filtro?: Filtro): Egreso[];
-  listarTodos(filtro?: Filtro): Egreso[];
-  insertar(egreso: Egreso): void;
+  listarPorMes(mes: Mes, filtro?: Filtro): Promise<Egreso[]>;
+  listarTodos(filtro?: Filtro): Promise<Egreso[]>;
+  insertar(egreso: Egreso): Promise<void>;
 }
 
 export interface FunnelRepo {
-  obtener(mes: Mes, filtro?: Filtro): FunnelMes;
-  guardar(mes: Mes, funnel: FunnelMes, filtro?: Filtro): void;
+  obtener(mes: Mes, filtro?: Filtro): Promise<FunnelMes>;
+  guardar(mes: Mes, funnel: FunnelMes, filtro?: Filtro): Promise<void>;
 }
 
 export interface ParametrosRepo {
-  obtener(): Parametros;
-  guardar(parametros: Partial<Parametros>): void;
+  obtener(): Promise<Parametros>;
+  guardar(parametros: Partial<Parametros>): Promise<void>;
 }
 
 export interface CierreMesRepo {
-  estado(mes: Mes): EstadoMes;
-  cerrar(mes: Mes): void;
-  reabrir(mes: Mes): void;
-  mesesConDatos(): Mes[];
+  estado(mes: Mes): Promise<EstadoMes>;
+  cerrar(mes: Mes): Promise<void>;
+  reabrir(mes: Mes): Promise<void>;
+  mesesConDatos(): Promise<Mes[]>;
 }
 
 /** Conjunto de repositorios que necesita la capa de aplicación. */

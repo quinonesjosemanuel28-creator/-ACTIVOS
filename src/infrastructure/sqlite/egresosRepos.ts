@@ -43,14 +43,14 @@ const toEgreso = (r: EgresoRow): Egreso => ({
 
 export function crearEgresosAdminRepo(db: Database.Database): EgresosAdminRepo {
   return {
-    obtener(id) {
+    async obtener(id) {
       const row = db.prepare('SELECT * FROM egresos WHERE id_egreso = ?').get(id) as EgresoRow | undefined;
       return row ? toEgreso(row) : null;
     },
-    listarTodos() {
+    async listarTodos() {
       return (db.prepare('SELECT * FROM egresos ORDER BY fecha DESC').all() as EgresoRow[]).map(toEgreso);
     },
-    guardar(e) {
+    async guardar(e) {
       db.prepare(
         `INSERT OR REPLACE INTO egresos
          (id_egreso, fecha, mes, tipo, categoria, concepto, monto_usd, monto_ars, cotizacion,
@@ -68,7 +68,7 @@ export function crearEgresosAdminRepo(db: Database.Database): EgresosAdminRepo {
         programa: e.programa ?? null,
       });
     },
-    eliminar(id) {
+    async eliminar(id) {
       db.prepare('DELETE FROM egresos WHERE id_egreso = ?').run(id);
     },
   };

@@ -24,21 +24,21 @@ const toReg = (r: Row): RegistroLiquidacion => ({
 
 export function crearLiquidacionRepo(db: Database.Database): LiquidacionRepo {
   return {
-    obtener(mes) {
+    async obtener(mes) {
       const row = db.prepare('SELECT * FROM comisiones_liquidacion WHERE mes = ?').get(mes) as Row | undefined;
       return row ? toReg(row) : null;
     },
-    listar() {
+    async listar() {
       return (db.prepare('SELECT * FROM comisiones_liquidacion ORDER BY mes DESC').all() as Row[]).map(toReg);
     },
-    guardar(r) {
+    async guardar(r) {
       db.prepare(
         `INSERT OR REPLACE INTO comisiones_liquidacion
          (mes, fecha_liquidacion, total_ars, total_usd, cotizacion, id_egreso)
          VALUES (@mes,@fechaLiquidacion,@totalArs,@totalUsd,@cotizacion,@idEgreso)`,
       ).run({ ...r, cotizacion: r.cotizacion ?? null });
     },
-    eliminar(mes) {
+    async eliminar(mes) {
       db.prepare('DELETE FROM comisiones_liquidacion WHERE mes = ?').run(mes);
     },
   };

@@ -13,12 +13,12 @@ interface Row {
 
 export function crearFunnelCanalRepo(db: Database.Database): FunnelCanalRepo {
   return {
-    listarPorMes(mes) {
+    async listarPorMes(mes) {
       return (db.prepare('SELECT canal, agendas, asistieron FROM funnel_canal WHERE mes = ? ORDER BY canal').all(mes) as Row[]).map(
         (r): CanalFila => ({ canal: r.canal, agendas: r.agendas, asistieron: r.asistieron }),
       );
     },
-    guardarMes(mes, filas) {
+    async guardarMes(mes, filas) {
       const stmt = db.prepare(
         `INSERT OR REPLACE INTO funnel_canal (mes, canal, agendas, asistieron) VALUES (?,?,?,?)`,
       );
@@ -27,7 +27,7 @@ export function crearFunnelCanalRepo(db: Database.Database): FunnelCanalRepo {
       });
       tx(filas);
     },
-    vaciar() {
+    async vaciar() {
       return db.prepare('DELETE FROM funnel_canal').run().changes;
     },
   };

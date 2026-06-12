@@ -18,8 +18,8 @@ const CATEGORIA_COMISIONES = 'Comisiones';
 const idEgresoDe = (mes: Mes) => `COMI-${mes}`;
 const ultimoDia = (mes: Mes) => `${mes}-28`;
 
-export function obtenerComisiones(repos: ReposCierres, mes: Mes): ComisionesDelMes {
-  return comisionesDelMes(repos.cierres.listar(), repos.pagos.listarTodos(), mes);
+export async function obtenerComisiones(repos: ReposCierres, mes: Mes): Promise<ComisionesDelMes> {
+  return comisionesDelMes(await repos.cierres.listar(), await repos.pagos.listarTodos(), mes);
 }
 
 export interface EstadoComisiones extends ComisionesDelMes {
@@ -28,13 +28,13 @@ export interface EstadoComisiones extends ComisionesDelMes {
 }
 
 /** Comisiones del mes + estado de liquidación (para la vista). */
-export function obtenerEstado(repos: ReposCierres, liq: LiquidacionRepo, mes: Mes): EstadoComisiones {
-  const comisiones = obtenerComisiones(repos, mes);
-  const liquidacion = liq.obtener(mes);
+export async function obtenerEstado(repos: ReposCierres, liq: LiquidacionRepo, mes: Mes): Promise<EstadoComisiones> {
+  const comisiones = await obtenerComisiones(repos, mes);
+  const liquidacion = await liq.obtener(mes);
   return { ...comisiones, liquidado: !!liquidacion, liquidacion };
 }
 
-export function listarLiquidaciones(liq: LiquidacionRepo): RegistroLiquidacion[] {
+export function listarLiquidaciones(liq: LiquidacionRepo): Promise<RegistroLiquidacion[]> {
   return liq.listar();
 }
 
@@ -51,14 +51,14 @@ export interface ResultadoLiquidacion {
  * anti-duplicado: id determinista COMI-<mes> (upsert) + registro de estado.
  * Si el mes ya está liquidado y no se pide `reemplazar`, lanza error con aviso.
  */
-export function liquidarComisiones(
+export async function liquidarComisiones(
   repos: ReposCierres,
   egresosRepo: EgresosAdminRepo,
   liq: LiquidacionRepo,
   mes: Mes,
   opciones: { reemplazar?: boolean } = {},
-): ResultadoLiquidacion {
-  const previa = liq.obtener(mes);
+): Promise<ResultadoLiquidacion> {
+  const previa = await liq.obtener(mes);
   if (previa && !opciones.reemplazar) {
     throw new Error(
       `El mes ${mes} ya fue liquidado el ${previa.fechaLiquidacion} por ARS ${Math.round(previa.totalArs)}. ` +
@@ -66,10 +66,10 @@ export function liquidarComisiones(
     );
   }
 
-  const comisiones = obtenerComisiones(repos, mes);
+  const comisiones = await obtenerComisiones(repos, mes);
   const totalArs = comisiones.totalArs;
   // USD por cotización ponderada del mes (de los pagos cobrados).
-  const cotiz = cotizacionPonderada(repos.pagos.listarTodos().filter((p) => p.fechaPago.slice(0, 7) === mes));
+  const cotiz = cotizacionPonderada((await repos.pagos.listarTodos()).filter((p) => p.fechaPago.slice(0, 7) === mes));
   const totalUsd = cotiz && cotiz > 0 ? totalArs / cotiz : 0;
 
   const idEgreso = idEgresoDe(mes);
@@ -86,9 +86,9 @@ export function liquidarComisiones(
     recurrente: false,
     unidadNegocio: 'ACADEMY',
   };
-  egresosRepo.guardar(egreso);
+  await egresosRepo.guardar(egreso);
 
-  liq.guardar({
+  await liq.guardar({
     mes,
     fechaLiquidacion: new Date().toISOString().slice(0, 10),
     totalArs,
@@ -101,7 +101,7 @@ export function liquidarComisiones(
 }
 
 /** Anula la liquidación de un mes: borra el egreso COMI-<mes> y el registro. */
-export function anularLiquidacion(egresosRepo: EgresosAdminRepo, liq: LiquidacionRepo, mes: Mes): void {
-  egresosRepo.eliminar(idEgresoDe(mes));
-  liq.eliminar(mes);
+export async function anularLiquidacion(egresosRepo: EgresosAdminRepo, liq: LiquidacionRepo, mes: Mes): Promise<void> {
+  await egresosRepo.eliminar(idEgresoDe(mes));
+  await liq.eliminar(mes);
 }

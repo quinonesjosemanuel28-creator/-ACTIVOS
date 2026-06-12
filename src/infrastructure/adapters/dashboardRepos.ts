@@ -75,17 +75,18 @@ export function crearRepositoriosDashboard(db: Database.Database): Repositorios 
     f?.unidadNegocio && f.unidadNegocio !== 'CONSOLIDADO' ? f.unidadNegocio : undefined;
 
   const ventas: VentasRepo = {
-    listarPorMes: (mes, filtro) => rc.cierres.listar({ mes, unidadNegocio: unidadDe(filtro) }).map(cierreToVenta),
-    listarTodas: (filtro) => rc.cierres.listar({ unidadNegocio: unidadDe(filtro) }).map(cierreToVenta),
+    listarPorMes: async (mes, filtro) =>
+      (await rc.cierres.listar({ mes, unidadNegocio: unidadDe(filtro) })).map(cierreToVenta),
+    listarTodas: async (filtro) =>
+      (await rc.cierres.listar({ unidadNegocio: unidadDe(filtro) })).map(cierreToVenta),
     insertar: NO_ESCRIBIR,
   };
 
   /** Proyecta pagos→Cobro resolviendo programa y mes del cierre origen. */
-  const adaptarCobros = (filtro: Filtro | undefined, pred: (p: Pago) => boolean): Cobro[] => {
-    const cierres = rc.cierres.listar({ unidadNegocio: unidadDe(filtro) });
+  const adaptarCobros = async (filtro: Filtro | undefined, pred: (p: Pago) => boolean): Promise<Cobro[]> => {
+    const cierres = await rc.cierres.listar({ unidadNegocio: unidadDe(filtro) });
     const info = new Map(cierres.map((c) => [c.idCierre, c]));
-    return rc.pagos
-      .listarTodos()
+    return (await rc.pagos.listarTodos())
       .filter((p) => info.has(p.idCierre) && pred(p))
       .map((p) => {
         const c = info.get(p.idCierre)!;
@@ -105,11 +106,11 @@ export function crearRepositoriosDashboard(db: Database.Database): Repositorios 
     estado: (mes) => legacy.cierre.estado(mes),
     cerrar: (mes) => legacy.cierre.cerrar(mes),
     reabrir: (mes) => legacy.cierre.reabrir(mes),
-    mesesConDatos: () => {
+    mesesConDatos: async () => {
       const meses = new Set<string>();
-      rc.cierres.listar().forEach((c) => meses.add(mesDe(c.fechaCierre)));
-      rc.pagos.listarTodos().forEach((p) => meses.add(mesDe(p.fechaPago)));
-      legacy.egresos.listarTodos().forEach((e) => meses.add(e.mes));
+      (await rc.cierres.listar()).forEach((c) => meses.add(mesDe(c.fechaCierre)));
+      (await rc.pagos.listarTodos()).forEach((p) => meses.add(mesDe(p.fechaPago)));
+      (await legacy.egresos.listarTodos()).forEach((e) => meses.add(e.mes));
       return [...meses].sort();
     },
   };
@@ -119,12 +120,12 @@ export function crearRepositoriosDashboard(db: Database.Database): Repositorios 
   // reales del mes → coincide con la sección Cierres y corrige el dashboard.
   const canalRepo = crearFunnelCanalRepo(db);
   const funnel: FunnelRepo = {
-    obtener: (mes, filtro) => {
-      const filas = canalRepo.listarPorMes(mes);
+    obtener: async (mes, filtro) => {
+      const filas = await canalRepo.listarPorMes(mes);
       const base = filas.length
         ? { agendas: filas.reduce((a, f) => a + f.agendas, 0), asistieron: filas.reduce((a, f) => a + f.asistieron, 0) }
-        : legacy.funnel.obtener(mes, filtro);
-      const cerrados = rc.cierres.listar({ mes, unidadNegocio: unidadDe(filtro) }).length;
+        : await legacy.funnel.obtener(mes, filtro);
+      const cerrados = (await rc.cierres.listar({ mes, unidadNegocio: unidadDe(filtro) })).length;
       return { agendas: base.agendas, asistieron: base.asistieron, cerrados };
     },
     guardar: (mes, f, filtro) => legacy.funnel.guardar(mes, f, filtro),

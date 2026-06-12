@@ -23,20 +23,20 @@ function filasDesdeXlsxDePrueba(): FilaPagoCruda[] {
   return XLSX.utils.sheet_to_json<FilaPagoCruda>(wb2.Sheets['PAGOS']!, { defval: '' });
 }
 
-function setup() {
+async function setup() {
   const db = getDbMemoria();
-  sembrarBaseDemo(crearRepositorios(db)); // egresos/funnel/parámetros para el dashboard
+  await sembrarBaseDemo(crearRepositorios(db)); // egresos/funnel/parámetros para el dashboard
   return { db, repos: crearReposCierres(db) };
 }
 
 describe('Importación end-to-end (xlsx de prueba)', () => {
-  it('lee la hoja PAGOS, agrupa y persiste; el cierre con "revisar" queda marcado', () => {
-    const { repos } = setup();
+  it('lee la hoja PAGOS, agrupa y persiste; el cierre con "revisar" queda marcado', async () => {
+    const { repos } = await setup();
     const previa = construirImportacion(filasDesdeXlsxDePrueba());
     expect(previa.resumen).toEqual({ cierres: 2, pagos: 3, aRevisar: 1 });
 
-    ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
-    const filas = ucc.listarCierresConPagos(repos);
+    await ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
+    const filas = await ucc.listarCierresConPagos(repos);
     expect(filas).toHaveLength(2);
     const t1 = filas.find((f) => f.cierre.idCierre === 'T0001')!;
     expect(t1.cierre.ticketTotalUsd).toBe(3000);
@@ -44,29 +44,29 @@ describe('Importación end-to-end (xlsx de prueba)', () => {
     expect(filas.find((f) => f.cierre.idCierre === 'T0002')!.cierre.revisar).toBe('falta mail');
   });
 
-  it('es idempotente: reimportar el mismo archivo no duplica', () => {
-    const { repos } = setup();
+  it('es idempotente: reimportar el mismo archivo no duplica', async () => {
+    const { repos } = await setup();
     const previa = construirImportacion(filasDesdeXlsxDePrueba());
-    ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
-    ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
-    expect(ucc.listarCierresConPagos(repos)).toHaveLength(2);
-    expect(repos.pagos.listarTodos()).toHaveLength(3);
+    await ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
+    await ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
+    expect(await ucc.listarCierresConPagos(repos)).toHaveLength(2);
+    expect(await repos.pagos.listarTodos()).toHaveLength(3);
   });
 
-  it('impacta el dashboard (lee cierres vía adaptador)', () => {
-    const { db, repos } = setup();
+  it('impacta el dashboard (lee cierres vía adaptador)', async () => {
+    const { db, repos } = await setup();
     const previa = construirImportacion(filasDesdeXlsxDePrueba());
-    ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
-    const snap = uc.obtenerDashboardDelMes(crearRepositoriosDashboard(db), '2026-03').snapshot;
+    await ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
+    const snap = (await uc.obtenerDashboardDelMes(crearRepositoriosDashboard(db), '2026-03')).snapshot;
     expect(snap.cierres.valor).toBe(2); // T0001 y T0002 cierran en marzo
     expect(snap.cashCollected.valor).toBe(1500 + 1200); // pagos de marzo
   });
 
-  it('quitarRevisar limpia el flag', () => {
-    const { repos } = setup();
+  it('quitarRevisar limpia el flag', async () => {
+    const { repos } = await setup();
     const previa = construirImportacion(filasDesdeXlsxDePrueba());
-    ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
-    ucc.quitarRevisar(repos, 'T0002');
-    expect(repos.cierres.obtener('T0002')!.revisar).toBeUndefined();
+    await ucc.importarCierresPagos(repos, { cierres: previa.cierres, pagos: previa.pagos });
+    await ucc.quitarRevisar(repos, 'T0002');
+    expect((await repos.cierres.obtener('T0002'))!.revisar).toBeUndefined();
   });
 });

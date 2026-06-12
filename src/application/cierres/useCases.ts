@@ -22,9 +22,9 @@ export interface FilaCierre {
   estadoSaldo: EstadoSaldo;
 }
 
-export function listarCierresConPagos(repos: ReposCierres, filtros?: FiltrosCierres): FilaCierre[] {
-  const cierres = repos.cierres.listar(filtros);
-  const todos = repos.pagos.listarTodos();
+export async function listarCierresConPagos(repos: ReposCierres, filtros?: FiltrosCierres): Promise<FilaCierre[]> {
+  const cierres = await repos.cierres.listar(filtros);
+  const todos = await repos.pagos.listarTodos();
   return cierres.map((cierre) => {
     const pagos = todos.filter((p) => p.idCierre === cierre.idCierre);
     return {
@@ -66,9 +66,9 @@ export interface ResumenMes {
  * - Sin filtro de closer, el total del mes es el cash real del mes (cohortes
  *   incluidos) y coincide con el total sin filtrar.
  */
-export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCierres): ResumenMes {
+export async function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCierres): Promise<ResumenMes> {
   // Cierres que matchean los filtros de cierre (programa/estado/q), sin filtro de mes.
-  const cierresMatch = repos.cierres.listar({
+  const cierresMatch = await repos.cierres.listar({
     programa: filtros?.programa,
     estado: filtros?.estado,
     q: filtros?.q,
@@ -77,7 +77,7 @@ export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCi
   const cierrePorId = new Map(cierresMatch.map((c) => [c.idCierre, c]));
 
   const closerFiltro = filtros?.closer;
-  const pagosMes = cm.pagosDelMes(repos.pagos.listarTodos(), mes).filter((p) => {
+  const pagosMes = cm.pagosDelMes(await repos.pagos.listarTodos(), mes).filter((p) => {
     const cierre = cierrePorId.get(p.idCierre);
     if (!cierre) return false; // el cierre no matchea programa/estado/q
     if (closerFiltro && cm.closerEfectivo(p, cierre) !== closerFiltro) return false;
@@ -109,7 +109,7 @@ export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCi
   }
 
   // Cierres nuevos del período por programa (respeta los filtros del listado).
-  const cierresDelMes = repos.cierres.listar({
+  const cierresDelMes = await repos.cierres.listar({
     mes,
     programa: filtros?.programa,
     closer: filtros?.closer,
@@ -137,10 +137,10 @@ export function resumenDelMes(repos: ReposCierres, mes: Mes, filtros?: FiltrosCi
   };
 }
 
-export function obtenerCierre(repos: ReposCierres, id: string): CierreConPagos | null {
-  const cierre = repos.cierres.obtener(id);
+export async function obtenerCierre(repos: ReposCierres, id: string): Promise<CierreConPagos | null> {
+  const cierre = await repos.cierres.obtener(id);
   if (!cierre) return null;
-  return { cierre, pagos: repos.pagos.listarPorCierre(id) };
+  return { cierre, pagos: await repos.pagos.listarPorCierre(id) };
 }
 
 // ───────────────────────── CRUD Cierres ─────────────────────────
@@ -148,7 +148,7 @@ export function obtenerCierre(repos: ReposCierres, id: string): CierreConPagos |
 let secuencia = 0;
 const nuevoId = (prefijo: string) => `${prefijo}-${Date.now().toString(36)}-${(secuencia++).toString(36)}`;
 
-export function crearCierre(repos: ReposCierres, input: unknown): Cierre {
+export async function crearCierre(repos: ReposCierres, input: unknown): Promise<Cierre> {
   const c = cierreInputSchema.parse(input);
   const cierre: Cierre = {
     idCierre: c.idCierre ?? nuevoId('CL'),
@@ -173,26 +173,26 @@ export function crearCierre(repos: ReposCierres, input: unknown): Cierre {
     // calendario mensual fijo del semáforo.
     fechaPrimeraCuota: c.cantidadCuotas ? (c.fechaPrimeraCuota ?? c.fechaCierre) : undefined,
   };
-  repos.cierres.guardar(cierre);
+  await repos.cierres.guardar(cierre);
   return cierre;
 }
 
-export function editarCierre(repos: ReposCierres, id: string, input: unknown): Cierre {
-  if (!repos.cierres.obtener(id)) throw new Error(`No existe el cierre ${id}.`);
+export async function editarCierre(repos: ReposCierres, id: string, input: unknown): Promise<Cierre> {
+  if (!(await repos.cierres.obtener(id))) throw new Error(`No existe el cierre ${id}.`);
   const c = cierreInputSchema.parse(input);
   return crearCierre(repos, { ...c, idCierre: id });
 }
 
-export function eliminarCierre(repos: ReposCierres, id: string): void {
-  if (!repos.cierres.obtener(id)) throw new Error(`No existe el cierre ${id}.`);
-  repos.cierres.eliminar(id); // ON DELETE CASCADE borra sus pagos
+export async function eliminarCierre(repos: ReposCierres, id: string): Promise<void> {
+  if (!(await repos.cierres.obtener(id))) throw new Error(`No existe el cierre ${id}.`);
+  await repos.cierres.eliminar(id); // ON DELETE CASCADE borra sus pagos
 }
 
 // ───────────────────────── CRUD Pagos ─────────────────────────
 
-export function agregarPago(repos: ReposCierres, input: unknown): Pago {
+export async function agregarPago(repos: ReposCierres, input: unknown): Promise<Pago> {
   const p = pagoInputSchema.parse(input);
-  if (!repos.cierres.obtener(p.idCierre)) throw new Error(`No existe el cierre ${p.idCierre}.`);
+  if (!(await repos.cierres.obtener(p.idCierre))) throw new Error(`No existe el cierre ${p.idCierre}.`);
   const pago: Pago = {
     idPago: p.idPago ?? nuevoId('PG'),
     idCierre: p.idCierre,
@@ -210,18 +210,18 @@ export function agregarPago(repos: ReposCierres, input: unknown): Pago {
     aplicaSetting: p.aplicaSetting,
     setter: p.setter,
   };
-  repos.pagos.guardar(pago);
+  await repos.pagos.guardar(pago);
   return pago;
 }
 
-export function editarPago(repos: ReposCierres, id: string, input: unknown): Pago {
-  const existentes = repos.pagos.listarTodos().find((x) => x.idPago === id);
+export async function editarPago(repos: ReposCierres, id: string, input: unknown): Promise<Pago> {
+  const existentes = (await repos.pagos.listarTodos()).find((x) => x.idPago === id);
   if (!existentes) throw new Error(`No existe el pago ${id}.`);
   return agregarPago(repos, { ...(input as object), idPago: id });
 }
 
-export function eliminarPago(repos: ReposCierres, id: string): void {
-  repos.pagos.eliminar(id);
+export async function eliminarPago(repos: ReposCierres, id: string): Promise<void> {
+  await repos.pagos.eliminar(id);
 }
 
 // ───────────────────────── Reseteo seguro ─────────────────────────
@@ -232,9 +232,9 @@ export interface ResultadoReset {
 }
 
 /** Borra SOLO los datos de demostración (prefijo DEMO-). No toca lo real. */
-export function borrarDatosDemo(repos: ReposCierres): ResultadoReset {
-  const pagosBorrados = repos.pagos.borrarDemo();
-  const cierresBorrados = repos.cierres.borrarDemo();
+export async function borrarDatosDemo(repos: ReposCierres): Promise<ResultadoReset> {
+  const pagosBorrados = await repos.pagos.borrarDemo();
+  const cierresBorrados = await repos.cierres.borrarDemo();
   return { cierresBorrados, pagosBorrados };
 }
 
@@ -243,10 +243,10 @@ export function borrarDatosDemo(repos: ReposCierres): ResultadoReset {
  * también en el backend (defensa en profundidad, además de la doble
  * confirmación de la UI).
  */
-export function reiniciarCierresYPagos(repos: ReposCierres, input: unknown): ResultadoReset {
+export async function reiniciarCierresYPagos(repos: ReposCierres, input: unknown): Promise<ResultadoReset> {
   resetConfirmSchema.parse(input);
-  const pagosBorrados = repos.pagos.vaciar();
-  const cierresBorrados = repos.cierres.vaciar();
+  const pagosBorrados = await repos.pagos.vaciar();
+  const cierresBorrados = await repos.cierres.vaciar();
   return { cierresBorrados, pagosBorrados };
 }
 
@@ -262,10 +262,10 @@ export interface ImportarResult {
  * (construirImportacion). Revalida en el borde con Zod, hace upsert en una
  * transacción (idempotente por los IDs deterministas) y NO borra nada.
  */
-export function importarCierresPagos(repos: ReposCierres, input: unknown): ImportarResult {
+export async function importarCierresPagos(repos: ReposCierres, input: unknown): Promise<ImportarResult> {
   const { cierres, pagos } = importPayloadSchema.parse(input);
   for (const c of cierres) {
-    repos.cierres.guardar({
+    await repos.cierres.guardar({
       idCierre: c.idCierre,
       fechaCierre: c.fechaCierre,
       clienteNombre: c.clienteNombre,
@@ -283,7 +283,7 @@ export function importarCierresPagos(repos: ReposCierres, input: unknown): Impor
     });
   }
   for (const p of pagos) {
-    repos.pagos.guardar({
+    await repos.pagos.guardar({
       idPago: p.idPago,
       idCierre: p.idCierre,
       fechaPago: p.fechaPago,
@@ -301,25 +301,25 @@ export function importarCierresPagos(repos: ReposCierres, input: unknown): Impor
 }
 
 /** Quita el flag "a revisar" de un cierre (dato ya completado). */
-export function quitarRevisar(repos: ReposCierres, id: string): void {
-  const cierre = repos.cierres.obtener(id);
+export async function quitarRevisar(repos: ReposCierres, id: string): Promise<void> {
+  const cierre = await repos.cierres.obtener(id);
   if (!cierre) throw new Error(`No existe el cierre ${id}.`);
-  repos.cierres.guardar({ ...cierre, revisar: undefined });
+  await repos.cierres.guardar({ ...cierre, revisar: undefined });
 }
 
 /**
  * Marca un cierre como INACTIVO (manual). El plan original se conserva (el
  * ajuste de ticket a lo pagado se deriva en cobranza); es reversible.
  */
-export function marcarInactivo(repos: ReposCierres, id: string): void {
-  const cierre = repos.cierres.obtener(id);
+export async function marcarInactivo(repos: ReposCierres, id: string): Promise<void> {
+  const cierre = await repos.cierres.obtener(id);
   if (!cierre) throw new Error(`No existe el cierre ${id}.`);
-  repos.cierres.guardar({ ...cierre, inactivo: true });
+  await repos.cierres.guardar({ ...cierre, inactivo: true });
 }
 
 /** Reactiva un cierre marcado inactivo (vuelve a su plan original). */
-export function reactivar(repos: ReposCierres, id: string): void {
-  const cierre = repos.cierres.obtener(id);
+export async function reactivar(repos: ReposCierres, id: string): Promise<void> {
+  const cierre = await repos.cierres.obtener(id);
   if (!cierre) throw new Error(`No existe el cierre ${id}.`);
-  repos.cierres.guardar({ ...cierre, inactivo: false });
+  await repos.cierres.guardar({ ...cierre, inactivo: false });
 }

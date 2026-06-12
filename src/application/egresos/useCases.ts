@@ -39,22 +39,22 @@ function aEgreso(input: ReturnType<typeof egresoInputSchema.parse>): Egreso {
   };
 }
 
-export function crearEgreso(repo: EgresosAdminRepo, input: unknown): Egreso {
+export async function crearEgreso(repo: EgresosAdminRepo, input: unknown): Promise<Egreso> {
   const e = aEgreso(egresoInputSchema.parse(input));
-  repo.guardar(e);
+  await repo.guardar(e);
   return e;
 }
 
-export function editarEgreso(repo: EgresosAdminRepo, id: string, input: unknown): Egreso {
-  if (!repo.obtener(id)) throw new Error(`No existe el egreso ${id}.`);
+export async function editarEgreso(repo: EgresosAdminRepo, id: string, input: unknown): Promise<Egreso> {
+  if (!(await repo.obtener(id))) throw new Error(`No existe el egreso ${id}.`);
   const e = aEgreso({ ...(egresoInputSchema.parse(input)), idEgreso: id });
-  repo.guardar(e);
+  await repo.guardar(e);
   return e;
 }
 
-export function eliminarEgreso(repo: EgresosAdminRepo, id: string): void {
-  if (!repo.obtener(id)) throw new Error(`No existe el egreso ${id}.`);
-  repo.eliminar(id);
+export async function eliminarEgreso(repo: EgresosAdminRepo, id: string): Promise<void> {
+  if (!(await repo.obtener(id))) throw new Error(`No existe el egreso ${id}.`);
+  await repo.eliminar(id);
 }
 
 /** Aplica el mes (con proyección de recurrentes) + filtros no-mensuales. */
@@ -72,8 +72,8 @@ function aplicarFiltros(egresos: Egreso[], filtros: FiltrosEgresos): Egreso[] {
   return base;
 }
 
-export function listarEgresos(repo: EgresosAdminRepo, filtros: FiltrosEgresos = {}): Egreso[] {
-  return aplicarFiltros(repo.listarTodos(), filtros);
+export async function listarEgresos(repo: EgresosAdminRepo, filtros: FiltrosEgresos = {}): Promise<Egreso[]> {
+  return aplicarFiltros(await repo.listarTodos(), filtros);
 }
 
 /**
@@ -81,7 +81,7 @@ export function listarEgresos(repo: EgresosAdminRepo, filtros: FiltrosEgresos = 
  * categoría y separación operativo vs retiros. Toma el mes (proyectado) y
  * respeta q/tipo/moneda, pero NO la categoría (el desglose muestra todas).
  */
-export function resumenEgresos(repo: EgresosAdminRepo, mes: Mes | 'TODOS', filtros: FiltrosEgresos = {}): em.ResumenEgresos {
-  const set = aplicarFiltros(repo.listarTodos(), { ...filtros, mes, categoria: 'TODOS' });
+export async function resumenEgresos(repo: EgresosAdminRepo, mes: Mes | 'TODOS', filtros: FiltrosEgresos = {}): Promise<em.ResumenEgresos> {
+  const set = aplicarFiltros(await repo.listarTodos(), { ...filtros, mes, categoria: 'TODOS' });
   return em.resumenEgresos(set);
 }

@@ -1,8 +1,10 @@
 /**
  * CAPA 4 — INFRAESTRUCTURA · Repositorios SQLite.
  *
- * Implementan los puertos de la capa de aplicación (inversión de
- * dependencias). Traducen filas snake_case ↔ entidades de dominio camelCase.
+ * Implementan los puertos ASYNC de la capa de aplicación (inversión de
+ * dependencias). better-sqlite3 es síncrono: los métodos son `async` solo
+ * para cumplir el contrato Promise que también implementa Postgres.
+ * Traducen filas snake_case ↔ entidades de dominio camelCase.
  */
 import type Database from 'better-sqlite3';
 import type {
@@ -122,19 +124,19 @@ function whereUnidad(filtro?: Filtro): { sql: string; params: string[] } {
 
 export function crearRepositorios(db: Database.Database): Repositorios {
   const ventas: VentasRepo = {
-    listarPorMes(mes, filtro) {
+    async listarPorMes(mes, filtro) {
       const u = whereUnidad(filtro);
       return (
         db.prepare(`SELECT * FROM ventas WHERE mes_venta = ?${u.sql}`).all(mes, ...u.params) as VentaRow[]
       ).map(toVenta);
     },
-    listarTodas(filtro) {
+    async listarTodas(filtro) {
       const u = whereUnidad(filtro);
       return (
         db.prepare(`SELECT * FROM ventas WHERE 1=1${u.sql}`).all(...u.params) as VentaRow[]
       ).map(toVenta);
     },
-    insertar(v) {
+    async insertar(v) {
       db.prepare(
         `INSERT OR REPLACE INTO ventas
          (id_venta, fecha_venta, mes_venta, cliente, programa, closer, setter, funnel, ticket_total_usd, unidad_negocio, estado)
@@ -150,19 +152,19 @@ export function crearRepositorios(db: Database.Database): Repositorios {
   };
 
   const cobros: CobrosRepo = {
-    listarPorMes(mes, filtro) {
+    async listarPorMes(mes, filtro) {
       const u = whereUnidad(filtro);
       return (
         db.prepare(`SELECT * FROM cobros WHERE mes_cobro = ?${u.sql}`).all(mes, ...u.params) as CobroRow[]
       ).map(toCobro);
     },
-    listarTodos(filtro) {
+    async listarTodos(filtro) {
       const u = whereUnidad(filtro);
       return (
         db.prepare(`SELECT * FROM cobros WHERE 1=1${u.sql}`).all(...u.params) as CobroRow[]
       ).map(toCobro);
     },
-    insertar(c) {
+    async insertar(c) {
       db.prepare(
         `INSERT OR REPLACE INTO cobros
          (id_cobro, id_venta_origen, fecha_cobro, mes_cobro, mes_original_venta, monto_usd, programa, unidad_negocio)
@@ -172,19 +174,19 @@ export function crearRepositorios(db: Database.Database): Repositorios {
   };
 
   const egresos: EgresosRepo = {
-    listarPorMes(mes, filtro) {
+    async listarPorMes(mes, filtro) {
       const u = whereUnidad(filtro);
       return (
         db.prepare(`SELECT * FROM egresos WHERE mes = ?${u.sql}`).all(mes, ...u.params) as EgresoRow[]
       ).map(toEgreso);
     },
-    listarTodos(filtro) {
+    async listarTodos(filtro) {
       const u = whereUnidad(filtro);
       return (
         db.prepare(`SELECT * FROM egresos WHERE 1=1${u.sql}`).all(...u.params) as EgresoRow[]
       ).map(toEgreso);
     },
-    insertar(e) {
+    async insertar(e) {
       db.prepare(
         `INSERT OR REPLACE INTO egresos
          (id_egreso, fecha, mes, tipo, categoria, concepto, monto_usd, programa, unidad_negocio,
@@ -205,14 +207,14 @@ export function crearRepositorios(db: Database.Database): Repositorios {
   };
 
   const funnel: FunnelRepo = {
-    obtener(mes, filtro): FunnelMes {
+    async obtener(mes, filtro): Promise<FunnelMes> {
       const u = filtro?.unidadNegocio && filtro.unidadNegocio !== 'CONSOLIDADO' ? filtro.unidadNegocio : 'ACADEMY';
       const row = db
         .prepare('SELECT agendas, asistieron, cerrados FROM funnel WHERE mes = ? AND unidad_negocio = ?')
         .get(mes, u) as { agendas: number; asistieron: number; cerrados: number } | undefined;
       return row ?? { agendas: 0, asistieron: 0, cerrados: 0 };
     },
-    guardar(mes, f, filtro) {
+    async guardar(mes, f, filtro) {
       const u = filtro?.unidadNegocio && filtro.unidadNegocio !== 'CONSOLIDADO' ? filtro.unidadNegocio : 'ACADEMY';
       db.prepare(
         `INSERT OR REPLACE INTO funnel (mes, unidad_negocio, agendas, asistieron, cerrados)
@@ -245,7 +247,7 @@ export function crearRepositorios(db: Database.Database): Repositorios {
   };
 
   const parametros: ParametrosRepo = {
-    obtener(): Parametros {
+    async obtener(): Promise<Parametros> {
       const filas = db.prepare('SELECT clave, valor FROM parametros').all() as {
         clave: string;
         valor: string;
@@ -258,7 +260,7 @@ export function crearRepositorios(db: Database.Database): Repositorios {
       });
       return out;
     },
-    guardar(p) {
+    async guardar(p) {
       const stmt = db.prepare(
         'INSERT OR REPLACE INTO parametros (clave, valor) VALUES (?, ?)',
       );
@@ -273,19 +275,19 @@ export function crearRepositorios(db: Database.Database): Repositorios {
   };
 
   const cierre: CierreMesRepo = {
-    estado(mes): EstadoMes {
+    async estado(mes): Promise<EstadoMes> {
       const row = db.prepare('SELECT estado FROM cierre_mes WHERE mes = ?').get(mes) as
         | { estado: EstadoMes }
         | undefined;
       return row?.estado ?? 'Abierto';
     },
-    cerrar(mes) {
+    async cerrar(mes) {
       db.prepare("INSERT OR REPLACE INTO cierre_mes (mes, estado) VALUES (?, 'Cerrado')").run(mes);
     },
-    reabrir(mes) {
+    async reabrir(mes) {
       db.prepare("INSERT OR REPLACE INTO cierre_mes (mes, estado) VALUES (?, 'Abierto')").run(mes);
     },
-    mesesConDatos(): Mes[] {
+    async mesesConDatos(): Promise<Mes[]> {
       const filas = db
         .prepare(
           `SELECT mes FROM (
