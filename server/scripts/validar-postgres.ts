@@ -81,11 +81,36 @@ async function fotografiar(lado: Lado): Promise<unknown> {
   };
 }
 
+/**
+ * Tolerancia para comparar montos (no exactitud bit a bit).
+ *
+ * SQLite y PostgreSQL hacen la MISMA aritmética IEEE 754 de doble precisión,
+ * pero el orden interno de las operaciones difiere y el último ULP del double
+ * (~2.2e-16 relativo) puede caer distinto. Dos números se consideran iguales
+ * si su diferencia es ≤ max(EPS_ABS, EPS_REL × |mayor|).
+ *
+ * EPS_REL = 1e-9: ~1.000.000× más grande que el ruido de redondeo real
+ * (que vive en 1e-15..1e-13 relativo) pero ~1.000.000× más chico que
+ * cualquier diferencia económica real. Sobre un monto de hasta ~10 millones,
+ * sigue detectando una diferencia de 1 centavo; por debajo de eso el margen
+ * es aún mayor. EPS_ABS = 1e-9 cubre los valores cercanos a 0 (ratios, %).
+ */
+const EPS_REL = 1e-9;
+const EPS_ABS = 1e-9;
+
+function casiIguales(a: number, b: number): boolean {
+  if (Object.is(a, b)) return true;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false; // NaN/Infinity: exigir igualdad exacta
+  return Math.abs(a - b) <= Math.max(EPS_ABS, EPS_REL * Math.max(Math.abs(a), Math.abs(b)));
+}
+
 /** Diff recursivo: devuelve las rutas con valores distintos. */
 function diferencias(a: unknown, b: unknown, ruta = '', acc: string[] = []): string[] {
   if (Object.is(a, b)) return acc;
   if (typeof a === 'number' && typeof b === 'number') {
-    acc.push(`${ruta}: sqlite=${a} ≠ postgres=${b}`);
+    // Igualdad con tolerancia: el ruido de redondeo float SQLite↔PG no cuenta;
+    // una diferencia real (≥ 1 centavo en montos normales) sí se reporta.
+    if (!casiIguales(a, b)) acc.push(`${ruta}: sqlite=${a} ≠ postgres=${b} (Δ=${Math.abs(a - b)})`);
     return acc;
   }
   if (Array.isArray(a) && Array.isArray(b)) {
