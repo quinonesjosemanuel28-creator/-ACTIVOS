@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Briefcase, GraduationCap, Lock, Pencil } from 'lucide-react';
 import { useFunnel, useGuardarFunnel } from '../hooks';
-import { useUI } from '../store';
+import { useUI, usePuede } from '../store';
 import { Button, Card, CardBody, CardHeader, CardTitle, Input, Spinner } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import { fmtArs, fmtMes, fmtNum, fmtPct, fmtUsd } from '../lib/format';
@@ -27,13 +27,14 @@ export function VistaFunnel() {
     { label: 'Asistieron (shows)', valor: data.asistieron, color: 'bg-teal-500', manual: true },
     { label: 'Cerrados', valor: data.cerrados, color: 'bg-gold-400', manual: false },
   ];
+  const puedeEditar = usePuede('editar');
 
   return (
     <div>
       <SectionHeader
         titulo={`Funnel Comercial · ${fmtMes(mes)}`}
         descripcion="Agendas y shows se cargan a mano; Cerrados sale de los cierres reales del mes."
-        accion={<Button variant="outline" onClick={() => setEditar(true)}><Pencil size={16} /> Editar agendas/shows</Button>}
+        accion={puedeEditar ? <Button variant="outline" onClick={() => setEditar(true)}><Pencil size={16} /> Editar agendas/shows</Button> : undefined}
       />
 
       {!data.cargaManual && (

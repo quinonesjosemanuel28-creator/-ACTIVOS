@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, CheckCircle2, Coins } from 'lucide-react';
-import { useUI } from '../store';
+import { useUI, usePuede } from '../store';
 import { useComisiones, useLiquidarComisiones, useAnularLiquidacion } from '../hooks';
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Spinner } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
@@ -20,6 +20,7 @@ const TD = 'px-3 py-2.5 align-middle';
 export function VistaComisiones() {
   const { mes } = useUI();
   const { data, isLoading, error } = useComisiones(mes);
+  const puedeEditar = usePuede('editar');
   const liquidar = useLiquidarComisiones();
   const anular = useAnularLiquidacion();
   const [reliqOpen, setReliqOpen] = useState(false);
@@ -48,7 +49,7 @@ export function VistaComisiones() {
         titulo={`Comisiones · ${fmtMes(mes)}`}
         descripcion="10% al closer del pago + 2% al setter (si aplica), sobre el ARS cobrado. Derivado de los pagos, siempre al día."
         accion={
-          data.liquidado ? (
+          !puedeEditar ? undefined : data.liquidado ? (
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => setReliqOpen(true)} disabled={liquidar.isPending}>Re-liquidar</Button>
               <Button variant="ghost" onClick={() => anular.mutate(mes, { onSuccess: () => setAviso('Liquidación anulada.') })} disabled={anular.isPending}>Anular</Button>

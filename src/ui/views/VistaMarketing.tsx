@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Target } from 'lucide-react';
 import { useDashboard, useParametros, useGuardarParametros } from '../hooks';
 import { Button, Card, CardBody, CardHeader, CardTitle, Input, Spinner } from '../components/ui/primitives';
+import { usePuede } from '../store';
 import { SectionHeader } from '../components/SectionHeader';
 import { Gauge } from '../components/Gauge';
 import { Dialog } from '../components/ui/Dialog';
@@ -16,13 +17,14 @@ export function VistaMarketing() {
   if (isLoading || !data || !params)
     return <div className="flex min-h-[40vh] items-center justify-center"><Spinner className="h-8 w-8" /></div>;
 
+  const puedeEditar = usePuede('editar');
   const s = data.snapshot;
   return (
     <div>
       <SectionHeader
         titulo="Marketing & Adquisición"
         descripcion="Eficiencia del gasto en adquisición vs tus objetivos."
-        accion={<Button variant="outline" onClick={() => setEditar(true)}><Target size={16} /> Editar objetivos</Button>}
+        accion={puedeEditar ? <Button variant="outline" onClick={() => setEditar(true)}><Target size={16} /> Editar objetivos</Button> : undefined}
       />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card>

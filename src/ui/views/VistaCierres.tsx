@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useCierres, useCierresFiltrados, useMeses, useResumenCierres } from '../hooks';
 import { Button, Card, Spinner } from '../components/ui/primitives';
+import { usePuede } from '../store';
 import { SectionHeader } from '../components/SectionHeader';
 import { FilaCierre } from '../components/cierres/FilaCierre';
 import { CierreFormDialog } from '../components/cierres/CierreFormDialog';
@@ -54,6 +55,7 @@ export function VistaCierres() {
   }, [todos]);
 
   // Resumen: por mes → backend (incluye cohortes); "Todos" → cálculo en cliente.
+  const puedeEditar = usePuede('editar');
   const resumen =
     filtros.mes === 'TODOS' ? resumenDesdeFilas(filas ?? []) : resumenMes;
 
@@ -62,7 +64,7 @@ export function VistaCierres() {
       <SectionHeader
         titulo="Cierres y Clientes"
         descripcion="Cada venta y sus pagos, en USD y ARS. Cargar o editar mueve también los KPIs del dashboard."
-        accion={<Button onClick={() => setNuevo(true)}><Plus size={16} /> Nuevo cierre</Button>}
+        accion={puedeEditar ? <Button onClick={() => setNuevo(true)}><Plus size={16} /> Nuevo cierre</Button> : undefined}
       />
 
       <FiltrosBar filtros={filtros} onChange={setFiltros} meses={meses?.meses ?? []} closers={closers} />

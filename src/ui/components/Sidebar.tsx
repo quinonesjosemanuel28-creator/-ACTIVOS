@@ -1,7 +1,15 @@
-/** Navegación entre pantallas: sidebar en desktop, barra superior en mobile. */
-import { AlertTriangle, BarChart3, CalendarClock, Database, Filter, LayoutDashboard, LineChart, Megaphone, Percent, Receipt, Sparkles, TrendingDown, Users } from 'lucide-react';
-import { useUI, type Vista } from '../store';
+/** Navegación entre pantallas: sidebar en desktop, barra superior en mobile.
+ *  Los ítems se filtran por el rol de la sesión (Carga & Admin y Usuarios son
+ *  solo ADMIN). El candado real está en la API; esto es presentación. */
+import { AlertTriangle, BarChart3, CalendarClock, Database, Filter, LayoutDashboard, LineChart, LogOut, Megaphone, Percent, Receipt, ShieldCheck, Sparkles, TrendingDown, Users } from 'lucide-react';
+import { useUI, puedeUI, ACCION_POR_VISTA, type Vista } from '../store';
+import { api } from '../lib/api';
 import { cn } from '../lib/utils';
+
+/** Cierra sesión y recarga: vuelve al login con todo el estado limpio. */
+function salir() {
+  void api.logout().finally(() => window.location.reload());
+}
 
 const ITEMS: { id: Vista; label: string; icono: typeof LayoutDashboard }[] = [
   { id: 'ejecutiva', label: 'Vista Ejecutiva', icono: LayoutDashboard },
@@ -17,11 +25,19 @@ const ITEMS: { id: Vista; label: string; icono: typeof LayoutDashboard }[] = [
   { id: 'comisiones', label: 'Comisiones', icono: Percent },
   { id: 'asistente', label: 'Asistente IA', icono: Sparkles },
   { id: 'datos', label: 'Carga & Admin', icono: Database },
+  { id: 'usuarios', label: 'Usuarios', icono: ShieldCheck },
 ];
+
+/** Ítems visibles para la sesión actual (sin sesión cargada: todos).
+ *  Exportada para testearla como función pura (en SSR zustand devuelve el
+ *  estado inicial, así que el gating por rol se verifica acá). */
+export function itemsVisibles(state: Parameters<typeof puedeUI>[0]): typeof ITEMS {
+  return ITEMS.filter(({ id }) => puedeUI(state, ACCION_POR_VISTA[id]));
+}
 
 /** Sidebar fijo para ≥ md. */
 export function Sidebar() {
-  const { vista, setVista } = useUI();
+  const { vista, setVista, usuario, acciones } = useUI();
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-navy-100 bg-white/70 p-4 backdrop-blur md:flex dark:border-navy-700 dark:bg-navy-900/70 print:hidden">
       <div className="mb-6 flex items-center gap-2 px-2">
@@ -32,7 +48,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1">
-        {ITEMS.map(({ id, label, icono: Icono }) => (
+        {itemsVisibles({ usuario, acciones }).map(({ id, label, icono: Icono }) => (
           <button
             key={id}
             onClick={() => setVista(id)}
@@ -48,17 +64,29 @@ export function Sidebar() {
           </button>
         ))}
       </nav>
-      <p className="px-2 text-xs text-navy-300">v1 · 100% local</p>
+      {usuario && (
+        <div className="border-t border-navy-100 pt-3 dark:border-navy-700">
+          <p className="truncate px-2 text-sm font-600 text-navy-900 dark:text-navy-50">{usuario.nombre}</p>
+          <p className="truncate px-2 text-xs text-navy-400">{usuario.email} · {usuario.rol}</p>
+          <button
+            onClick={salir}
+            className="mt-2 flex w-full items-center gap-2 rounded-xl px-2 py-2 text-sm font-500 text-navy-600 transition-colors hover:bg-navy-100 dark:text-navy-200 dark:hover:bg-navy-800"
+          >
+            <LogOut size={16} /> Salir
+          </button>
+        </div>
+      )}
+      <p className="px-2 pt-2 text-xs text-navy-300">v1</p>
     </aside>
   );
 }
 
 /** Barra de navegación horizontal, scrollable, para < md (mobile/preview). */
 export function MobileNav() {
-  const { vista, setVista } = useUI();
+  const { vista, setVista, usuario, acciones } = useUI();
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-navy-100 bg-white/80 px-2 py-2 backdrop-blur md:hidden dark:border-navy-700 dark:bg-navy-900/80 print:hidden">
-      {ITEMS.map(({ id, label, icono: Icono }) => (
+      {itemsVisibles({ usuario, acciones }).map(({ id, label, icono: Icono }) => (
         <button
           key={id}
           onClick={() => setVista(id)}
@@ -73,6 +101,15 @@ export function MobileNav() {
           {label}
         </button>
       ))}
+      {usuario && (
+        <button
+          onClick={salir}
+          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-500 text-navy-600 hover:bg-navy-100 dark:text-navy-200 dark:hover:bg-navy-800"
+          title={`${usuario.email} · ${usuario.rol}`}
+        >
+          <LogOut size={16} /> Salir
+        </button>
+      )}
     </nav>
   );
 }

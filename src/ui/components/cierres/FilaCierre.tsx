@@ -5,6 +5,7 @@ import type { FilaCierre as Fila } from '../../lib/api';
 import type { Pago } from '@domain/cierres/types';
 import { fmtArs, fmtMes, fmtNum, fmtUsd } from '../../lib/format';
 import { cn } from '../../lib/utils';
+import { usePuede } from '../../store';
 import { BadgeSaldo } from './BadgeSaldo';
 import { CierreFormDialog } from './CierreFormDialog';
 import { PagoFormDialog } from './PagoFormDialog';
@@ -18,6 +19,7 @@ const iconBtn =
 export function FilaCierre({ fila }: { fila: Fila }) {
   const { cierre, pagos } = fila;
   const [abierto, setAbierto] = useState(false);
+  const puedeEditar = usePuede('editar');
   const [editarCierre, setEditarCierre] = useState(false);
   const [borrarCierre, setBorrarCierre] = useState(false);
   const [nuevoPago, setNuevoPago] = useState(false);
@@ -63,20 +65,26 @@ export function FilaCierre({ fila }: { fila: Fila }) {
                 title={cierre.revisar}
               >
                 ⚠ Revisar
-                <button
-                  className="rounded-full px-1 hover:bg-amber-200/70 dark:hover:bg-amber-800"
-                  title="Marcar como revisado"
-                  onClick={stop(() => quitarRevisar.mutate(cierre.idCierre))}
-                >
-                  ✕
-                </button>
+                {puedeEditar && (
+                  <button
+                    className="rounded-full px-1 hover:bg-amber-200/70 dark:hover:bg-amber-800"
+                    title="Marcar como revisado"
+                    onClick={stop(() => quitarRevisar.mutate(cierre.idCierre))}
+                  >
+                    ✕
+                  </button>
+                )}
               </span>
             )}
           </div>
         </td>
         <td className={cn(TD, 'whitespace-nowrap text-right')}>
-          <button className={iconBtn} title="Editar cierre" onClick={stop(() => setEditarCierre(true))}><Pencil size={15} /></button>
-          <button className={cn(iconBtn, 'hover:text-signal-red')} title="Eliminar cierre" onClick={stop(() => setBorrarCierre(true))}><Trash2 size={15} /></button>
+          {puedeEditar && (
+            <>
+              <button className={iconBtn} title="Editar cierre" onClick={stop(() => setEditarCierre(true))}><Pencil size={15} /></button>
+              <button className={cn(iconBtn, 'hover:text-signal-red')} title="Eliminar cierre" onClick={stop(() => setBorrarCierre(true))}><Trash2 size={15} /></button>
+            </>
+          )}
         </td>
       </tr>
 
@@ -86,12 +94,14 @@ export function FilaCierre({ fila }: { fila: Fila }) {
           <td colSpan={11} className="px-4 py-3">
             <div className="mb-2 flex items-center justify-between">
               <h4 className="text-xs font-600 uppercase tracking-wide text-navy-400">Pagos del cierre</h4>
-              <button
-                className="inline-flex items-center gap-1 rounded-lg bg-navy-900 px-2.5 py-1 text-xs font-600 text-white hover:bg-navy-700 dark:bg-gold-400 dark:text-navy-900"
-                onClick={() => setNuevoPago(true)}
-              >
-                <Plus size={14} /> Agregar pago
-              </button>
+              {puedeEditar && (
+                <button
+                  className="inline-flex items-center gap-1 rounded-lg bg-navy-900 px-2.5 py-1 text-xs font-600 text-white hover:bg-navy-700 dark:bg-gold-400 dark:text-navy-900"
+                  onClick={() => setNuevoPago(true)}
+                >
+                  <Plus size={14} /> Agregar pago
+                </button>
+              )}
             </div>
             {pagos.length === 0 ? (
               <p className="text-sm text-navy-400">Este cierre todavía no tiene pagos cargados.</p>
@@ -129,8 +139,12 @@ export function FilaCierre({ fila }: { fila: Fila }) {
                         </td>
                         <td className="px-3 py-2 text-navy-600 dark:text-navy-200">{p.medioPago}</td>
                         <td className="px-3 py-2 whitespace-nowrap text-right">
-                          <button className={iconBtn} title="Editar pago" onClick={() => setPagoEditar(p)}><Pencil size={14} /></button>
-                          <button className={cn(iconBtn, 'hover:text-signal-red')} title="Eliminar pago" onClick={() => setPagoBorrar(p)}><Trash2 size={14} /></button>
+                          {puedeEditar && (
+                            <>
+                              <button className={iconBtn} title="Editar pago" onClick={() => setPagoEditar(p)}><Pencil size={14} /></button>
+                              <button className={cn(iconBtn, 'hover:text-signal-red')} title="Eliminar pago" onClick={() => setPagoBorrar(p)}><Trash2 size={14} /></button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}

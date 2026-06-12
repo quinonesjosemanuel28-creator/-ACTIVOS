@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Ban, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { useCobranza, useMarcarInactivo } from '../hooks';
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Spinner } from '../components/ui/primitives';
+import { usePuede } from '../store';
 import { SectionHeader } from '../components/SectionHeader';
 import type { CobranzaCierreView } from '../lib/api';
 import { fmtMes, fmtUsd } from '../lib/format';
@@ -171,6 +172,7 @@ export function VistaCobranza() {
 
 function FilaCobranza({ c }: { c: CobranzaCierreView }) {
   const [abierto, setAbierto] = useState(false);
+  const puedeEditar = usePuede('editar');
   const inactivar = useMarcarInactivo();
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   return (
@@ -193,7 +195,7 @@ function FilaCobranza({ c }: { c: CobranzaCierreView }) {
             : <Badge tone={TONO[c.estado]}>{c.estado}{c.estado === 'Morosidad' ? ` · ${c.diasAtraso}d` : ''}</Badge>}
         </td>
         <td className={cn(TD, 'text-right')}>
-          {c.inactivo ? (
+          {!puedeEditar ? null : c.inactivo ? (
             <Button variant="ghost" size="sm" title="Reactivar" disabled={inactivar.isPending}
               onClick={stop(() => inactivar.mutate({ id: c.idCierre, inactivo: false }))}>
               <RotateCcw size={14} /> Reactivar

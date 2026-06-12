@@ -9,6 +9,14 @@ import type { Cierre, EstadoSaldo, Pago } from '@domain/cierres/types';
 import type { Egreso } from '@domain/types';
 import type { ResumenEgresos } from '@domain/egresos/metrics';
 import type { ComisionesDelMes } from '@domain/comisiones/calculo';
+import type { Accion, Rol, UsuarioPublico } from '@domain/auth/permisos';
+
+// ───────────────────── Auth / sesión ─────────────────────
+
+export interface SesionActual {
+  usuario: UsuarioPublico;
+  acciones: Accion[];
+}
 
 export interface RegistroLiquidacion {
   mes: string;
@@ -164,6 +172,17 @@ export interface FiltrosCierresUI {
   unidad?: string;
 }
 
+/** Error HTTP con status (la UI distingue 401 = sin sesión de otros). */
+export class ErrorHttp extends Error {
+  constructor(
+    public readonly status: number,
+    mensaje: string,
+  ) {
+    super(mensaje);
+    this.name = 'ErrorHttp';
+  }
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -171,7 +190,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `Error ${res.status}`);
+    throw new ErrorHttp(res.status, body.error ?? `Error ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -186,6 +205,25 @@ const qs = (params: Record<string, string | undefined>) => {
 };
 
 export const api = {
+  // Auth / sesión
+  login: (email: string, password: string) =>
+    req<SesionActual & { expiraEn: string }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  logout: () => req('/auth/logout', { method: 'POST' }),
+  sesion: () => req<SesionActual>('/auth/yo'),
+  cambiarPassword: (passwordActual: string, passwordNueva: string) =>
+    req('/auth/password', { method: 'POST', body: JSON.stringify({ passwordActual, passwordNueva }) }),
+
+  // Usuarios (solo ADMIN)
+  usuarios: () => req<UsuarioPublico[]>('/usuarios'),
+  crearUsuario: (u: { email: string; nombre: string; rol: Rol }) =>
+    req<{ usuario: UsuarioPublico; passwordTemporal?: string }>('/usuarios', { method: 'POST', body: JSON.stringify(u) }),
+  cambiarRol: (id: string, rol: Rol) =>
+    req<UsuarioPublico>(`/usuarios/${id}/rol`, { method: 'PUT', body: JSON.stringify({ rol }) }),
+  darDeBaja: (id: string) => req<UsuarioPublico>(`/usuarios/${id}`, { method: 'DELETE' }),
+  reactivarUsuario: (id: string) => req<UsuarioPublico>(`/usuarios/${id}/reactivar`, { method: 'POST' }),
+  resetearPassword: (id: string) =>
+    req<{ passwordTemporal: string }>(`/usuarios/${id}/reset-password`, { method: 'POST' }),
+
   meses: () => req<MesesResponse>('/meses'),
   dashboard: (mes: Mes, opts: { programa?: string; unidad?: string } = {}) =>
     req<DashboardResult>(`/dashboard/${mes}${qs({ programa: opts.programa, unidad: opts.unidad })}`),

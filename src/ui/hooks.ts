@@ -1,7 +1,88 @@
 /** Hooks de server-state (TanStack Query) sobre el cliente API. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type FiltrosCierresUI, type FiltrosEgresosUI } from './lib/api';
+import { api, ErrorHttp, type FiltrosCierresUI, type FiltrosEgresosUI, type SesionActual } from './lib/api';
 import { useUI } from './store';
+import type { Rol } from '@domain/auth/permisos';
+
+// ───────────────────────── Auth / sesión ─────────────────────────
+
+/** Sesión actual: null = sin login (401), undefined = cargando. */
+export function useSesion() {
+  return useQuery<SesionActual | null>({
+    queryKey: ['sesion'],
+    queryFn: async () => {
+      try {
+        return await api.sesion();
+      } catch (err) {
+        if (err instanceof ErrorHttp && err.status === 401) return null; // sin sesión: pantalla de login
+        throw err;
+      }
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useLogin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { email: string; password: string }) => api.login(v.email, v.password),
+    // El login cambia QUIÉN mira: se refresca todo el server-state.
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useLogout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.logout(),
+    onSuccess: () => {
+      qc.setQueryData(['sesion'], null);
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'sesion' });
+    },
+  });
+}
+
+export function useCambiarPassword() {
+  return useMutation({
+    mutationFn: (v: { passwordActual: string; passwordNueva: string }) =>
+      api.cambiarPassword(v.passwordActual, v.passwordNueva),
+  });
+}
+
+// ───────────────────────── Usuarios (ADMIN) ─────────────────────────
+
+export function useUsuarios() {
+  return useQuery({ queryKey: ['usuarios'], queryFn: api.usuarios });
+}
+export function useCrearUsuario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (u: { email: string; nombre: string; rol: Rol }) => api.crearUsuario(u),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
+  });
+}
+export function useCambiarRol() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; rol: Rol }) => api.cambiarRol(v.id, v.rol),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
+  });
+}
+export function useBajaUsuario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; reactivar: boolean }) => (v.reactivar ? api.reactivarUsuario(v.id) : api.darDeBaja(v.id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
+  });
+}
+export function useResetearPassword() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.resetearPassword(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
+  });
+}
 
 export function useMeses() {
   return useQuery({ queryKey: ['meses'], queryFn: api.meses });

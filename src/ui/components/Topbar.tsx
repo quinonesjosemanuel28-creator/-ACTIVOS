@@ -20,6 +20,7 @@ const TITULOS: Record<Vista, string> = {
   comisiones: 'Comisiones',
   asistente: 'Asistente IA',
   datos: 'Carga & Admin',
+  usuarios: 'Usuarios',
 };
 
 export function Topbar() {

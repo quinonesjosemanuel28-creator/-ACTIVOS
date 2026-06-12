@@ -9,6 +9,7 @@ import type { Egreso } from '@domain/types';
 import { esDistribucion } from '@domain/egresos/categorias';
 import { useEgresos, useMeses, useResumenEgresos, useEliminarEgreso } from '../hooks';
 import { Button, Card, Spinner, Badge } from '../components/ui/primitives';
+import { usePuede } from '../store';
 import { SectionHeader } from '../components/SectionHeader';
 import { ResumenEgresos } from '../components/egresos/ResumenEgresos';
 import { EgresoFormDialog } from '../components/egresos/EgresoFormDialog';
@@ -40,6 +41,7 @@ export function VistaEgresos() {
   const sinMes = { categoria: filtros.categoria, moneda: filtros.moneda, tipo: filtros.tipo, q: qDebounced };
   const { data: resumenMes } = useResumenEgresos(filtros.mes, sinMes);
   const elim = useEliminarEgreso();
+  const puedeEditar = usePuede('editar');
 
   // Resumen: por mes → backend; "Todos" → cálculo en cliente sobre la lista.
   const resumen = filtros.mes === 'TODOS' ? calcResumen(egresos ?? []) : resumenMes;
@@ -49,7 +51,7 @@ export function VistaEgresos() {
       <SectionHeader
         titulo="Egresos"
         descripcion="Todos los gastos del negocio, en USD y ARS. Operativo vs retiros de socios, recurrentes y puntuales."
-        accion={<Button onClick={() => setNuevo(true)}><Plus size={16} /> Registrar egreso</Button>}
+        accion={puedeEditar ? <Button onClick={() => setNuevo(true)}><Plus size={16} /> Registrar egreso</Button> : undefined}
       />
 
       <FiltrosBarEgresos filtros={filtros} onChange={setFiltros} meses={meses?.meses ?? []} />
@@ -96,8 +98,12 @@ export function VistaEgresos() {
                     <td className={cn(TD, 'text-right font-600 tnum text-navy-900 dark:text-navy-50')}>{fmtUsd(e.montoUsd)}</td>
                     <td className={cn(TD, 'text-right tnum text-teal-600')}>{fmtArs(e.montoArs)}</td>
                     <td className={cn(TD, 'whitespace-nowrap text-right')}>
-                      <button className={iconBtn} title="Editar" onClick={() => setEditar(e)}><Pencil size={15} /></button>
-                      <button className={cn(iconBtn, 'hover:text-signal-red')} title="Eliminar" onClick={() => setBorrar(e)}><Trash2 size={15} /></button>
+                      {puedeEditar && (
+                        <>
+                          <button className={iconBtn} title="Editar" onClick={() => setEditar(e)}><Pencil size={15} /></button>
+                          <button className={cn(iconBtn, 'hover:text-signal-red')} title="Eliminar" onClick={() => setBorrar(e)}><Trash2 size={15} /></button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
