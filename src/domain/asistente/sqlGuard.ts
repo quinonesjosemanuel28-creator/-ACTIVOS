@@ -7,9 +7,12 @@
  *  1. Una sola sentencia (corta inyección de segundo statement con `;`).
  *  2. Debe empezar con SELECT o WITH (tras stripear comentarios).
  *  3. Lista negra de keywords de escritura/DDL con límites de palabra.
+ *  4. Lista negra de TABLAS sensibles (usuarios/sesiones): la IA no puede
+ *     leer hashes de contraseñas ni tokens de sesión.
  *
  * Cero dependencias. La IA NUNCA debe poder modificar ni borrar datos.
  */
+import { TABLAS_SENSIBLES } from '../auth/permisos';
 
 export interface ResultadoGuard {
   ok: boolean;
@@ -60,6 +63,16 @@ export function esSoloLectura(sqlOriginal: string): ResultadoGuard {
     const re = new RegExp(`\\b${kw}\\b`, 'i');
     if (re.test(sinFinal)) {
       return { ok: false, motivo: `Operación no permitida: ${kw}. Solo lectura.` };
+    }
+  }
+
+  // 4) Tablas sensibles: usuarios/sesiones quedan fuera del alcance de la IA
+  // (hashes de contraseñas, tokens). Aunque el esquema ya las oculta, esto
+  // bloquea cualquier intento de nombrarlas directamente.
+  for (const tabla of TABLAS_SENSIBLES) {
+    const re = new RegExp(`\\b${tabla}\\b`, 'i');
+    if (re.test(sinFinal)) {
+      return { ok: false, motivo: `Tabla no accesible para el asistente: ${tabla}.` };
     }
   }
 

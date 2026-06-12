@@ -11,6 +11,7 @@ import type { ReposCierres } from '../../application/cierres/ports';
 import type { EgresosAdminRepo } from '../../application/egresos/ports';
 import type { LiquidacionRepo } from '../../application/comisiones/ports';
 import type { FunnelCanalRepo } from '../../application/funnel/ports';
+import type { ReposAuth } from '../../application/auth/ports';
 import { armarRepositoriosDashboard } from '../adapters/dashboardRepos';
 import { getDb } from '../sqlite/db';
 import { crearRepositorios } from '../sqlite/repos';
@@ -18,12 +19,15 @@ import { crearReposCierres } from '../sqlite/cierresRepos';
 import { crearEgresosAdminRepo } from '../sqlite/egresosRepos';
 import { crearLiquidacionRepo } from '../sqlite/comisionesRepos';
 import { crearFunnelCanalRepo } from '../sqlite/funnelCanalRepos';
+import { crearUsuariosRepo, crearSesionesRepo } from '../sqlite/authRepos';
 import { getPoolPg } from '../postgres/db';
 import { crearRepositoriosPg } from '../postgres/repos';
 import { crearReposCierresPg } from '../postgres/cierresRepos';
 import { crearEgresosAdminRepoPg } from '../postgres/egresosRepos';
 import { crearLiquidacionRepoPg } from '../postgres/comisionesRepos';
 import { crearFunnelCanalRepoPg } from '../postgres/funnelCanalRepos';
+import { crearUsuariosRepoPg, crearSesionesRepoPg } from '../postgres/authRepos';
+import { hasherBcrypt } from '../auth/hasher';
 
 export interface Infraestructura {
   driver: DriverDb;
@@ -35,6 +39,8 @@ export interface Infraestructura {
   reposEgresos: EgresosAdminRepo;
   reposLiquidacion: LiquidacionRepo;
   reposFunnelCanal: FunnelCanalRepo;
+  /** Repos de auth (usuarios + sesiones) + hasher bcrypt. */
+  reposAuth: ReposAuth;
 }
 
 export async function crearInfraestructura(): Promise<Infraestructura> {
@@ -52,6 +58,7 @@ export async function crearInfraestructura(): Promise<Infraestructura> {
       reposEgresos: crearEgresosAdminRepoPg(pool),
       reposLiquidacion: crearLiquidacionRepoPg(pool),
       reposFunnelCanal,
+      reposAuth: { usuarios: crearUsuariosRepoPg(pool), sesiones: crearSesionesRepoPg(pool), hasher: hasherBcrypt },
     };
   }
   const db = getDb();
@@ -66,5 +73,6 @@ export async function crearInfraestructura(): Promise<Infraestructura> {
     reposEgresos: crearEgresosAdminRepo(db),
     reposLiquidacion: crearLiquidacionRepo(db),
     reposFunnelCanal,
+    reposAuth: { usuarios: crearUsuariosRepo(db), sesiones: crearSesionesRepo(db), hasher: hasherBcrypt },
   };
 }

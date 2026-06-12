@@ -64,6 +64,23 @@ describe('sqlGuard · entradas inválidas', () => {
   });
 });
 
+describe('sqlGuard · bloquea tablas sensibles (auth)', () => {
+  it('rechaza leer la tabla usuarios (hashes de contraseña)', () => {
+    const r = esSoloLectura('SELECT email, password_hash FROM usuarios');
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toMatch(/usuarios/i);
+  });
+  it('rechaza leer la tabla sesiones (tokens)', () => {
+    expect(esSoloLectura('SELECT token FROM sesiones').ok).toBe(false);
+  });
+  it('rechaza un JOIN escondido contra usuarios', () => {
+    expect(esSoloLectura('SELECT c.* FROM cierres c, usuarios u').ok).toBe(false);
+  });
+  it('no bloquea por subcadena (p. ej. una columna "usuarios_totales")', () => {
+    expect(esSoloLectura('SELECT usuarios_totales FROM metricas').ok).toBe(true);
+  });
+});
+
 describe('conLimite', () => {
   it('agrega LIMIT si falta', () => {
     expect(conLimite('SELECT * FROM cierres', 50)).toBe('SELECT * FROM cierres LIMIT 50');

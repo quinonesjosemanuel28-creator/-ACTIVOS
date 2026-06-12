@@ -119,12 +119,32 @@ CREATE TABLE IF NOT EXISTS funnel_canal (
   PRIMARY KEY (mes, canal)
 );
 
+-- ───────── Auth: usuarios y sesiones (login multi-usuario, 3 roles) ─────────
+CREATE TABLE IF NOT EXISTS usuarios (
+  id                     TEXT PRIMARY KEY,
+  email                  TEXT NOT NULL UNIQUE,
+  nombre                 TEXT NOT NULL,
+  rol                    TEXT NOT NULL CHECK(rol IN ('LECTOR','EDITOR','ADMIN')),
+  password_hash          TEXT NOT NULL,
+  activo                 INTEGER NOT NULL DEFAULT 1,
+  debe_cambiar_password  INTEGER NOT NULL DEFAULT 0,
+  creado_en              TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sesiones (
+  token       TEXT PRIMARY KEY,
+  id_usuario  TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  expira_en   TEXT NOT NULL,
+  creada_en   TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_cierres_fecha ON cierres(fecha_cierre);
 CREATE INDEX IF NOT EXISTS idx_pagos_cierre ON pagos(id_cierre);
 CREATE INDEX IF NOT EXISTS idx_pagos_fecha ON pagos(fecha_pago);
 CREATE INDEX IF NOT EXISTS idx_ventas_mes ON ventas(mes_venta);
 CREATE INDEX IF NOT EXISTS idx_cobros_mes ON cobros(mes_cobro);
 CREATE INDEX IF NOT EXISTS idx_egresos_mes ON egresos(mes);
+CREATE INDEX IF NOT EXISTS idx_sesiones_usuario ON sesiones(id_usuario);
 
 -- Migraciones aditivas (mismas que en SQLite, para bases ya creadas).
 ALTER TABLE cierres ADD COLUMN IF NOT EXISTS cantidad_cuotas INTEGER;
