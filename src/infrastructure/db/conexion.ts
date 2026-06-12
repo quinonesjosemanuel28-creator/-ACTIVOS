@@ -61,18 +61,28 @@ export async function crearInfraestructura(): Promise<Infraestructura> {
       reposAuth: { usuarios: crearUsuariosRepoPg(pool), sesiones: crearSesionesRepoPg(pool), hasher: hasherBcrypt },
     };
   }
-  const db = getDb();
+  return infraestructuraDesdeDb(getDb());
+}
+
+/**
+ * Arma la infraestructura completa sobre una base SQLite dada. La usa el
+ * arranque (archivo local) y los tests (getDbMemoria + hasher rápido).
+ */
+export function infraestructuraDesdeDb(
+  db: Parameters<typeof crearRepositorios>[0],
+  hasher: ReposAuth['hasher'] = hasherBcrypt,
+): Infraestructura {
   const repos = crearRepositorios(db);
   const reposCierres = crearReposCierres(db);
   const reposFunnelCanal = crearFunnelCanalRepo(db);
   return {
-    driver,
+    driver: 'sqlite',
     repos,
     reposDash: armarRepositoriosDashboard(repos, reposCierres, reposFunnelCanal),
     reposCierres,
     reposEgresos: crearEgresosAdminRepo(db),
     reposLiquidacion: crearLiquidacionRepo(db),
     reposFunnelCanal,
-    reposAuth: { usuarios: crearUsuariosRepo(db), sesiones: crearSesionesRepo(db), hasher: hasherBcrypt },
+    reposAuth: { usuarios: crearUsuariosRepo(db), sesiones: crearSesionesRepo(db), hasher },
   };
 }

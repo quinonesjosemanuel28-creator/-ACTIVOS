@@ -12,6 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.{ts,tsx}'],
+    // src: dominio/aplicación/infra/UI · server: integración HTTP por rol.
+    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts'],
   },
 });
