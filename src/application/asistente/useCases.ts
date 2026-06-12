@@ -10,8 +10,9 @@
  */
 import { ASISTENTE_MODELO, asistenteDisponible, getAnthropic } from '../../infrastructure/anthropic/cliente';
 import { extraerEsquema, ejecutarSelect } from '../../infrastructure/db/asistenteDb';
+import { driverConfigurado } from '../../infrastructure/db/factory';
 import { describirEsquema } from '../../domain/asistente/esquema';
-import { contextoSql } from '../../domain/asistente/guia';
+import { contextoSql, type DialectoSql } from '../../domain/asistente/guia';
 import { conLimite, esSoloLectura } from '../../domain/asistente/sqlGuard';
 
 export const LIMITE_FILAS = 50;
@@ -54,6 +55,11 @@ export async function responderPregunta(pregunta: string): Promise<RespuestaAsis
 
   const client = getAnthropic()!;
   const esquema = describirEsquema(await extraerEsquema());
+  // El SQL generado debe hablar el dialecto del motor activo (DB_DRIVER).
+  const dialecto: DialectoSql = driverConfigurado() === 'postgres' ? 'postgres' : 'sqlite';
+  const motor = dialecto === 'postgres' ? 'PostgreSQL' : 'SQLite';
+  const filtroMes =
+    dialecto === 'postgres' ? "substr(fecha_pago,1,7) = 'YYYY-MM'" : "strftime('%Y-%m', fecha_pago)";
 
   try {
     // 1) Pregunta + esquema → SQL (solo nombres de tablas/columnas, sin datos).
@@ -61,16 +67,16 @@ export async function responderPregunta(pregunta: string): Promise<RespuestaAsis
       model: ASISTENTE_MODELO,
       max_tokens: 1024,
       system:
-        'Sos un generador de SQL para SQLite del dashboard de +Activos Academy. ' +
+        `Sos un generador de SQL para ${motor} del dashboard de +Activos Academy. ` +
         'A partir del ESQUEMA REAL, las notas de negocio y los ejemplos, devolvés UNA sola ' +
         'consulta SELECT de solo lectura que responda la pregunta.\n' +
         'REGLAS ESTRICTAS:\n' +
         '- Usá EXCLUSIVAMENTE nombres de tablas y columnas que aparecen en el ESQUEMA REAL. NO inventes columnas.\n' +
-        '- La tabla "pagos" NO tiene columna "mes": para filtrar por mes usá strftime(\'%Y-%m\', fecha_pago).\n' +
+        `- La tabla "pagos" NO tiene columna "mes": para filtrar por mes usá ${filtroMes}.\n` +
         '- Facturación/cash = SUM(monto_usd) de "pagos" (NO de "ventas" ni "cobros", que son legacy).\n' +
         '- Solo SELECT (o WITH … SELECT); nunca INSERT/UPDATE/DELETE/DDL; una sola sentencia, sin punto y coma extra.\n' +
         '- Respondé ÚNICAMENTE con la SQL, sin explicación ni markdown.\n\n' +
-        contextoSql(esquema),
+        contextoSql(esquema, dialecto),
       messages: [{ role: 'user', content: `Pregunta: ${pregunta}\n\nSQL:` }],
     });
     const sql = extraerSql(primerTexto(genie.content as { type: string; text?: string }[]));
