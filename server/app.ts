@@ -13,6 +13,7 @@
  *     según la matriz del dominio (LECTOR ve; EDITOR edita; ADMIN importa,
  *     resetea y gestiona usuarios).
  */
+import { resolve } from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import { ZodError } from 'zod';
@@ -45,6 +46,12 @@ export interface OpcionesApp {
   cookieSegura?: boolean;
   /** Limitador de login (inyectable para tests). */
   limitadorLogin?: ReturnType<typeof crearLimitadorLogin>;
+  /**
+   * Carpeta del frontend compilado (vite build → dist). Si se pasa, Express
+   * sirve esos archivos y hace fallback SPA (index.html) para las rutas del
+   * cliente. En dev no se pasa: Vite sirve la UI y proxea /api.
+   */
+  dirEstaticos?: string;
 }
 
 const STATUS_AUTH: Record<uauth.ErrorAuth['codigo'], number> = {
@@ -250,6 +257,18 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   // Reseteo seguro: destructivo → solo ADMIN.
   app.delete('/api/cierres-demo', requiere('importar'), h(() => ucc.borrarDatosDemo(reposCierres)));
   app.post('/api/cierres-reset', requiere('importar'), h((req) => ucc.reiniciarCierresYPagos(reposCierres, req.body)));
+
+  // ───────────────────── Frontend compilado (producción) ─────────────────────
+  // Una ruta /api/* que no matcheó nada llega acá → 404 JSON (no el index.html),
+  // así un endpoint inexistente nunca devuelve la SPA por error.
+  app.use('/api', (_req, res) => res.status(404).json({ error: 'Ruta de API inexistente.' }));
+
+  if (opciones.dirEstaticos) {
+    app.use(express.static(opciones.dirEstaticos));
+    // Fallback SPA: cualquier otra ruta devuelve index.html (React Router del
+    // lado del cliente). Express 4: '*' evita chocar con las rutas de /api.
+    app.get('*', (_req, res) => res.sendFile(resolve(opciones.dirEstaticos!, 'index.html')));
+  }
 
   return app;
 }

@@ -5,14 +5,14 @@
  * Railway). El pool es un singleton; al crearlo corre las migraciones.
  */
 import pg from 'pg';
-import { urlPostgres } from '../db/factory';
+import { sslPostgres, urlPostgres } from '../db/factory';
 import { migrarPg } from './schema';
 
 let pool: pg.Pool | null = null;
 
 export async function getPoolPg(): Promise<pg.Pool> {
   if (pool) return pool;
-  const nuevo = new pg.Pool({ connectionString: urlPostgres() });
+  const nuevo = new pg.Pool({ connectionString: urlPostgres(), ssl: sslPostgres() });
   await migrarPg(nuevo);
   pool = nuevo;
   return pool;

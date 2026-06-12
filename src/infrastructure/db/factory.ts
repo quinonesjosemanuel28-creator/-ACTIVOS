@@ -28,3 +28,22 @@ export function urlPostgres(env: NodeJS.ProcessEnv = process.env): string {
   }
   return url;
 }
+
+/**
+ * ¿La conexión a Postgres debe usar TLS? Lo decide:
+ *   - PGSSL explícito ('true'/'1' → sí; 'false'/'0' → no) tiene prioridad.
+ *   - sslmode=require/verify-* en la propia DATABASE_URL → sí.
+ *   - Si no, NO (Postgres local y la red interna de Railway no lo necesitan).
+ *
+ * En Railway la base pública (proxy) pide TLS: se activa con PGSSL=true. El
+ * certificado es de la plataforma, así que no verificamos la cadena
+ * (rejectUnauthorized:false) — el cifrado en tránsito igual aplica.
+ */
+export function sslPostgres(env: NodeJS.ProcessEnv = process.env): false | { rejectUnauthorized: boolean } {
+  const flag = env.PGSSL?.trim().toLowerCase();
+  if (flag === 'true' || flag === '1' || flag === 'require') return { rejectUnauthorized: false };
+  if (flag === 'false' || flag === '0') return false;
+  const url = env.DATABASE_URL ?? '';
+  if (/sslmode=(require|verify-ca|verify-full)/i.test(url)) return { rejectUnauthorized: false };
+  return false;
+}

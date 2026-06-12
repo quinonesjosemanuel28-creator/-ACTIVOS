@@ -16,6 +16,9 @@ data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 
+# Backups de la base (pg_dump) — quedan en tu máquina, no en git
+backups/
+
 # Logs / temporales
 *.log
 .tmp
