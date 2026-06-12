@@ -11,6 +11,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "seed": "tsx server/scripts/seed.ts",
+    "db:migrar": "tsx server/scripts/migrar-a-postgres.ts",
+    "db:validar": "tsx server/scripts/validar-postgres.ts",
     "backfill:closer": "tsx server/scripts/backfill-closer-pagos.ts",
     "clear:funnel": "tsx server/scripts/clear-funnel.ts",
     "test": "vitest run",
