@@ -20,6 +20,8 @@ import type Database from 'better-sqlite3';
 import type { Cierre, Pago } from '../../domain/cierres/types';
 import type { Cobro, Programa, Venta } from '../../domain/types';
 import type { CierreMesRepo, CobrosRepo, Filtro, FunnelRepo, Repositorios, VentasRepo } from '../../application/ports';
+import type { ReposCierres } from '../../application/cierres/ports';
+import type { FunnelCanalRepo } from '../../application/funnel/ports';
 import { crearRepositorios } from '../sqlite/repos';
 import { crearReposCierres } from '../sqlite/cierresRepos';
 import { crearFunnelCanalRepo } from '../sqlite/funnelCanalRepos';
@@ -65,12 +67,22 @@ const NO_ESCRIBIR = () => {
 
 /**
  * Repositorios que el dashboard usa para LEER. ventas/cobros vienen de
- * cierres/pagos; el resto, del repo legacy.
+ * cierres/pagos; el resto, del repo legacy. Conveniencia SQLite (tests/server
+ * con DB_DRIVER=sqlite); la versión Postgres arma lo mismo con sus repos.
  */
 export function crearRepositoriosDashboard(db: Database.Database): Repositorios {
-  const legacy = crearRepositorios(db);
-  const rc = crearReposCierres(db);
+  return armarRepositoriosDashboard(crearRepositorios(db), crearReposCierres(db), crearFunnelCanalRepo(db));
+}
 
+/**
+ * Versión agnóstica del motor: solo conoce los PUERTOS, así que sirve igual
+ * para SQLite y PostgreSQL (se le inyectan los repos ya creados).
+ */
+export function armarRepositoriosDashboard(
+  legacy: Repositorios,
+  rc: ReposCierres,
+  canalRepo: FunnelCanalRepo,
+): Repositorios {
   const unidadDe = (f?: Filtro) =>
     f?.unidadNegocio && f.unidadNegocio !== 'CONSOLIDADO' ? f.unidadNegocio : undefined;
 
@@ -118,7 +130,6 @@ export function crearRepositoriosDashboard(db: Database.Database): Repositorios 
   // Funnel: agendas/shows = suma de canales (funnel_canal), con fallback a los
   // totales legacy ("Sin especificar"); `cerrados` se DERIVA de los cierres
   // reales del mes → coincide con la sección Cierres y corrige el dashboard.
-  const canalRepo = crearFunnelCanalRepo(db);
   const funnel: FunnelRepo = {
     obtener: async (mes, filtro) => {
       const filas = await canalRepo.listarPorMes(mes);

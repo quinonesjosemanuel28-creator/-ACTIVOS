@@ -1,20 +1,16 @@
 /**
- * SERVER · Cablea la capa de aplicación con la infraestructura SQLite y
+ * SERVER · Cablea la capa de aplicación con la infraestructura de datos y
  * expone una API REST liviana. Vite proxea /api → :8787 en desarrollo.
  *
- * Este archivo es el ÚNICO lugar donde se conocen Express + better-sqlite3
- * a la vez. El dominio sigue sin saber que existen.
+ * El motor (SQLite local | PostgreSQL) se elige por DB_DRIVER en el .env;
+ * acá solo se reciben los repos ya armados. El dominio sigue sin saber que
+ * Express ni la base existen.
  */
-import 'dotenv/config'; // carga .env (ANTHROPIC_API_KEY, etc.) antes de todo
+import 'dotenv/config'; // carga .env (ANTHROPIC_API_KEY, DB_DRIVER, etc.) antes de todo
 import express from 'express';
 import cors from 'cors';
 import { ZodError } from 'zod';
-import { getDb } from '../src/infrastructure/sqlite/db';
-import { crearRepositorios } from '../src/infrastructure/sqlite/repos';
-import { crearReposCierres } from '../src/infrastructure/sqlite/cierresRepos';
-import { crearEgresosAdminRepo } from '../src/infrastructure/sqlite/egresosRepos';
-import { crearLiquidacionRepo } from '../src/infrastructure/sqlite/comisionesRepos';
-import { crearFunnelCanalRepo } from '../src/infrastructure/sqlite/funnelCanalRepos';
+import { crearInfraestructura } from '../src/infrastructure/db/conexion';
 import * as uce from '../src/application/egresos/useCases';
 import * as ucom from '../src/application/comisiones/useCases';
 import * as ucf from '../src/application/funnel/useCases';
@@ -22,22 +18,16 @@ import * as ucob from '../src/application/cobranza/useCases';
 import * as ucia from '../src/application/asistente/useCases';
 import { asistenteDisponible } from '../src/infrastructure/anthropic/cliente';
 import type { FiltrosEgresos } from '../src/application/egresos/useCases';
-import { crearRepositoriosDashboard } from '../src/infrastructure/adapters/dashboardRepos';
 import * as uc from '../src/application/useCases';
 import * as ucc from '../src/application/cierres/useCases';
 import type { Programa } from '../src/domain/types';
 import type { Filtro } from '../src/application/ports';
 import type { FiltrosCierres } from '../src/application/cierres/ports';
 
-const db = getDb();
-// Repo legacy: egresos, funnel, parámetros, cierre_mes e importación.
-const repos = crearRepositorios(db);
-// Repo del dashboard: ventas/cobros provienen de cierres/pagos (adaptador).
-const reposDash = crearRepositoriosDashboard(db);
-const reposCierres = crearReposCierres(db);
-const reposEgresos = crearEgresosAdminRepo(db);
-const reposLiquidacion = crearLiquidacionRepo(db);
-const reposFunnelCanal = crearFunnelCanalRepo(db);
+// Repos según DB_DRIVER: legacy (egresos/funnel/parámetros/cierre_mes),
+// dashboard (ventas/cobros desde cierres/pagos) y módulos.
+const { driver, repos, reposDash, reposCierres, reposEgresos, reposLiquidacion, reposFunnelCanal } =
+  await crearInfraestructura();
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -171,5 +161,5 @@ app.post('/api/cierres-reset', h((req) => ucc.reiniciarCierresYPagos(reposCierre
 
 const PORT = Number(process.env.PORT ?? 8787);
 app.listen(PORT, () => {
-  console.log(`[+Activos API] escuchando en http://localhost:${PORT}`);
+  console.log(`[+Activos API] escuchando en http://localhost:${PORT} (base de datos: ${driver})`);
 });

@@ -9,7 +9,7 @@
  * objeto con `disponible/ok` en false y un mensaje claro (no rompe la app).
  */
 import { ASISTENTE_MODELO, asistenteDisponible, getAnthropic } from '../../infrastructure/anthropic/cliente';
-import { extraerEsquema, ejecutarSelect } from '../../infrastructure/sqlite/asistenteDb';
+import { extraerEsquema, ejecutarSelect } from '../../infrastructure/db/asistenteDb';
 import { describirEsquema } from '../../domain/asistente/esquema';
 import { contextoSql } from '../../domain/asistente/guia';
 import { conLimite, esSoloLectura } from '../../domain/asistente/sqlGuard';
@@ -53,7 +53,7 @@ export async function responderPregunta(pregunta: string): Promise<RespuestaAsis
   }
 
   const client = getAnthropic()!;
-  const esquema = describirEsquema(extraerEsquema());
+  const esquema = describirEsquema(await extraerEsquema());
 
   try {
     // 1) Pregunta + esquema → SQL (solo nombres de tablas/columnas, sin datos).
@@ -83,7 +83,7 @@ export async function responderPregunta(pregunta: string): Promise<RespuestaAsis
 
     // 3) Ejecución READONLY (segundo candado) con LIMIT defensivo.
     const sqlConLimite = conLimite(sql, LIMITE_FILAS);
-    const { columnas, filas } = ejecutarSelect(sqlConLimite);
+    const { columnas, filas } = await ejecutarSelect(sqlConLimite);
     const filasAcotadas = filas.slice(0, LIMITE_FILAS);
 
     // 4) Filas → Claude para explicar en español rioplatense.
