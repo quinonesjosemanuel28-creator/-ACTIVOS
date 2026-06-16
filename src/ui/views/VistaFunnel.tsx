@@ -17,6 +17,7 @@ export function VistaFunnel() {
   const { mes } = useUI();
   const { data, isLoading } = useFunnel();
   const [editar, setEditar] = useState(false);
+  const puedeEditar = usePuede('editar'); // hook: SIEMPRE antes de cualquier return (rules of hooks)
 
   if (isLoading || !data || !mes)
     return <div className="flex min-h-[40vh] items-center justify-center"><Spinner className="h-8 w-8" /></div>;
@@ -27,7 +28,6 @@ export function VistaFunnel() {
     { label: 'Asistieron (shows)', valor: data.asistieron, color: 'bg-teal-500', manual: true },
     { label: 'Cerrados', valor: data.cerrados, color: 'bg-gold-400', manual: false },
   ];
-  const puedeEditar = usePuede('editar');
 
   return (
     <div>

@@ -13,11 +13,11 @@ export function VistaMarketing() {
   const { data, isLoading } = useDashboard();
   const { data: params } = useParametros();
   const [editar, setEditar] = useState(false);
+  const puedeEditar = usePuede('editar'); // hook: SIEMPRE antes de cualquier return (rules of hooks)
 
   if (isLoading || !data || !params)
     return <div className="flex min-h-[40vh] items-center justify-center"><Spinner className="h-8 w-8" /></div>;
 
-  const puedeEditar = usePuede('editar');
   const s = data.snapshot;
   return (
     <div>
