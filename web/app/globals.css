@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens institucionales como CSS vars (espejo de tailwind.config). */
+:root {
+  --navy: #0a1f44;
+  --navy-deep: #06122b;
+  --gold: #b8902f;
+  --gold-light: #c9a961;
+  --cream: #f5f1e8;
+  --cream-card: #fbf8f1;
+  --line-navy: rgba(201, 169, 97, 0.2);
+  --line-cream: rgba(10, 31, 68, 0.1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    /* Compensa la navbar sticky al saltar por anclas. */
+    scroll-padding-top: 5rem;
+  }
+
+  body {
+    @apply bg-cream font-sans text-navy antialiased;
+  }
+
+  ::selection {
+    background: var(--gold-light);
+    color: var(--navy-deep);
+  }
+
+  /* Accesibilidad: foco visible por teclado en toda interacción. */
+  :focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /* Etiqueta/eyebrow en monoespaciada para datos y rótulos. */
+  .eyebrow {
+    @apply font-mono text-xs font-medium uppercase tracking-[0.18em];
+  }
+
+  /* Contenedor central del sitio. */
+  .container-site {
+    @apply mx-auto w-full max-w-content px-5 sm:px-8;
+  }
+}
+
+/* Respeta la preferencia de movimiento reducido. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
