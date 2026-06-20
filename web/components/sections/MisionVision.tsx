@@ -3,7 +3,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 
 export function MisionVision() {
   return (
-    <section id="mision" className="bg-cream py-20 sm:py-24">
+    <section id="mision" aria-label="Quiénes somos" className="bg-cream py-20 sm:py-24">
       <div className="container-site">
         <SectionHeader
           eyebrow="Quiénes somos"

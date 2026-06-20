@@ -5,7 +5,7 @@ import { ContactForm } from './ContactForm';
 
 export function Contacto() {
   return (
-    <section id="contacto" className="bg-cream py-20 sm:py-24">
+    <section id="contacto" aria-label="Contacto" className="bg-cream py-20 sm:py-24">
       <div className="container-site">
         <SectionHeader
           eyebrow="Contacto"

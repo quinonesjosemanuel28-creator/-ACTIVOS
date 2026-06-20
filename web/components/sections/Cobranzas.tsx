@@ -4,7 +4,7 @@ import { Cta } from '@/components/ui/Cta';
 
 export function Cobranzas() {
   return (
-    <section id="cobranzas" className="bg-cream py-20 sm:py-24">
+    <section id="cobranzas" aria-label="Servicio de cobranzas" className="bg-cream py-20 sm:py-24">
       <div className="container-site">
         <SectionHeader
           eyebrow="Cobranzas"

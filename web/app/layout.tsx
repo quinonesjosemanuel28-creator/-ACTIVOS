@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Poppins, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { site } from '@/config/site';
+import { organizationJsonLd, websiteJsonLd } from '@/lib/jsonld';
 
 // Tipografía institucional: Poppins (display + cuerpo) e IBM Plex Mono (datos).
 const poppins = Poppins({
@@ -27,6 +28,16 @@ export const metadata: Metadata = {
     template: '%s · Activos Academy',
   },
   description: site.description,
+  // Términos reales que busca el público (sin keyword stuffing).
+  keywords: [
+    'formalizar préstamos',
+    'profesionalizar prestamista',
+    'software de gestión de préstamos',
+    'constituir SAS para prestar',
+    'cobranza extrajudicial',
+    'crédito en LATAM',
+    'Activos Academy',
+  ],
   alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
@@ -48,6 +59,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={`${poppins.variable} ${mono.variable}`}>
       <body>
+        {/* Datos estructurados Schema.org (Organization + WebSite). */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd()) }}
+        />
         {/* Accesibilidad: salto directo al contenido por teclado. */}
         <a
           href="#top"

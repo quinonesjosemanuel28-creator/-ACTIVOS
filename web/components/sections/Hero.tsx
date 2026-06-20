@@ -4,7 +4,7 @@ import { EcosystemDiagram } from '@/components/ui/EcosystemDiagram';
 
 export function Hero() {
   return (
-    <section id="top" className="relative overflow-hidden bg-navy">
+    <section id="top" aria-label="Presentación" className="relative overflow-hidden bg-navy">
       <div className="absolute inset-0 bg-gradient-to-b from-navy to-navy-deep" aria-hidden="true" />
 
       <div className="container-site relative grid gap-12 py-16 sm:py-20 lg:grid-cols-2 lg:items-center lg:py-24">

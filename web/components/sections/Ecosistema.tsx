@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 
 export function Ecosistema() {
   return (
-    <section id="ecosistema" className="bg-navy py-20 sm:py-24">
+    <section id="ecosistema" aria-label="El ecosistema integrado" className="bg-navy py-20 sm:py-24">
       <div className="container-site">
         <SectionHeader
           tone="dark"
