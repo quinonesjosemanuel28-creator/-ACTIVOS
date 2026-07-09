@@ -1,21 +1,4 @@
-# dependencias
-/node_modules
-
-# next.js
-/.next/
-/out/
-
-# producción
-/build
-
-# typescript / next
-*.tsbuildinfo
-next-env.d.ts
-
-# entorno (no commitear claves)
-.env
-.env*.local
-
-# sistema
-.DS_Store
+node_modules
+dist
 *.log
+.DS_Store

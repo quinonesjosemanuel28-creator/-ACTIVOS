@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# DOMINIO: reemplazar por masactivosholding.com al migrar.
+Sitemap: https://yellowgreen-zebra-591519.hostingersite.com/sitemap.xml
