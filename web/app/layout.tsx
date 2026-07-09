@@ -1,41 +1,37 @@
 import type { Metadata } from 'next';
-import { Poppins, IBM_Plex_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { site } from '@/config/site';
 import { organizationJsonLd, websiteJsonLd } from '@/lib/jsonld';
 
-// Tipografía institucional: Poppins (display + cuerpo) e IBM Plex Mono (datos).
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-poppins',
+// Satoshi: la única familia tipográfica del sistema (manual, cap. V).
+// Fuente variable 300–900, self-hosted.
+const satoshi = localFont({
+  src: './fonts/Satoshi-Variable.woff2',
+  weight: '300 900',
+  variable: '--font-satoshi',
   display: 'swap',
 });
 
-const mono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-mono',
-  display: 'swap',
-});
-
-const TITLE = 'Activos Academy | Profesionalizamos a los prestamistas de LATAM';
+const TITLE = '+Activos Holding | Profesionalizamos el dinero en Latinoamérica';
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: {
     default: TITLE,
-    template: '%s · Activos Academy',
+    template: '%s · +Activos Holding',
   },
   description: site.description,
-  // Términos reales que busca el público (sin keyword stuffing).
+  // Términos reales que busca el público (sin stuffing).
   keywords: [
-    'formalizar préstamos',
+    'holding financiero',
+    'educación financiera aplicada',
     'profesionalizar prestamista',
+    'formalizar préstamos',
     'software de gestión de préstamos',
     'constituir SAS para prestar',
-    'cobranza extrajudicial',
     'crédito en LATAM',
+    'Activos Holding',
     'Activos Academy',
   ],
   alternates: { canonical: '/' },
@@ -57,7 +53,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${poppins.variable} ${mono.variable}`}>
+    <html lang="es" className={satoshi.variable}>
       <body>
         {/* Datos estructurados Schema.org (Organization + WebSite). */}
         <script
@@ -71,7 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Accesibilidad: salto directo al contenido por teclado. */}
         <a
           href="#top"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-gold focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-navy-deep"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-gold focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-navy-deep"
         >
           Saltar al contenido
         </a>

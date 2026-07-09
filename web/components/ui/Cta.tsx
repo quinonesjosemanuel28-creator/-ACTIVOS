@@ -1,16 +1,18 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-type Variant = 'primary' | 'secondary' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'hero';
 
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-medium transition-colors duration-200';
+  'inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-bold transition-colors duration-200';
 
 const variants: Record<Variant, string> = {
-  // Acento principal — usar con moderación (un CTA primario por bloque).
+  // Dorado: acento principal para CTA (color · marca madre).
   primary: 'bg-gold text-navy-deep hover:bg-gold-light',
-  secondary: 'border border-gold-light/40 text-cream hover:border-gold-light hover:bg-white/5',
-  ghost: 'text-navy hover:text-gold underline-offset-4 hover:underline',
+  // Contorno sutil sobre navy.
+  secondary: 'border border-gold-light/40 text-warm hover:border-gold-light hover:bg-white/5',
+  // Botón blanco del héroe (mockup web institucional del manual).
+  hero: 'bg-warm text-navy hover:bg-white',
 };
 
 type Props = {

@@ -16,7 +16,7 @@ const PAISES = [
 type Status = 'idle' | 'sending' | 'success' | 'error';
 
 const inputCls =
-  'w-full rounded-md border border-line-cream bg-white px-3.5 py-2.5 text-sm text-navy placeholder:text-navy/40 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold';
+  'w-full rounded-md border border-line-warm bg-white px-3.5 py-2.5 text-sm text-navy placeholder:text-navy/40 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold';
 const labelCls = 'eyebrow mb-1.5 block text-navy/60';
 
 export function ContactForm() {
@@ -29,12 +29,10 @@ export function ContactForm() {
     const form = e.currentTarget;
     const data = new FormData(form);
 
-    // Sin endpoint configurado: feedback claro y derivación a WhatsApp/email.
+    // Sin endpoint configurado: mensaje claro y derivación a WhatsApp/email.
     if (!endpoint) {
       setStatus('error');
-      setError(
-        'El formulario todavía no está conectado. Escribinos por WhatsApp o email mientras tanto.',
-      );
+      setError('El formulario todavía no está conectado. Escríbenos por WhatsApp o email mientras tanto.');
       return;
     }
 
@@ -51,14 +49,11 @@ export function ContactForm() {
       } else {
         const json = await res.json().catch(() => null);
         setStatus('error');
-        setError(
-          json?.errors?.[0]?.message ??
-            'No pudimos enviar tu mensaje. Probá de nuevo en un momento.',
-        );
+        setError(json?.errors?.[0]?.message ?? 'No pudimos enviar tu mensaje. Inténtalo de nuevo en un momento.');
       }
     } catch {
       setStatus('error');
-      setError('Hubo un problema de conexión. Probá de nuevo o escribinos por WhatsApp.');
+      setError('Hubo un problema de conexión. Inténtalo de nuevo o escríbenos por WhatsApp.');
     }
   }
 
@@ -66,19 +61,19 @@ export function ContactForm() {
     return (
       <div
         role="status"
-        className="flex h-full flex-col items-start justify-center rounded-md border border-line-cream bg-cream-card p-7"
+        className="flex h-full flex-col items-start justify-center rounded-lg border border-line-warm bg-warm-card p-7"
       >
         <CheckCircle2 className="h-9 w-9 text-gold" aria-hidden="true" />
-        <h3 className="mt-4 font-display text-xl font-semibold text-navy">
-          ¡Gracias! Recibimos tu mensaje.
+        <h3 className="mt-4 font-display text-xl font-bold text-navy">
+          Gracias. Recibimos tu mensaje.
         </h3>
         <p className="mt-2 text-sm leading-relaxed text-navy/70">
-          Te vamos a responder a la brevedad. Si querés una respuesta más rápida, escribinos por{' '}
+          Te vamos a responder a la brevedad. Si quieres una respuesta más rápida, escríbenos por{' '}
           <a
             href={contact.whatsapp}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-gold underline-offset-2 hover:underline"
+            className="font-bold text-gold underline-offset-2 hover:underline"
           >
             WhatsApp
           </a>
@@ -91,7 +86,7 @@ export function ContactForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       {/* Asunto del email que recibe el equipo (Formspree). */}
-      <input type="hidden" name="_subject" value="Nuevo contacto desde activosacademy.com" />
+      <input type="hidden" name="_subject" value="Nuevo contacto desde la web de +Activos Holding" />
 
       <div>
         <label htmlFor="nombre" className={labelCls}>
@@ -113,7 +108,7 @@ export function ContactForm() {
         </label>
         <select id="pais" name="pais" required defaultValue="" className={inputCls}>
           <option value="" disabled>
-            Elegí tu país
+            Elige tu país
           </option>
           {PAISES.map((p) => (
             <option key={p} value={p}>
@@ -140,7 +135,7 @@ export function ContactForm() {
       <button
         type="submit"
         disabled={status === 'sending'}
-        className="inline-flex items-center justify-center gap-2 rounded-md bg-navy px-5 py-3 text-sm font-medium text-cream transition-colors hover:bg-navy-deep disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center justify-center gap-2 rounded-md bg-navy px-5 py-3 text-sm font-bold text-warm transition-colors hover:bg-navy-deep disabled:cursor-not-allowed disabled:opacity-60"
       >
         {status === 'sending' && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
         {status === 'sending' ? 'Enviando…' : 'Enviar mensaje'}

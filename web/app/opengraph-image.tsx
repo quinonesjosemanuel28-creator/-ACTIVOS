@@ -1,12 +1,21 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { ImageResponse } from 'next/og';
 
-// Imagen Open Graph diseñada en marca (navy/gold) — 1200×630.
-// Next la usa para og:image y twitter:image automáticamente.
-export const alt = 'Activos Academy — Profesionalizamos a los prestamistas de Latinoamérica';
+// Imagen Open Graph en marca (navy/dorado, Satoshi real) — 1200×630.
+export const alt = '+Activos Holding — Profesionalizamos el dinero en Latinoamérica';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-export default function OpengraphImage() {
+export default async function OpengraphImage() {
+  // Satoshi estático en .woff (satori no soporta woff2). Lectura por FS:
+  // la ruta se prerenderiza en build, donde app/fonts existe en el proyecto.
+  const fontsDir = path.join(process.cwd(), 'app', 'fonts');
+  const [bold, black] = await Promise.all([
+    readFile(path.join(fontsDir, 'Satoshi-Bold.woff')),
+    readFile(path.join(fontsDir, 'Satoshi-Black.woff')),
+  ]);
+
   return new ImageResponse(
     (
       <div
@@ -16,55 +25,75 @@ export default function OpengraphImage() {
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          backgroundColor: '#0A1F44',
+          background: 'linear-gradient(180deg, #10305E 0%, #0A1F44 45%, #06122B 100%)',
           padding: '72px',
-          fontFamily: 'sans-serif',
+          fontFamily: 'Satoshi',
         }}
       >
-        {/* Lockup del logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+        {/* Lockup del logo: isotipo + Activos + bajada */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <div
             style={{
               display: 'flex',
-              alignItems: 'flex-end',
-              gap: '5px',
-              width: '56px',
-              height: '56px',
-              backgroundColor: 'rgba(245,241,232,0.08)',
-              border: '1px solid #C9A961',
-              borderRadius: '10px',
-              padding: '12px',
-              boxSizing: 'border-box',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '64px',
+              height: '64px',
+              background: 'linear-gradient(135deg, #C9A961 0%, #B8902F 100%)',
+              borderRadius: '16px',
+              position: 'relative',
             }}
           >
-            <div style={{ width: '7px', height: '14px', backgroundColor: '#C9A961', borderRadius: '2px' }} />
-            <div style={{ width: '7px', height: '22px', backgroundColor: '#C9A961', borderRadius: '2px' }} />
-            <div style={{ width: '7px', height: '30px', backgroundColor: '#B8902F', borderRadius: '2px' }} />
+            {/* Signo + */}
+            <div style={{ position: 'absolute', width: '8px', height: '32px', backgroundColor: '#0A1F44', borderRadius: '2px' }} />
+            <div style={{ position: 'absolute', width: '32px', height: '8px', backgroundColor: '#0A1F44', borderRadius: '2px' }} />
           </div>
-          <div style={{ display: 'flex', fontSize: '30px', color: '#F5F1E8', fontWeight: 600 }}>
-            Activos Academy
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', fontSize: '34px', color: '#F8F7F3', fontWeight: 900 }}>
+              Activos
+            </div>
+            <div style={{ display: 'flex', fontSize: '13px', letterSpacing: '7px', color: '#C9A961', fontWeight: 700, marginTop: '2px' }}>
+              HOLDING
+            </div>
           </div>
         </div>
 
         {/* Eyebrow + claim */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', fontSize: '22px', letterSpacing: '4px', color: '#C9A961', marginBottom: '20px' }}>
-            PRESENTES EN +5 PAÍSES DE LATAM
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '22px' }}>
+            <div style={{ display: 'flex', width: '36px', height: '2px', backgroundColor: '#B8902F' }} />
+            <div style={{ display: 'flex', fontSize: '21px', letterSpacing: '5px', color: '#C9A961', fontWeight: 700 }}>
+              HOLDING FINANCIERO · LATINOAMÉRICA
+            </div>
           </div>
-          <div style={{ display: 'flex', fontSize: '62px', lineHeight: 1.1, color: '#F5F1E8', fontWeight: 700, maxWidth: '920px' }}>
-            Profesionalizamos a los prestamistas de Latinoamérica.
+          <div style={{ display: 'flex', flexWrap: 'wrap', fontSize: '64px', lineHeight: 1.08, color: '#F8F7F3', fontWeight: 900, maxWidth: '980px' }}>
+            Profesionalizamos el dinero en&nbsp;
+            <span style={{ color: '#C9A961' }}>Latinoamérica.</span>
           </div>
         </div>
 
-        {/* Las 4 áreas del ecosistema */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ display: 'flex', width: '48px', height: '3px', backgroundColor: '#B8902F' }} />
-          <div style={{ display: 'flex', fontSize: '24px', color: 'rgba(245,241,232,0.75)' }}>
-            Educación · Legal y contable · Tecnología · Cobranzas
-          </div>
+        {/* Las 4 unidades con sus acentos */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '28px', fontSize: '22px', fontWeight: 700 }}>
+          {[
+            { n: 'Academy', c: '#C9A961' },
+            { n: 'Financiera', c: '#7A9BD1' },
+            { n: 'Legal & Contable', c: '#6FA88C' },
+            { n: 'Software', c: '#2BB89C' },
+          ].map((u, i) => (
+            <div key={u.n} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', width: '10px', height: '10px', borderRadius: '5px', backgroundColor: u.c }} />
+              <div style={{ display: 'flex', color: 'rgba(248,247,243,0.8)' }}>{u.n}</div>
+            </div>
+          ))}
         </div>
       </div>
     ),
-    { ...size },
+    {
+      ...size,
+      fonts: [
+        { name: 'Satoshi', data: bold, weight: 700, style: 'normal' },
+        { name: 'Satoshi', data: black, weight: 900, style: 'normal' },
+      ],
+    },
   );
 }

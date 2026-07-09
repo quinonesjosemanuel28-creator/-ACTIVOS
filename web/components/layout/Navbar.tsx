@@ -16,17 +16,17 @@ export function Navbar() {
         className="container-site flex h-16 items-center justify-between"
         aria-label="Navegación principal"
       >
-        <Link href="#top" aria-label="Activos Academy — inicio">
+        <Link href="#top" aria-label="+Activos Holding — inicio">
           <Logo variant="dark" />
         </Link>
 
-        {/* Enlaces — desktop */}
+        {/* Enlaces — desktop (orden del mockup del manual) */}
         <ul className="hidden items-center gap-7 md:flex">
           {nav.map((item) => (
             <li key={item.href}>
               <Link
                 href={item.href}
-                className="text-sm text-cream/80 transition-colors hover:text-gold-light"
+                className="text-sm text-warm/80 transition-colors hover:text-gold-light"
               >
                 {item.label}
               </Link>
@@ -34,19 +34,13 @@ export function Navbar() {
           ))}
         </ul>
 
-        {/* CTAs — desktop */}
-        <div className="hidden items-center gap-3 md:flex">
-          <Link
-            href="#contacto"
-            className="rounded-md border border-gold-light/40 px-4 py-2 text-sm font-medium text-cream transition-colors hover:border-gold-light"
-          >
-            Unirme
-          </Link>
+        {/* CTA — desktop */}
+        <div className="hidden md:block">
           <a
             href={contact.whatsapp}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-navy-deep transition-colors hover:bg-gold-light"
+            className="rounded-md bg-gold px-4 py-2 text-sm font-bold text-navy-deep transition-colors hover:bg-gold-light"
           >
             WhatsApp
           </a>
@@ -56,7 +50,7 @@ export function Navbar() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="text-cream md:hidden"
+          className="text-warm md:hidden"
           aria-expanded={open}
           aria-controls="menu-mobile"
           aria-label={open ? 'Cerrar menú' : 'Abrir menú'}
@@ -79,25 +73,18 @@ export function Navbar() {
               <Link
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="block rounded px-2 py-2.5 text-sm text-cream/85 hover:bg-white/5 hover:text-gold-light"
+                className="block rounded px-2 py-2.5 text-sm text-warm/85 hover:bg-white/5 hover:text-gold-light"
               >
                 {item.label}
               </Link>
             </li>
           ))}
-          <li className="mt-2 flex gap-3 px-2">
-            <Link
-              href="#contacto"
-              onClick={() => setOpen(false)}
-              className="flex-1 rounded-md border border-gold-light/40 px-4 py-2.5 text-center text-sm font-medium text-cream"
-            >
-              Unirme
-            </Link>
+          <li className="mt-2 px-2">
             <a
               href={contact.whatsapp}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 rounded-md bg-gold px-4 py-2.5 text-center text-sm font-medium text-navy-deep"
+              className="block rounded-md bg-gold px-4 py-2.5 text-center text-sm font-bold text-navy-deep"
             >
               WhatsApp
             </a>

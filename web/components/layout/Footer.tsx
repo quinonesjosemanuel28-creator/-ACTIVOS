@@ -12,10 +12,10 @@ export function Footer() {
       <div className="container-site grid gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
         {/* Marca + descripción */}
         <div>
-          <Logo variant="dark" />
-          <p className="mt-4 max-w-xs text-sm leading-relaxed text-cream/60">
-            La cabecera de un ecosistema integrado que profesionaliza y formaliza a los
-            prestamistas de Latinoamérica.
+          <Logo variant="dark" withBajada />
+          <p className="mt-5 max-w-xs text-sm leading-relaxed text-warm/60">
+            Holding financiero con presencia en Latinoamérica: formación, capital, estructura y
+            tecnología en un solo ecosistema.
           </p>
         </div>
 
@@ -27,7 +27,7 @@ export function Footer() {
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="text-sm text-cream/70 transition-colors hover:text-gold-light"
+                  className="text-sm text-warm/70 transition-colors hover:text-gold-light"
                 >
                   {item.label}
                 </Link>
@@ -39,7 +39,7 @@ export function Footer() {
         {/* Contacto */}
         <div>
           <h2 className="eyebrow text-gold-light">Contacto</h2>
-          <ul className="mt-4 space-y-3 text-sm text-cream/70">
+          <ul className="mt-4 space-y-3 text-sm text-warm/70">
             <li className="flex items-start gap-2.5">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold-light/70" aria-hidden="true" />
               <span>{contact.addressFull}</span>
@@ -60,7 +60,7 @@ export function Footer() {
                     href={s.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-cream/70 hover:text-gold-light"
+                    className="text-sm text-warm/70 hover:text-gold-light"
                   >
                     {s.label}
                   </a>
@@ -72,9 +72,9 @@ export function Footer() {
       </div>
 
       <div className="border-t border-line-navy">
-        <div className="container-site flex flex-col items-center justify-between gap-2 py-5 text-xs text-cream/50 sm:flex-row">
+        <div className="container-site flex flex-col items-center justify-between gap-2 py-5 text-xs text-warm/50 sm:flex-row">
           <p>© {year} {site.name}</p>
-          <p>{contact.addressFull}</p>
+          <p>Holding financiero · Latinoamérica</p>
         </div>
       </div>
     </footer>

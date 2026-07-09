@@ -2,16 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Tokens institucionales como CSS vars (espejo de tailwind.config). */
+/* Tokens institucionales (Manual de Marca +Activos Holding v1.0). */
 :root {
   --navy: #0a1f44;
   --navy-deep: #06122b;
   --gold: #b8902f;
   --gold-light: #c9a961;
-  --cream: #f5f1e8;
-  --cream-card: #fbf8f1;
+  --warm: #f8f7f3;
+  --carbon: #15171f;
   --line-navy: rgba(201, 169, 97, 0.2);
-  --line-cream: rgba(10, 31, 68, 0.1);
+  --line-warm: rgba(10, 31, 68, 0.1);
 }
 
 @layer base {
@@ -22,7 +22,7 @@
   }
 
   body {
-    @apply bg-cream font-sans text-navy antialiased;
+    @apply bg-warm font-sans text-navy antialiased;
   }
 
   ::selection {
@@ -39,21 +39,49 @@
 }
 
 @layer components {
-  /* Etiqueta/eyebrow en monoespaciada para datos y rótulos. */
+  /* Eyebrow institucional: Satoshi medium, tracking amplio, con guión dorado. */
   .eyebrow {
-    @apply font-mono text-xs font-medium uppercase tracking-[0.18em];
+    @apply text-xs font-medium uppercase tracking-[0.2em];
+  }
+
+  .eyebrow-dash::before {
+    content: '';
+    @apply mr-3 inline-block h-px w-7 -translate-y-1 bg-gold;
   }
 
   /* Contenedor central del sitio. */
   .container-site {
     @apply mx-auto w-full max-w-content px-5 sm:px-8;
   }
+
+  /* Gradiente de impacto (portadas/héroes del manual). */
+  .bg-impact {
+    background: linear-gradient(180deg, #10305e 0%, var(--navy) 45%, var(--navy-deep) 100%);
+  }
+}
+
+/* Animaciones de entrada al hacer scroll (manual · web institucional). */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s ease-out,
+    transform 0.6s ease-out;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
 }
 
 /* Respeta la preferencia de movimiento reducido. */
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
   *,
   *::before,

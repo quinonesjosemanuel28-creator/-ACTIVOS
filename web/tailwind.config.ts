@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
-// Sistema de diseño Activos Academy — tokens institucionales exactos.
-// Navy dominante · gold con restricción · cream para lectura.
+// Sistema de diseño +Activos Holding — tokens exactos del Manual de Marca v1.0.
+// Navy dominante (60) · blanco cálido (30) · dorado de acento (10).
 const config: Config = {
   content: [
     './app/**/*.{ts,tsx}',
@@ -12,42 +12,41 @@ const config: Config = {
     extend: {
       colors: {
         navy: {
-          DEFAULT: '#0A1F44', // institucional primario
-          deep: '#06122B', // profundidad, footer, métricas
+          DEFAULT: '#0A1F44', // primario: fondos de impacto, texto, logo
+          deep: '#06122B', // profundidad de gradientes y footer
         },
         gold: {
-          DEFAULT: '#B8902F', // acento principal (con moderación)
-          light: '#C9A961', // acento secundario, líneas, hovers
+          DEFAULT: '#B8902F', // acento principal: líneas, detalles, CTA
+          light: '#C9A961', // variante del dorado sobre fondo oscuro
         },
-        cream: {
-          DEFAULT: '#F5F1E8', // fondo de lectura, papel
-          card: '#FBF8F1', // tarjetas sobre cream
+        warm: {
+          DEFAULT: '#F8F7F3', // blanco cálido: fondo claro dominante
+          card: '#FFFFFF', // tarjetas sobre blanco cálido
+        },
+        carbon: '#15171F', // paneles del software y modo oscuro
+        // Acentos por unidad (arquitectura de marca)
+        unit: {
+          academy: '#B8902F',
+          financiera: '#3F65A6',
+          legal: '#24503C',
+          software: '#2BB89C',
         },
         'line-navy': 'rgba(201,169,97,.20)', // divisores sobre navy
-        'line-cream': 'rgba(10,31,68,.10)', // divisores sobre cream
+        'line-warm': 'rgba(10,31,68,.10)', // divisores sobre blanco cálido
       },
       fontFamily: {
-        sans: ['var(--font-poppins)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-poppins)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        // Satoshi: una sola familia para todo el sistema (variable 300–900).
+        sans: ['var(--font-satoshi)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-satoshi)', 'system-ui', 'sans-serif'],
       },
       maxWidth: {
         content: '1200px',
       },
       borderRadius: {
-        // Bordes sutiles: 2–6px máximo (sin radios exagerados).
         sm: '2px',
         DEFAULT: '4px',
         md: '6px',
-      },
-      keyframes: {
-        'fade-up': {
-          '0%': { opacity: '0', transform: 'translateY(16px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-      },
-      animation: {
-        'fade-up': 'fade-up .6s ease-out both',
+        lg: '10px', // tarjetas grandes (manual usa radios algo mayores en cards)
       },
     },
   },

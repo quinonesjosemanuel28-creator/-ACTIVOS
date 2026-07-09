@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-// Apple touch icon (180×180) generado con el isotipo sobre navy.
+// Apple touch icon (180×180): el isotipo «+» sobre el dorado institucional.
 export const size = { width: 180, height: 180 };
 export const contentType = 'image/png';
 
@@ -12,17 +12,15 @@ export default function AppleIcon() {
           width: '100%',
           height: '100%',
           display: 'flex',
-          alignItems: 'flex-end',
+          alignItems: 'center',
           justifyContent: 'center',
-          gap: '14px',
-          backgroundColor: '#0A1F44',
-          padding: '52px',
-          boxSizing: 'border-box',
+          background: 'linear-gradient(135deg, #C9A961 0%, #B8902F 100%)',
+          borderRadius: '40px',
+          position: 'relative',
         }}
       >
-        <div style={{ width: '20px', height: '38px', backgroundColor: '#C9A961', borderRadius: '5px' }} />
-        <div style={{ width: '20px', height: '62px', backgroundColor: '#C9A961', borderRadius: '5px' }} />
-        <div style={{ width: '20px', height: '86px', backgroundColor: '#B8902F', borderRadius: '5px' }} />
+        <div style={{ position: 'absolute', width: '24px', height: '96px', backgroundColor: '#0A1F44', borderRadius: '6px' }} />
+        <div style={{ position: 'absolute', width: '96px', height: '24px', backgroundColor: '#0A1F44', borderRadius: '6px' }} />
       </div>
     ),
     { ...size },
