@@ -28,16 +28,17 @@ npm run preview   # sirve /dist localmente
    `dist`, su contenido) a `public_html`.
 5. Verificar que `index.html` quede en la **raíz** de `public_html`.
 
-## Cambio de dominio (temporal → definitivo)
+## Dominio
 
-Hoy el sitio vive en `yellowgreen-zebra-591519.hostingersite.com`. Al migrar a
-`masactivosholding.com`, reemplazar el dominio en estos 3 lugares y rebuildear:
+El sitio vive en **`plusactivosholding.com`**. Si algún día cambia, reemplazar
+el dominio en estos 3 lugares y rebuildear:
 
 - `index.html` (canonical + og:/twitter: + JSON-LD — bloque comentado en el `<head>`)
 - `public/robots.txt`
 - `public/sitemap.xml`
 
-`grep -r "yellowgreen-zebra" .` no debe devolver nada después del cambio.
+Verificación: `grep -rn "plusactivosholding" index.html public/` debe listar
+todas las apariciones, y no debe quedar ninguna del dominio anterior.
 
 ## Escena 3D del hero (la única del sitio)
 
