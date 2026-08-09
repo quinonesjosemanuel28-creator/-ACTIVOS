@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Dominio del sitio.
+Sitemap: https://plusactivosholding.com/sitemap.xml
