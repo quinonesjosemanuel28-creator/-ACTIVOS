@@ -9,6 +9,7 @@
     "dev:web": "vite",
     "dev:api": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
+    "build:calculadora": "node calculadora/build.mjs",
     "preview": "vite preview",
     "seed": "tsx server/scripts/seed.ts",
     "backfill:closer": "tsx server/scripts/backfill-closer-pagos.ts",

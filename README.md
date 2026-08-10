@@ -131,6 +131,64 @@ El **selector de mes** (arriba) es el driver maestro: cambiarlo recalcula todo.
 
 ---
 
+## 🧮 Calculadora de Márgenes (herramienta de closers)
+
+Herramienta **aparte del dashboard**, pensada para que el closer la use en vivo
+con el lead: carga los números que el prestamista tiene hoy, mueve las palancas
+del sistema +Activos y le muestra en la misma pantalla cuánta utilidad está
+dejando sobre la mesa.
+
+```bash
+npm run build:calculadora
+```
+
+Genera dos archivos en `calculadora/publicar/`:
+
+| Archivo | Para qué |
+|---|---|
+| `calculadora-margenes.html` | Documento completo. Se abre con doble clic o se sube a cualquier hosting. |
+| `artifact.html` | El mismo contenido como fragmento, para publicar como página compartible. |
+
+**Un solo archivo, sin internet.** La tipografía va embebida en base64 y el
+JavaScript compilado se inyecta en línea: no hace una sola request externa.
+Abre en la casa del cliente, en un coworking o con el wifi de un bar.
+
+### Qué hace
+
+- **Cuatro palancas**: mora e incobrables, tasa de interés, rotación del
+  capital, y gastos + apalancamiento. Cada una con su deslizador para moverla
+  delante del cliente.
+- **Objetivo auto-sugerido**: con solo cargar los datos de hoy ya hay una
+  propuesta arriba de la mesa (mora e incobrables a un tercio, dos puntos más
+  de tasa). En cuanto el closer edita un campo, ese campo deja de sugerirse.
+- **Waterfall de atribución**: cuánto aporta cada palanca por separado. La suma
+  da exactamente la diferencia total, sin residuos que explicar en la llamada.
+- **Modo presentación** para compartir pantalla, selector ARS/USD, resumen
+  copiable para mandar por WhatsApp, e impresión a PDF para dejarle al cliente.
+- Todo queda guardado en el navegador: si se recarga, no se pierde la carga.
+
+### Motor de cálculo
+
+La matemática vive en `src/domain/calculadora/margenes.ts` — TypeScript puro,
+sin dependencias, con 30 tests. Los supuestos están declarados y son
+deliberadamente conservadores: cartera constante, tasa flat mensual, la mora no
+genera interés extra (solo inmoviliza capital y estira el ciclo), y el
+incobrable pega dos veces (no paga interés **y** se lleva el capital).
+
+Hereda la regla de gobierno del tablero: división por cero devuelve `null` y la
+pantalla muestra "—". Cero NaN.
+
+| Archivo | Rol |
+|---|---|
+| `src/domain/calculadora/margenes.ts` | El motor. Puro y testeado. |
+| `calculadora/texto.ts` | Parser tolerante de lo que se tipea en vivo ("1.500", "12,5", "$ 15.000.000"). |
+| `calculadora/app.ts` | Interfaz: lee del DOM, formatea y dibuja. |
+| `calculadora/plantilla.html` | Markup y estilos (identidad navy/oro del tablero). |
+| `calculadora/build.mjs` | Empaqueta todo en el archivo único. |
+
+> La pantalla aclara que es una **proyección estimada** sobre los datos que
+> declara el cliente, no una promesa de resultados.
+
 ## 🗄️ Modelo de datos (SQLite)
 
 Tres tablas transaccionales (`ventas`, `cobros`, `egresos`) + `parametros`,

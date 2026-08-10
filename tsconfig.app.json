@@ -28,5 +28,5 @@
       "@ui/*": ["src/ui/*"]
     }
   },
-  "include": ["src/ui", "src/domain"]
+  "include": ["src/ui", "src/domain", "calculadora"]
 }

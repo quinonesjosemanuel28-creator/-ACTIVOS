@@ -1,0 +1,706 @@
+<title>Calculadora de Márgenes · +Activos</title>
+<style>
+  /* ═══════════════════════════════════════════════════════════════════
+     CALCULADORA DE MÁRGENES · +Activos Academy
+     Herramienta de closer: se opera en vivo y se comparte por pantalla.
+
+     Identidad heredada del tablero (tailwind.config.ts): navy profundo,
+     oro de acento, Fraunces para los títulos. Los números van en la sans
+     con cifras tabulares — Fraunces es para leer, no para alinear
+     columnas de plata.
+
+     Paleta de datos validada con el checker de dataviz contra las dos
+     superficies reales (blanco / navy oscuro): banda de luminosidad,
+     piso de croma, separación para daltonismo y contraste.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  @font-face {
+    font-family: "Fraunces";
+    src: url("data:font/woff2;base64,__FUENTE_BASE64__") format("woff2");
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  /* ─── Tokens · tema claro (estado por defecto) ─── */
+  :root {
+    color-scheme: light;
+
+    --tinta:      #0a1628;
+    --tinta-2:    #3d4f6b;
+    --tinta-3:    #6f7f9c;
+    --fondo:      #eaeff8;
+    --panel:      #ffffff;
+    --panel-2:    #f5f8fd;
+    --linea:      #dbe2f0;
+    --linea-2:    #c0cde4;
+    --oro:        #c9a227;
+    --oro-tinta:  #7a6115;
+    --oro-velo:   #fbf4de;
+    --verde:      #16a34a;
+    --rojo:       #dc2626;
+    --ambar:      #d97706;
+
+    /* Serie categórica — composición del interés cobrado. */
+    --serie-1:    #3f5cae;
+    --serie-2:    #0d9488;
+    --serie-3:    #c9a227;
+    --serie-4:    #b0416a;
+
+    /* Tinta de la etiqueta que va ENCIMA de cada relleno: se elige por
+       contraste contra ese relleno, no contra el fondo de la página. */
+    --sobre-serie-1: #ffffff;
+    --sobre-serie-2: #06231f;
+    --sobre-serie-3: #2a2003;
+    --sobre-serie-4: #ffffff;
+
+    --sombra:     0 1px 2px rgba(10, 22, 40, .05), 0 10px 30px rgba(10, 22, 40, .07);
+    --sombra-alta:0 2px 6px rgba(10, 22, 40, .08), 0 18px 44px rgba(10, 22, 40, .11);
+    --radio:      14px;
+    --radio-s:    10px;
+
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --display: "Fraunces", Georgia, "Times New Roman", serif;
+  }
+
+  /* ─── Tokens · tema oscuro por preferencia del sistema ───
+     Guardado con :not([data-theme="light"]) para que una elección
+     explícita de tema claro le gane al sistema. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+
+      --tinta:      #eef2fb;
+      --tinta-2:    #aab8d4;
+      --tinta-3:    #7e8dac;
+      --fondo:      #060d1a;
+      --panel:      #0d1b33;
+      --panel-2:    #122340;
+      --linea:      #1e3255;
+      --linea-2:    #2c4674;
+      --oro:        #d9b54a;
+      --oro-tinta:  #e8cf80;
+      --oro-velo:   #2a2210;
+      --verde:      #4ade80;
+      --rojo:       #f87171;
+      --ambar:      #fbbf24;
+
+      --serie-1:    #5f7fcc;
+      --serie-2:    #14a99a;
+      --serie-3:    #b3901f;
+      --serie-4:    #c65a83;
+
+      --sobre-serie-1: #061020;
+      --sobre-serie-2: #04211d;
+      --sobre-serie-3: #241b02;
+      --sobre-serie-4: #2a0b16;
+
+      --sombra:     0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
+      --sombra-alta:0 2px 6px rgba(0, 0, 0, .45), 0 18px 44px rgba(0, 0, 0, .5);
+    }
+  }
+
+  /* ─── Tokens · tema oscuro elegido con el botón ─── */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --tinta:      #eef2fb;
+    --tinta-2:    #aab8d4;
+    --tinta-3:    #7e8dac;
+    --fondo:      #060d1a;
+    --panel:      #0d1b33;
+    --panel-2:    #122340;
+    --linea:      #1e3255;
+    --linea-2:    #2c4674;
+    --oro:        #d9b54a;
+    --oro-tinta:  #e8cf80;
+    --oro-velo:   #2a2210;
+    --verde:      #4ade80;
+    --rojo:       #f87171;
+    --ambar:      #fbbf24;
+
+    --serie-1:    #5f7fcc;
+    --serie-2:    #14a99a;
+    --serie-3:    #b3901f;
+    --serie-4:    #c65a83;
+
+    --sobre-serie-1: #061020;
+    --sobre-serie-2: #04211d;
+    --sobre-serie-3: #241b02;
+    --sobre-serie-4: #2a0b16;
+
+    --sombra:     0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
+    --sombra-alta:0 2px 6px rgba(0, 0, 0, .45), 0 18px 44px rgba(0, 0, 0, .5);
+  }
+
+  /* ─── Base ─── */
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--fondo);
+    color: var(--tinta);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; text-wrap: balance; }
+
+  button, input, select { font: inherit; color: inherit; }
+
+  :focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; border-radius: 4px; }
+
+  .tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+  .micro {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--tinta-3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  /* ─── Estructura ─── */
+  .marco { max-width: 1440px; margin: 0 auto; padding: 18px 20px 56px; }
+
+  .barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 16px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--linea);
+  }
+
+  .marca { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+
+  .marca-sello {
+    display: grid;
+    place-items: center;
+    width: 38px; height: 38px;
+    border-radius: 11px;
+    background: var(--tinta);
+    color: var(--oro);
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .marca h1 { font-size: 17px; line-height: 1.15; }
+  .marca p { margin: 1px 0 0; font-size: 11.5px; color: var(--tinta-3); }
+
+  .barra-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+  .boton {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--linea-2);
+    border-radius: var(--radio-s);
+    background: var(--panel);
+    color: var(--tinta-2);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .boton:hover { background: var(--panel-2); color: var(--tinta); border-color: var(--tinta-3); }
+  .boton--fuerte { background: var(--tinta); border-color: var(--tinta); color: var(--panel); }
+  .boton--fuerte:hover { background: var(--tinta-2); border-color: var(--tinta-2); color: var(--panel); }
+  .boton[aria-pressed="true"] { background: var(--oro-velo); border-color: var(--oro); color: var(--oro-tinta); }
+
+  .entrada-nombre {
+    height: 34px;
+    min-width: 190px;
+    padding: 0 11px;
+    border: 1px solid var(--linea-2);
+    border-radius: var(--radio-s);
+    background: var(--panel);
+    font-size: 13.5px;
+  }
+  .entrada-nombre::placeholder { color: var(--tinta-3); }
+
+  .selector-moneda {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid var(--linea-2);
+    border-radius: var(--radio-s);
+    background: var(--panel);
+  }
+  .selector-moneda button {
+    padding: 4px 11px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--tinta-3);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .selector-moneda button[aria-pressed="true"] { background: var(--tinta); color: var(--panel); }
+
+  .lienzo {
+    display: grid;
+    grid-template-columns: minmax(0, 430px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 1080px) {
+    .lienzo { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* ─── Tarjetas ─── */
+  .tarjeta {
+    background: var(--panel);
+    border: 1px solid var(--linea);
+    border-radius: var(--radio);
+    box-shadow: var(--sombra);
+  }
+  .tarjeta + .tarjeta { margin-top: 16px; }
+  .tarjeta-cab {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 15px 18px 0;
+  }
+  .tarjeta-cab h2 { font-size: 15.5px; }
+  .tarjeta-cab p { margin: 3px 0 0; font-size: 12.5px; color: var(--tinta-3); }
+  .tarjeta-cuerpo { padding: 14px 18px 18px; }
+
+  /* ─── Consola de carga ─── */
+  .grupo + .grupo { margin-top: 6px; border-top: 1px solid var(--linea); padding-top: 12px; }
+  .grupo-titulo { margin-bottom: 8px; }
+
+  .fila { padding: 7px 0; }
+  .fila + .fila { border-top: 1px dashed var(--linea); }
+
+  .fila-nombre { display: block; font-size: 13.5px; font-weight: 500; }
+  .fila-ayuda { display: block; font-size: 11.5px; color: var(--tinta-3); margin-top: 1px; }
+
+  .fila-campos { display: flex; gap: 8px; margin-top: 6px; }
+
+  /* En pantallas angostas los dos campos no entran uno al lado del otro sin
+     comerse los dígitos: se apilan. */
+  @media (max-width: 560px) {
+    .fila-campos { flex-direction: column; }
+  }
+
+  .campo {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    height: 38px;
+    padding: 0 9px;
+    border: 1px solid var(--linea-2);
+    border-radius: var(--radio-s);
+    background: var(--panel-2);
+    cursor: text;
+    transition: border-color .15s, background .15s;
+  }
+  .campo:focus-within { border-color: var(--oro); background: var(--panel); }
+  .campo--obj { border-color: var(--oro); background: var(--oro-velo); }
+
+  .campo-tag {
+    flex: none;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--tinta-3);
+    margin-right: 7px;
+  }
+  .campo--obj .campo-tag { color: var(--oro-tinta); }
+
+  .campo input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    text-align: right;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .campo input:focus { outline: none; }
+
+  .campo-sufijo { flex: none; margin-left: 4px; font-size: 12px; color: var(--tinta-3); }
+
+  .deslizador {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 20px;
+    margin-top: 4px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .deslizador::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--linea-2);
+  }
+  .deslizador::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--linea-2);
+  }
+  .deslizador::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px; height: 15px;
+    margin-top: -5.5px;
+    border: 2px solid var(--panel);
+    border-radius: 50%;
+    background: var(--oro);
+    box-shadow: 0 1px 3px rgba(10, 22, 40, .3);
+  }
+  .deslizador::-moz-range-thumb {
+    width: 15px; height: 15px;
+    border: 2px solid var(--panel);
+    border-radius: 50%;
+    background: var(--oro);
+  }
+
+  /* ─── Tablero de resultados ─── */
+  .tablero { position: sticky; top: 14px; }
+  @media (max-width: 1080px) { .tablero { position: static; } }
+
+  .heroe {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+  }
+  .heroe-lado { min-width: 0; }
+  .heroe-num {
+    margin: 4px 0 0;
+    font-size: clamp(22px, 2.7vw, 33px);
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .heroe-num--obj { color: var(--oro-tinta); }
+  .heroe-sub { display: block; margin-top: 3px; font-size: 12px; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+  .heroe-flecha { color: var(--tinta-3); font-size: 20px; line-height: 1; }
+
+  .delta {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--oro);
+    border-radius: var(--radio-s);
+    background: var(--oro-velo);
+  }
+  .delta-num {
+    margin: 4px 0 0;
+    font-size: clamp(26px, 3.4vw, 40px);
+    font-weight: 700;
+    letter-spacing: -.025em;
+    line-height: 1.02;
+    color: var(--oro-tinta);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .delta--negativo { border-color: var(--rojo); background: transparent; }
+  .delta--negativo .delta-num { color: var(--rojo); }
+  .delta-sub { margin: 5px 0 0; font-size: 13px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+
+  .metricas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    margin-top: 16px;
+    background: var(--linea);
+    border: 1px solid var(--linea);
+    border-radius: var(--radio-s);
+    overflow: hidden;
+  }
+  .metrica { padding: 10px 12px; background: var(--panel); }
+  .metrica-valores {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .metrica-hoy { font-size: 15px; font-weight: 600; color: var(--tinta-2); }
+  .metrica-flecha { font-size: 11px; color: var(--tinta-3); }
+  .metrica-obj { font-size: 17px; font-weight: 700; }
+  .metrica-obj--mejor { color: var(--verde); }
+  .metrica-obj--peor { color: var(--rojo); }
+  .metrica-obj--igual { color: var(--tinta-2); }
+
+  /* ─── Cascada de palancas ─── */
+  .cascada-fila { display: grid; grid-template-columns: 1fr; gap: 3px; padding: 5px 0; }
+  .cascada-fila + .cascada-fila { border-top: 1px solid var(--linea); }
+  .cascada-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .cascada-nombre { font-size: 13px; font-weight: 500; }
+  .cascada-fila--total .cascada-nombre { font-weight: 700; }
+  .cascada-valor { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cascada-pista { position: relative; height: 15px; border-radius: 4px; background: var(--panel-2); }
+  .cascada-barra { position: absolute; top: 0; height: 100%; min-width: 3px; border-radius: 4px; }
+  .cascada-cero {
+    position: absolute;
+    top: -2px; bottom: -2px;
+    width: 1px;
+    background: var(--linea-2);
+  }
+
+  .vacio { padding: 14px 0; font-size: 13px; color: var(--tinta-3); }
+
+  /* ─── Composición del interés ─── */
+  .comp-bloque + .comp-bloque { margin-top: 14px; }
+  .comp-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 5px; }
+  .comp-titulo { font-size: 12.5px; font-weight: 600; }
+  .comp-total { font-size: 12px; color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+  .comp-barra { display: flex; gap: 2px; height: 30px; }
+  .comp-seg {
+    display: grid;
+    place-items: center;
+    min-width: 2px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .leyenda { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 12px; }
+  .leyenda-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tinta-2); }
+  .leyenda-chip { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  /* ─── Retorno del programa ─── */
+  .roi-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+  .roi-campo { flex: 1 1 190px; min-width: 0; }
+  .roi-salida { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 14px; }
+  .roi-dato p { margin: 2px 0 0; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .roi-dato--fuerte p { color: var(--oro-tinta); }
+
+  /* ─── Nota metodológica ─── */
+  .metodo { margin-top: 16px; font-size: 12.5px; color: var(--tinta-3); }
+  .metodo summary { cursor: pointer; font-weight: 600; color: var(--tinta-2); }
+  .metodo ul { margin: 8px 0 0; padding-left: 18px; }
+  .metodo li { margin-bottom: 4px; }
+  .aviso { margin-top: 12px; font-size: 11.5px; color: var(--tinta-3); line-height: 1.45; }
+
+  /* ─── Resumen flotante (pantallas chicas) ─── */
+  .flotante {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 16px -20px -56px;
+    padding: 11px 20px;
+    border-top: 1px solid var(--oro);
+    background: var(--panel);
+    box-shadow: var(--sombra-alta);
+  }
+  .flotante p { margin: 0; font-size: 19px; font-weight: 700; color: var(--oro-tinta); font-variant-numeric: tabular-nums; }
+  @media (max-width: 1080px) { .flotante { display: flex; } }
+
+  /* ─── Modo presentación: la consola se va, el tablero manda ─── */
+  body.presentacion .consola,
+  body.presentacion .flotante { display: none; }
+  body.presentacion .lienzo { grid-template-columns: minmax(0, 1fr); }
+  body.presentacion .tablero { position: static; }
+  body.presentacion .heroe-num { font-size: clamp(30px, 4.4vw, 52px); }
+  body.presentacion .delta-num { font-size: clamp(38px, 6vw, 76px); }
+  body.presentacion .metrica-obj { font-size: 22px; }
+  body.presentacion .metrica-hoy { font-size: 17px; }
+
+  /* ─── Impresión: una hoja limpia para dejarle al cliente ─── */
+  @media print {
+    body { background: #ffffff; }
+    .barra-controles, .flotante, .metodo summary { display: none; }
+    .marco { max-width: none; padding: 0; }
+    .lienzo { grid-template-columns: 1fr; }
+    .tarjeta { box-shadow: none; border-color: #cbd5e1; break-inside: avoid; }
+    .tablero { position: static; }
+    .metodo[open] summary { display: none; }
+    .metodo { display: block; }
+  }
+</style>
+
+<div class="marco">
+  <header class="barra">
+    <div class="marca">
+      <span class="marca-sello" aria-hidden="true">+</span>
+      <div>
+        <h1>Calculadora de Márgenes</h1>
+        <p>+Activos Academy · herramienta de diagnóstico en vivo</p>
+      </div>
+    </div>
+
+    <div class="barra-controles">
+      <input id="nombreLead" class="entrada-nombre" type="text" placeholder="Nombre del cliente" aria-label="Nombre del cliente" autocomplete="off" />
+      <div class="selector-moneda" role="group" aria-label="Moneda">
+        <button type="button" id="monedaArs" aria-pressed="true">ARS</button>
+        <button type="button" id="monedaUsd" aria-pressed="false">USD</button>
+      </div>
+      <button type="button" class="boton" id="btnPresentacion" aria-pressed="false">Modo presentación</button>
+      <button type="button" class="boton" id="btnTema">Tema</button>
+      <button type="button" class="boton" id="btnCopiar">Copiar resumen</button>
+      <button type="button" class="boton" id="btnImprimir">Imprimir</button>
+      <button type="button" class="boton" id="btnNuevo">Nuevo cliente</button>
+    </div>
+  </header>
+
+  <div class="lienzo">
+    <!-- ─────────── Consola de carga ─────────── -->
+    <section class="consola" aria-label="Datos del negocio">
+      <div class="tarjeta">
+        <div class="tarjeta-cab">
+          <div>
+            <h2>Los números de hoy</h2>
+            <p>Cargá lo que te dice el cliente. La columna dorada es a dónde puede llegar.</p>
+          </div>
+        </div>
+        <div class="tarjeta-cuerpo">
+          <div id="grupos"></div>
+          <div class="barra-controles" style="margin-top: 14px;">
+            <button type="button" class="boton" id="btnSugerir">Sugerir objetivo</button>
+            <button type="button" class="boton" id="btnIgualar">Igualar al actual</button>
+            <button type="button" class="boton" id="btnEjemplo">Cargar ejemplo</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── Tablero de resultados ─────────── -->
+    <section class="tablero" aria-label="Resultado">
+      <div class="tarjeta">
+        <div class="tarjeta-cab">
+          <div>
+            <h2 id="tituloTablero">Utilidad neta anual</h2>
+            <p>Lo que le queda al bolsillo después de incobrables, costo del capital y gastos.</p>
+          </div>
+        </div>
+        <div class="tarjeta-cuerpo">
+          <div class="heroe">
+            <div class="heroe-lado">
+              <span class="micro">Como está hoy</span>
+              <p class="heroe-num tnum" id="utilHoy">—</p>
+              <span class="heroe-sub" id="utilHoyMes">—</span>
+            </div>
+            <div class="heroe-flecha" aria-hidden="true">→</div>
+            <div class="heroe-lado">
+              <span class="micro">Con el negocio ordenado</span>
+              <p class="heroe-num heroe-num--obj tnum" id="utilObj">—</p>
+              <span class="heroe-sub" id="utilObjMes">—</span>
+            </div>
+          </div>
+
+          <div class="delta" id="cajaDelta">
+            <span class="micro" id="deltaRotulo">Lo que está dejando sobre la mesa</span>
+            <p class="delta-num tnum" id="deltaAnual">—</p>
+            <p class="delta-sub tnum" id="deltaMes">—</p>
+          </div>
+
+          <div class="metricas" id="metricas"></div>
+        </div>
+      </div>
+
+      <div class="tarjeta">
+        <div class="tarjeta-cab">
+          <div>
+            <h2>De dónde sale la mejora</h2>
+            <p>Cada palanca medida por separado. La suma da exactamente la diferencia.</p>
+          </div>
+        </div>
+        <div class="tarjeta-cuerpo"><div id="cascada"></div></div>
+      </div>
+
+      <div class="tarjeta">
+        <div class="tarjeta-cab">
+          <div>
+            <h2>A dónde va la plata</h2>
+            <p>Cómo se reparte todo lo que entra por intereses.</p>
+          </div>
+        </div>
+        <div class="tarjeta-cuerpo">
+          <div id="composicion"></div>
+          <div class="leyenda" id="leyenda"></div>
+        </div>
+      </div>
+
+      <div class="tarjeta">
+        <div class="tarjeta-cab">
+          <div>
+            <h2>Retorno del programa</h2>
+            <p>Cuánto tarda la mejora en pagar la inversión.</p>
+          </div>
+          <button type="button" class="boton" id="btnRoi" aria-pressed="false" aria-controls="panelRoi">Mostrar</button>
+        </div>
+        <div class="tarjeta-cuerpo" id="panelRoi" hidden>
+          <div class="roi-form">
+            <label class="roi-campo">
+              <span class="micro">Inversión en el programa</span>
+              <span class="campo" style="margin-top: 5px;">
+                <span class="campo-tag" id="roiSimbolo">$</span>
+                <input type="text" inputmode="decimal" id="roiInversion" placeholder="0" autocomplete="off" />
+              </span>
+            </label>
+          </div>
+          <div class="roi-salida">
+            <div class="roi-dato roi-dato--fuerte">
+              <span class="micro">Se paga</span>
+              <p class="tnum" id="roiVeces">—</p>
+            </div>
+            <div class="roi-dato">
+              <span class="micro">Recupero</span>
+              <p class="tnum" id="roiMeses">—</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <details class="metodo">
+        <summary>Cómo se calcula</summary>
+        <ul>
+          <li><strong>Cartera constante:</strong> lo que vuelve se vuelve a prestar y lo que se pierde se repone. Por eso el incobrable se cuenta una vez por cada giro del capital, no una vez al año.</li>
+          <li><strong>Tasa flat mensual:</strong> el interés de un préstamo es capital × tasa × meses de plazo, como opera la mayoría del mercado.</li>
+          <li><strong>La mora no genera interés extra:</strong> el atraso solo inmoviliza capital y estira el ciclo. Si el cliente cobra punitorios, su realidad es mejor que la que muestra esta pantalla.</li>
+          <li><strong>El incobrable pega dos veces:</strong> esa cartera no paga intereses y además se lleva el capital.</li>
+          <li><strong>Orden de las palancas:</strong> cobranza, precio, rotación, gastos y capital. Cada una se mide sobre el escenario que dejó la anterior.</li>
+        </ul>
+        <p class="aviso">
+          Proyección estimada a partir de los datos declarados por el cliente en la llamada.
+          No constituye una promesa de resultados ni asesoramiento financiero.
+        </p>
+      </details>
+    </section>
+  </div>
+
+  <div class="flotante" id="flotante">
+    <div>
+      <span class="micro">Mejora anual proyectada</span>
+      <p class="tnum" id="flotanteValor">—</p>
+    </div>
+    <button type="button" class="boton boton--fuerte" id="btnFlotante">Ver tablero</button>
+  </div>
+</div>
+
+<script>__APP__</script>
