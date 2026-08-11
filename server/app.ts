@@ -9,9 +9,13 @@
  *  1. Rutas públicas: /api/health y /api/auth/login|logout (nada más).
  *  2. `autenticar`: TODO el resto de /api exige sesión válida (cookie
  *     HttpOnly). Sin sesión → 401, siempre.
- *  3. `requiere(accion)`: cada ruta de escritura declara su acción mínima
- *     según la matriz del dominio (LECTOR ve; EDITOR edita; ADMIN importa,
- *     resetea y gestiona usuarios).
+ *  3. `requiere(accion)`: cada ruta declara su acción mínima según la matriz
+ *     del dominio — las de LECTURA también, no solo las de escritura. Tener
+ *     sesión no alcanza para leer: el contable exige 'ver', y un CONSULTOR
+ *     (que no lo tiene) recibe 403 en todas ellas.
+ *  4. Ámbito por fila: qué filas alcanza la sesión sale de `alcanceDe(res)`
+ *     — del USUARIO, nunca de la query string. Los filtros que manda el
+ *     cliente son cosméticos: pueden achicar el resultado, jamás ensancharlo.
  */
 import { resolve } from 'node:path';
 import express from 'express';
@@ -19,9 +23,11 @@ import cors from 'cors';
 import { ZodError } from 'zod';
 import type { Infraestructura } from '../src/infrastructure/db/conexion';
 import {
+  alcanceDe,
   borrarCookieSesion,
   crearGuardias,
   crearLimitadorLogin,
+  exigirAmbitoTotal,
   setCookieSesion,
   tokenDe,
   usuarioDe,
@@ -73,7 +79,14 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   app.use(express.json({ limit: '50mb' }));
   app.use(express.raw({ type: ['application/octet-stream', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], limit: '50mb' }));
 
-  const filtroDe = (q: express.Request['query']): Filtro | undefined => {
+  /**
+   * Filtro del dashboard. La unidad de negocio la elige el cliente (es un
+   * recorte de presentación, no un permiso), pero antes se verifica que la
+   * sesión alcance TODAS las filas del contable: si algún día no fuera así,
+   * acá no habría con qué acotar y la consulta se corta.
+   */
+  const filtroDe = (q: express.Request['query'], res: express.Response): Filtro | undefined => {
+    exigirAmbitoTotal(alcanceDe(res), 'contable');
     const u = typeof q.unidad === 'string' ? q.unidad : undefined;
     return u ? { unidadNegocio: u as Filtro['unidadNegocio'] } : undefined;
   };
@@ -154,25 +167,28 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   app.post('/api/usuarios/:id/reactivar', requiere('gestionar_usuarios'), h((req) => uauth.reactivar(reposAuth, param(req, 'id'))));
   app.post('/api/usuarios/:id/reset-password', requiere('gestionar_usuarios'), h((req) => uauth.resetearPassword(reposAuth, param(req, 'id'))));
 
-  // ───────────────────── Lecturas (cualquier rol logueado: 'ver') ─────────────────────
+  // ───────────────────── Lecturas del contable (exigen 'ver') ─────────────────────
+  // Ojo: NO alcanza con estar logueado. Un CONSULTOR tiene sesión válida y no
+  // tiene 'ver' → 403 en todo este bloque.
 
-  app.get('/api/meses', h(() => uc.obtenerMeses(reposDash)));
+  app.get('/api/meses', requiere('ver'), h(() => uc.obtenerMeses(reposDash)));
 
   app.get(
     '/api/dashboard/:mes',
-    h((req) =>
+    requiere('ver'),
+    h((req, res) =>
       uc.obtenerDashboardDelMes(reposDash, param(req, 'mes'), {
-        filtro: filtroDe(req.query),
+        filtro: filtroDe(req.query, res),
         programa: (req.query.programa as 'TODOS' | Programa) ?? 'TODOS',
       }),
     ),
   );
 
-  app.get('/api/historico', h((req) => uc.obtenerHistorico(reposDash, filtroDe(req.query))));
+  app.get('/api/historico', requiere('ver'), h((req, res) => uc.obtenerHistorico(reposDash, filtroDe(req.query, res))));
 
-  app.get('/api/comparar/:mes', h((req) => uc.compararProgramas(reposDash, param(req, 'mes'), filtroDe(req.query))));
+  app.get('/api/comparar/:mes', requiere('ver'), h((req, res) => uc.compararProgramas(reposDash, param(req, 'mes'), filtroDe(req.query, res))));
 
-  app.get('/api/parametros', h(() => repos.parametros.obtener()));
+  app.get('/api/parametros', requiere('ver'), h(() => repos.parametros.obtener()));
   app.put('/api/parametros', requiere('editar'), h((req) => uc.guardarParametros(repos, req.body)));
 
   app.post('/api/ventas', requiere('editar'), h((req) => uc.agregarVenta(repos, req.body)));
@@ -185,21 +201,21 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
     moneda: typeof q.moneda === 'string' ? q.moneda : undefined,
     q: typeof q.q === 'string' ? q.q : undefined,
   });
-  app.get('/api/egresos', h((req) => uce.listarEgresos(reposEgresos, filtrosEgresosDe(req.query))));
-  app.get('/api/egresos/resumen/:mes', h((req) => uce.resumenEgresos(reposEgresos, param(req, 'mes'), filtrosEgresosDe(req.query))));
+  app.get('/api/egresos', requiere('ver'), h((req) => uce.listarEgresos(reposEgresos, filtrosEgresosDe(req.query))));
+  app.get('/api/egresos/resumen/:mes', requiere('ver'), h((req) => uce.resumenEgresos(reposEgresos, param(req, 'mes'), filtrosEgresosDe(req.query))));
   app.post('/api/egresos', requiere('editar'), h((req) => uce.crearEgreso(reposEgresos, req.body)));
   app.put('/api/egresos/:id', requiere('editar'), h((req) => uce.editarEgreso(reposEgresos, param(req, 'id'), req.body)));
   app.delete('/api/egresos/:id', requiere('editar'), h((req) => uce.eliminarEgreso(reposEgresos, param(req, 'id'))));
 
   // Comisiones (cálculo automático + liquidación idempotente)
-  app.get('/api/comisiones/liquidaciones', h(() => ucom.listarLiquidaciones(reposLiquidacion)));
-  app.get('/api/comisiones/:mes', h((req) => ucom.obtenerEstado(reposCierres, reposLiquidacion, param(req, 'mes'))));
+  app.get('/api/comisiones/liquidaciones', requiere('ver'), h(() => ucom.listarLiquidaciones(reposLiquidacion)));
+  app.get('/api/comisiones/:mes', requiere('ver'), h((req) => ucom.obtenerEstado(reposCierres, reposLiquidacion, param(req, 'mes'))));
   app.post('/api/comisiones/liquidar/:mes', requiere('editar'), h((req) =>
     ucom.liquidarComisiones(reposCierres, reposEgresos, reposLiquidacion, param(req, 'mes'), { reemplazar: req.body?.reemplazar === true }),
   ));
   app.delete('/api/comisiones/liquidar/:mes', requiere('editar'), h((req) => ucom.anularLiquidacion(reposEgresos, reposLiquidacion, param(req, 'mes'))));
 
-  app.get('/api/funnel/:mes', h((req) => ucf.obtenerFunnel(reposCierres, reposFunnelCanal, repos.funnel, param(req, 'mes'))));
+  app.get('/api/funnel/:mes', requiere('ver'), h((req) => ucf.obtenerFunnel(reposCierres, reposFunnelCanal, repos.funnel, param(req, 'mes'))));
   app.put('/api/funnel/:mes', requiere('editar'), h((req) => ucf.guardarFunnelCanales(reposFunnelCanal, param(req, 'mes'), req.body)));
 
   app.post('/api/cierre/:mes', requiere('editar'), h((req) => uc.cerrarMes(repos, param(req, 'mes'))));
@@ -216,18 +232,27 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   );
 
   // ───────────────────── Módulo "Cierres y Clientes" ─────────────────────
-  const filtrosCierresDe = (q: express.Request['query']): FiltrosCierres => ({
-    mes: typeof q.mes === 'string' ? q.mes : undefined,
-    programa: typeof q.programa === 'string' ? (q.programa as FiltrosCierres['programa']) : undefined,
-    closer: typeof q.closer === 'string' ? q.closer : undefined,
-    estado: typeof q.estado === 'string' ? (q.estado as FiltrosCierres['estado']) : undefined,
-    q: typeof q.q === 'string' ? q.q : undefined,
-    unidadNegocio: typeof q.unidad === 'string' ? q.unidad : undefined,
-  });
+  /**
+   * Filtros del listado de cierres. TODOS son cosméticos: acotan lo que el
+   * usuario ya tiene derecho a ver. `closer` incluido — es el nombre del
+   * closer en texto libre, no un titular ligado a `usuarios`, así que no
+   * sirve como control de acceso. El control real es 'ver' + ámbito total.
+   */
+  const filtrosCierresDe = (q: express.Request['query'], res: express.Response): FiltrosCierres => {
+    exigirAmbitoTotal(alcanceDe(res), 'cierres');
+    return {
+      mes: typeof q.mes === 'string' ? q.mes : undefined,
+      programa: typeof q.programa === 'string' ? (q.programa as FiltrosCierres['programa']) : undefined,
+      closer: typeof q.closer === 'string' ? q.closer : undefined,
+      estado: typeof q.estado === 'string' ? (q.estado as FiltrosCierres['estado']) : undefined,
+      q: typeof q.q === 'string' ? q.q : undefined,
+      unidadNegocio: typeof q.unidad === 'string' ? q.unidad : undefined,
+    };
+  };
 
-  app.get('/api/cierres', h((req) => ucc.listarCierresConPagos(reposCierres, filtrosCierresDe(req.query))));
-  app.get('/api/cierres/resumen/:mes', h((req) => ucc.resumenDelMes(reposCierres, param(req, 'mes'), filtrosCierresDe(req.query))));
-  app.get('/api/cierres/:id', h((req) => ucc.obtenerCierre(reposCierres, param(req, 'id'))));
+  app.get('/api/cierres', requiere('ver'), h((req, res) => ucc.listarCierresConPagos(reposCierres, filtrosCierresDe(req.query, res))));
+  app.get('/api/cierres/resumen/:mes', requiere('ver'), h((req, res) => ucc.resumenDelMes(reposCierres, param(req, 'mes'), filtrosCierresDe(req.query, res))));
+  app.get('/api/cierres/:id', requiere('ver'), h((req) => ucc.obtenerCierre(reposCierres, param(req, 'id'))));
   app.post('/api/cierres', requiere('editar'), h((req) => ucc.crearCierre(reposCierres, req.body)));
   app.put('/api/cierres/:id', requiere('editar'), h((req) => ucc.editarCierre(reposCierres, param(req, 'id'), req.body)));
   app.delete('/api/cierres/:id', requiere('editar'), h((req) => ucc.eliminarCierre(reposCierres, param(req, 'id'))));
@@ -236,9 +261,12 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   app.post('/api/cierres/importar', requiere('importar'), h((req) => ucc.importarCierresPagos(reposCierres, req.body)));
   app.delete('/api/cierres/:id/revisar', requiere('editar'), h((req) => ucc.quitarRevisar(reposCierres, param(req, 'id'))));
 
-  // Asistente IA (text-to-SQL de solo lectura: cualquier rol logueado).
-  app.get('/api/asistente/estado', (_req, res) => res.json({ disponible: asistenteDisponible() }));
-  app.post('/api/asistente', (req, res) => {
+  // Asistente IA (text-to-SQL de solo lectura sobre el contable → exige 'ver').
+  // Un CONSULTOR no llega acá: sería la puerta de atrás al contable, y además
+  // el SQL generado pasaría por encima del ámbito por fila. Por eso las tablas
+  // del módulo de alumnos siguen en TABLAS_SENSIBLES hasta el ticket 6.
+  app.get('/api/asistente/estado', requiere('ver'), (_req, res) => res.json({ disponible: asistenteDisponible() }));
+  app.post('/api/asistente', requiere('ver'), (req, res) => {
     ucia
       .responderPregunta(req.body?.pregunta)
       .then((r) => res.json(r))
@@ -246,7 +274,7 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   });
 
   // Cobranza y morosidad (deriva del plan de cuotas + pagos reales)
-  app.get('/api/cobranza', h(() => ucob.obtenerCobranza(reposCierres)));
+  app.get('/api/cobranza', requiere('ver'), h(() => ucob.obtenerCobranza(reposCierres)));
   app.post('/api/cierres/:id/inactivar', requiere('editar'), h((req) => ucc.marcarInactivo(reposCierres, param(req, 'id'))));
   app.delete('/api/cierres/:id/inactivar', requiere('editar'), h((req) => ucc.reactivar(reposCierres, param(req, 'id'))));
 

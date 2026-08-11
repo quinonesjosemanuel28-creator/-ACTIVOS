@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect } from 'react';
 import { accionesDe } from '@domain/auth/permisos';
 import { useMeses, useSesion } from './hooks';
+import { api } from './lib/api';
 import { useUI, ACCION_POR_VISTA } from './store';
 import { Sidebar, MobileNav } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
@@ -41,7 +42,35 @@ export function App() {
   // Sin sesión (401) → solo existe el login.
   if (!sesion.data) return <VistaLogin />;
 
+  // El Dashboard entero es contable. Un rol sin 'ver' (CONSULTOR) no tiene
+  // ninguna pantalla acá todavía: montarlo sería pedirle /api/meses y comerse
+  // un 403 por cada panel. Su panel llega con el módulo de alumnos.
+  if (!accionesDe(sesion.data.usuario.rol).includes('ver')) {
+    return <PanelEnConstruccion nombre={sesion.data.usuario.nombre} />;
+  }
+
   return <Dashboard />;
+}
+
+/** Rol sin acceso al contable y sin panel propio construido todavía. */
+function PanelEnConstruccion({ nombre }: { nombre: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="max-w-md text-center">
+        <h2 className="font-display text-2xl font-700 text-navy-900 dark:text-navy-50">Hola, {nombre}</h2>
+        <p className="mt-2 text-sm text-navy-500 dark:text-navy-300">
+          Tu panel de alumnos todavía está en construcción. Cuando esté listo vas a ver acá tu cartera,
+          los diagnósticos y el índice de claridad de cada alumno.
+        </p>
+        <button
+          onClick={() => void api.logout().finally(() => window.location.reload())}
+          className="mt-6 rounded-lg border border-navy-200 px-4 py-2 text-sm font-600 text-navy-700 hover:bg-navy-50 dark:border-navy-700 dark:text-navy-200 dark:hover:bg-navy-800"
+        >
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** El dashboard completo: solo se monta con sesión válida. */

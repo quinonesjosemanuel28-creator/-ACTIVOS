@@ -104,7 +104,7 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 |---|---|---|
 | 0 | Informe de exploración del repo | hecho |
 | 1 | Migraciones de las tablas del módulo | hecho |
-| 2 | Rol consultor y reglas de acceso | pendiente |
+| 2 | Rol consultor y reglas de acceso | hecho |
 | 3 | Formulario público con token por alumno | pendiente |
 | 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | pendiente |
 | 5 | Exportación del diagnóstico para la skill | pendiente |
@@ -137,3 +137,14 @@ Para no volver a discutirlas:
 - **Multi-selección como JSON en TEXT** (no JSONB): el espejo SQLite/PostgreSQL exige el mismo tipo en ambos motores.
 - **Asistente IA excluido del módulo — temporal.** Las 4 tablas están en `TABLAS_SENSIBLES` desde el mismo commit que las crea. Se reactiva en el ticket 6 con vistas filtradas por sesión (consulta) y herramientas acotadas (acción); nunca escritura por SQL generado.
 - **db:migrar no copia las tablas de alumnos** (están en `TABLAS_NO_COPIADAS`): el módulo nace en producción y ese script vacía el destino antes de copiar — incluirlas pisaría datos reales con una base local vacía. Su resguardo es `db:backup`.
+
+### Cerradas en el ticket 2 (agosto 2026)
+
+- **`CONSULTOR` no es un escalón de la escalera del contable.** `puede()` es lista blanca por rol, no comparación de nivel: LECTOR ⊂ EDITOR ⊂ ADMIN siguen siendo la escalera del contable, y `CONSULTOR` cuelga aparte. No tiene `'ver'`, y por eso queda afuera del contable de raíz.
+- **Dos familias de acciones.** Contable/administración (`ver`, `editar`, `importar`, `gestionar_usuarios`) y alumnos (`ver_alumnos`, `editar_alumnos`). No se cruzan: `ver` no habilita nada de alumnos y `ver_alumnos` no habilita nada del contable. ADMIN tiene ambas.
+- **Las rutas de LECTURA del contable ahora exigen `'ver'`.** Antes solo exigían sesión: cualquier usuario logueado leía todo el contable y el gating era únicamente de UI. Sin esto, agregar `CONSULTOR` le habría abierto la contabilidad entera. Para LECTOR/EDITOR/ADMIN no cambia nada (los tres tienen `'ver'`).
+- **El ámbito por fila sale de la sesión, nunca de la query string.** `alcanceDe(res)` deriva el `Alcance` del usuario autenticado. `titularSegunAlcance()` deja que el filtro del cliente ACHIQUE el resultado pero jamás lo ensanche; `alcanzaFila()` cubre la lectura/escritura de una fila suelta (si no la alcanza, se responde como si no existiera).
+- **El contable no tiene titular por fila.** `cierres.closer` es texto libre (el nombre del closer), no un id de `usuarios`: no sirve como control de acceso y no se lo convirtió en uno. Sus filtros (`closer`, `unidad`, `mes`…) son cosméticos y así están documentados. La protección real del contable es `'ver'` + ámbito total.
+- **Red que falla cerrada:** `exigirAmbitoTotal()` corta la consulta si alguna vez una sesión con ámbito acotado llega al contable. Hoy no se dispara nunca; el día que alguien le dé `'ver'` a un rol acotado, la consulta muere en vez de devolver la tabla entera.
+- **UI del consultor:** el menú del contable le queda vacío y el dashboard no se monta (sería un 403 por panel). Ve una pantalla de "panel en construcción" hasta el ticket 4.
+- **Sigue pendiente para el ticket 4:** no hay endpoints ni repos de alumnos todavía. El mecanismo de ámbito está listo y testeado, pero quien construya el panel tiene que aplicarlo en la consulta (`titularSegunAlcance` en los listados, `alcanzaFila` en la ficha) — no alcanza con exigir `ver_alumnos`.

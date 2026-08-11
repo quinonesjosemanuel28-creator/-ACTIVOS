@@ -51,6 +51,10 @@ describe('UI · gating del menú por rol (itemsVisibles)', () => {
     // ADMIN ve exactamente la lista completa
     expect(l).toEqual(itemsVisibles({ usuario: null, acciones: [] }).map((i) => i.label));
   });
+
+  it('CONSULTOR: el menú del contable le queda VACÍO (todas las vistas exigen ver)', () => {
+    expect(labels('CONSULTOR')).toEqual([]);
+  });
 });
 
 describe('UI · matriz vista ↔ acción y helper puedeUI', () => {
@@ -68,6 +72,8 @@ describe('UI · matriz vista ↔ acción y helper puedeUI', () => {
     expect(puedeUI(sesion('EDITOR'), 'editar')).toBe(true);
     expect(puedeUI(sesion('EDITOR'), 'importar')).toBe(false);
     expect(puedeUI(sesion('ADMIN'), 'gestionar_usuarios')).toBe(true);
+    expect(puedeUI(sesion('CONSULTOR'), 'ver')).toBe(false);
+    expect(puedeUI(sesion('CONSULTOR'), 'ver_alumnos')).toBe(true);
   });
 
   it('setSesion corrige la vista activa si quedó prohibida para el rol', () => {

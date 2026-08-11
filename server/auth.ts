@@ -10,7 +10,13 @@
  * - Limitador de intentos de login en memoria (anti fuerza bruta).
  */
 import type express from 'express';
-import { puede, type Accion, type Usuario } from '../src/domain/auth/permisos';
+import {
+  alcanceDeUsuario,
+  puede,
+  type Accion,
+  type Alcance,
+  type Usuario,
+} from '../src/domain/auth/permisos';
 import { usuarioDeSesion } from '../src/application/auth/useCases';
 import type { ReposAuth } from '../src/application/auth/ports';
 
@@ -41,6 +47,29 @@ export function borrarCookieSesion(res: express.Response, segura: boolean): void
 /** Usuario autenticado del request (lo deja `autenticar` en res.locals). */
 export function usuarioDe(res: express.Response): Usuario {
   return res.locals.usuario as Usuario;
+}
+
+/**
+ * Ámbito de filas de la sesión. Sale del USUARIO autenticado, nunca de la
+ * query string: es la única fuente válida para acotar una consulta.
+ */
+export function alcanceDe(res: express.Response): Alcance {
+  return alcanceDeUsuario(usuarioDe(res));
+}
+
+/**
+ * Corta en seco si la sesión tiene ámbito acotado sobre un recurso que todavía
+ * no sabe filtrar por titular.
+ *
+ * El contable no tiene titular por fila ligado a `usuarios`: `cierres.closer`
+ * es texto libre (el nombre del closer), no un id. Hoy ningún rol con 'ver'
+ * está acotado, así que esto nunca se dispara — pero el día que alguno lo esté,
+ * la consulta falla en vez de devolver de más. Falla cerrado, no abierto.
+ */
+export function exigirAmbitoTotal(alcance: Alcance, recurso: string): void {
+  if (alcance.ambito !== 'todos') {
+    throw new Error(`El recurso "${recurso}" no sabe acotar por titular: consulta bloqueada.`);
+  }
 }
 
 export interface Guardias {

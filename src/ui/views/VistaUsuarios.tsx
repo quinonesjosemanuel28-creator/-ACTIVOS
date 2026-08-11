@@ -15,6 +15,7 @@ const DESCRIPCION_ROL: Record<Rol, string> = {
   LECTOR: 'Solo ve dashboards y métricas',
   EDITOR: 'Ve todo y carga/edita el día a día',
   ADMIN: 'Todo + importar/resetear + usuarios',
+  CONSULTOR: 'Solo su cartera de alumnos · NADA de contabilidad',
 };
 
 export function VistaUsuarios() {
@@ -27,7 +28,7 @@ export function VistaUsuarios() {
     <div className="space-y-6">
       <SectionHeader
         titulo="Usuarios"
-        descripcion="Roles: LECTOR (solo ve) · EDITOR (carga el día a día) · ADMIN (todo). Mínimo permiso necesario."
+        descripcion="Contable: LECTOR (solo ve) · EDITOR (carga el día a día) · ADMIN (todo). Aparte: CONSULTOR, que solo ve su cartera de alumnos y nada de contabilidad. Mínimo permiso necesario."
       />
 
       <FormAlta onTemporal={(email, password) => setTemporal({ email, password })} />

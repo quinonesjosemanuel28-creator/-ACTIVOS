@@ -11,7 +11,8 @@ import { infraestructuraDesdeDb } from '../../src/infrastructure/db/conexion';
 import type { Hasher } from '../../src/application/auth/ports';
 import * as uauth from '../../src/application/auth/useCases';
 import { crearApp } from '../app';
-import { crearLimitadorLogin } from '../auth';
+import { crearLimitadorLogin, exigirAmbitoTotal } from '../auth';
+import { alcanceDeUsuario } from '../../src/domain/auth/permisos';
 
 /** Hasher rápido para tests (bcrypt real se cubre en auth.integracion). */
 const hasherFake: Hasher = {
@@ -22,17 +23,18 @@ const hasherFake: Hasher = {
 interface Ctx {
   base: string;
   server: Server;
-  cookies: { admin: string; editor: string; lector: string };
+  cookies: { admin: string; editor: string; lector: string; consultor: string };
 }
 
 async function levantarApp(): Promise<Ctx> {
   const db = getDbMemoria();
   const infra = infraestructuraDesdeDb(db, hasherFake);
 
-  // Usuarios de los 3 roles, vía casos de uso (no HTTP, para no acoplar el setup).
+  // Usuarios de los 4 roles, vía casos de uso (no HTTP, para no acoplar el setup).
   await uauth.asegurarAdminInicial(infra.reposAuth, 'admin@activos.com', 'Clave1234');
   await uauth.crearUsuario(infra.reposAuth, { email: 'editor@activos.com', nombre: 'Edi', rol: 'EDITOR', password: 'Clave1234' });
   await uauth.crearUsuario(infra.reposAuth, { email: 'lector@activos.com', nombre: 'Lec', rol: 'LECTOR', password: 'Clave1234' });
+  await uauth.crearUsuario(infra.reposAuth, { email: 'consultor@activos.com', nombre: 'Consu', rol: 'CONSULTOR', password: 'Clave1234' });
 
   const app = crearApp(infra, { cookieSegura: false });
   const server = app.listen(0);
@@ -57,6 +59,7 @@ async function levantarApp(): Promise<Ctx> {
       admin: await loguear('admin@activos.com'),
       editor: await loguear('editor@activos.com'),
       lector: await loguear('lector@activos.com'),
+      consultor: await loguear('consultor@activos.com'),
     },
   };
 }
@@ -160,7 +163,7 @@ describe('HTTP · ADMIN (todo)', () => {
 
     const lista = await fetch(`${ctx.base}/api/usuarios`, { headers: conAdmin() });
     expect(lista.status).toBe(200);
-    expect(((await lista.json()) as unknown[]).length).toBe(3);
+    expect(((await lista.json()) as unknown[]).length).toBe(4);
   });
 
   it('alta de usuario por HTTP devuelve la contraseña temporal UNA vez', async () => {
@@ -185,6 +188,124 @@ describe('HTTP · ADMIN (todo)', () => {
       body: JSON.stringify({ email: 'nuevo@activos.com', nombre: 'X', rol: 'root' }),
     });
     expect(malRol.status).toBe(400);
+  });
+});
+
+/**
+ * La regla dura del módulo de alumnos: "los consultores no ven NADA de
+ * contabilidad". Y la otra: "los permisos se aplican a nivel de consulta, no
+ * de interfaz". Estos tests golpean la API a mano, sin pasar por la UI —
+ * que es exactamente como un consultor curioso intentaría saltearla.
+ */
+describe('HTTP · CONSULTOR (cero contabilidad, aunque llame la API a mano)', () => {
+  const conConsultor = () => ({ cookie: ctx.cookies.consultor });
+
+  /** Toda la superficie de LECTURA del contable. */
+  const LECTURAS_CONTABLES = [
+    '/api/meses',
+    '/api/dashboard/2026-05',
+    '/api/historico',
+    '/api/comparar/2026-05',
+    '/api/parametros',
+    '/api/egresos',
+    '/api/egresos/resumen/2026-05',
+    '/api/comisiones/liquidaciones',
+    '/api/comisiones/2026-05',
+    '/api/funnel/2026-05',
+    '/api/cierres',
+    '/api/cierres/resumen/2026-05',
+    '/api/cierres/cualquiera',
+    '/api/cobranza',
+    '/api/asistente/estado',
+  ];
+
+  it('recibe 403 en TODAS las lecturas del contable', async () => {
+    for (const ruta of LECTURAS_CONTABLES) {
+      const res = await fetch(`${ctx.base}${ruta}`, { headers: conConsultor() });
+      expect(res.status, `GET ${ruta} debería ser 403`).toBe(403);
+    }
+  });
+
+  it('no se abre nada tocando la query string (el filtro del cliente no da permisos)', async () => {
+    const trucos = [
+      '/api/cierres?closer=Consu',
+      '/api/cierres?unidad=ACADEMY',
+      '/api/cierres?mes=2026-05&programa=Empresario',
+      '/api/dashboard/2026-05?unidad=CONSOLIDADO',
+      '/api/historico?unidad=ACADEMY',
+    ];
+    for (const ruta of trucos) {
+      const res = await fetch(`${ctx.base}${ruta}`, { headers: conConsultor() });
+      expect(res.status, `GET ${ruta} debería ser 403`).toBe(403);
+    }
+  });
+
+  it('tampoco puede escribir, importar ni usar el asistente IA', async () => {
+    const escrituras: [string, string, string][] = [
+      ['POST', '/api/cierres', CIERRE_NUEVO],
+      ['POST', '/api/pagos', '{}'],
+      ['POST', '/api/egresos', '{}'],
+      ['PUT', '/api/parametros', '{}'],
+      ['PUT', '/api/funnel/2026-05', '{}'],
+      ['POST', '/api/cierres/importar', '{}'],
+      ['POST', '/api/cierres-reset', JSON.stringify({ confirm: 'BORRAR' })],
+      ['POST', '/api/asistente', JSON.stringify({ pregunta: '¿Cuánto facturamos?' })],
+    ];
+    for (const [method, ruta, body] of escrituras) {
+      const res = await fetch(`${ctx.base}${ruta}`, { method, headers: { ...json, ...conConsultor() }, body });
+      expect(res.status, `${method} ${ruta} debería ser 403`).toBe(403);
+    }
+  });
+
+  it('no puede gestionar usuarios (no es un ADMIN por otra puerta)', async () => {
+    expect((await fetch(`${ctx.base}/api/usuarios`, { headers: conConsultor() })).status).toBe(403);
+    expect((await fetch(`${ctx.base}/api/usuarios`, { method: 'POST', headers: { ...json, ...conConsultor() }, body: '{}' })).status).toBe(403);
+  });
+
+  it('SÍ conserva la sesión propia: /auth/yo declara sus acciones de alumnos', async () => {
+    const res = await fetch(`${ctx.base}/api/auth/yo`, { headers: conConsultor() });
+    expect(res.status).toBe(200);
+    const r = (await res.json()) as { usuario: { rol: string }; acciones: string[] };
+    expect(r.usuario.rol).toBe('CONSULTOR');
+    expect(r.acciones).toEqual(['ver_alumnos', 'editar_alumnos']);
+    expect(r.acciones).not.toContain('ver');
+  });
+});
+
+describe('HTTP · el contable NO cambió para los roles que ya lo usaban', () => {
+  it('LECTOR/EDITOR/ADMIN siguen leyendo todo lo de siempre (200)', async () => {
+    const rutas = ['/api/meses', '/api/dashboard/2026-05', '/api/cierres', '/api/cobranza', '/api/egresos', '/api/parametros'];
+    for (const cookie of [ctx.cookies.lector, ctx.cookies.editor, ctx.cookies.admin]) {
+      for (const ruta of rutas) {
+        const res = await fetch(`${ctx.base}${ruta}`, { headers: { cookie } });
+        expect(res.status, `GET ${ruta} debería seguir siendo 200`).toBe(200);
+      }
+    }
+  });
+
+  it('el filtro por closer de la query string sigue funcionando (es cosmético, no un permiso)', async () => {
+    const res = await fetch(`${ctx.base}/api/cierres?closer=Nadie`, { headers: { cookie: ctx.cookies.lector } });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as unknown[]).toEqual([]);
+  });
+});
+
+/**
+ * El contable no sabe acotar por titular (`cierres.closer` es texto libre, no
+ * un id de usuario). Hoy ningún rol con 'ver' está acotado, así que la red no
+ * se dispara nunca — pero si mañana alguien le da 'ver' a un rol acotado, la
+ * consulta tiene que MORIR, no devolver la tabla entera.
+ */
+describe('Contable · la red de ámbito falla cerrada', () => {
+  it('un ámbito acotado sobre el contable corta la consulta en vez de devolver de más', () => {
+    const acotado = alcanceDeUsuario({ id: 'usr-x', rol: 'CONSULTOR' });
+    expect(() => exigirAmbitoTotal(acotado, 'cierres')).toThrow(/no sabe acotar por titular/i);
+  });
+
+  it('con ámbito total no molesta a nadie', () => {
+    for (const rol of ['LECTOR', 'EDITOR', 'ADMIN'] as const) {
+      expect(() => exigirAmbitoTotal(alcanceDeUsuario({ id: 'usr-y', rol }), 'cierres')).not.toThrow();
+    }
   });
 });
 
