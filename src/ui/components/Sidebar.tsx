@@ -1,7 +1,7 @@
 /** Navegación entre pantallas: sidebar en desktop, barra superior en mobile.
  *  Los ítems se filtran por el rol de la sesión (Carga & Admin y Usuarios son
  *  solo ADMIN). El candado real está en la API; esto es presentación. */
-import { AlertTriangle, BarChart3, CalendarClock, Database, Filter, LayoutDashboard, LineChart, LogOut, Megaphone, Percent, Receipt, ShieldCheck, Sparkles, TrendingDown, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, CalendarClock, Database, Filter, GraduationCap, LayoutDashboard, LineChart, LogOut, Megaphone, Percent, Receipt, ShieldCheck, Sparkles, TrendingDown, Users } from 'lucide-react';
 import { useUI, puedeUI, ACCION_POR_VISTA, type Vista } from '../store';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -24,6 +24,7 @@ const ITEMS: { id: Vista; label: string; icono: typeof LayoutDashboard }[] = [
   { id: 'egresos', label: 'Egresos', icono: TrendingDown },
   { id: 'comisiones', label: 'Comisiones', icono: Percent },
   { id: 'asistente', label: 'Asistente IA', icono: Sparkles },
+  { id: 'alumnos', label: 'Alumnos', icono: GraduationCap },
   { id: 'datos', label: 'Carga & Admin', icono: Database },
   { id: 'usuarios', label: 'Usuarios', icono: ShieldCheck },
 ];

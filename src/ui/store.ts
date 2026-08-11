@@ -16,6 +16,7 @@ export type Vista =
   | 'egresos'
   | 'comisiones'
   | 'asistente'
+  | 'alumnos'
   | 'datos'
   | 'usuarios';
 
@@ -33,6 +34,7 @@ export const ACCION_POR_VISTA: Record<Vista, Accion> = {
   egresos: 'ver',
   comisiones: 'ver',
   asistente: 'ver',
+  alumnos: 'ver_alumnos', // módulo de alumnos: CONSULTOR y ADMIN, nadie más
   datos: 'importar', // Carga & Admin: importar/resetear → solo ADMIN
   usuarios: 'gestionar_usuarios', // solo ADMIN
 };

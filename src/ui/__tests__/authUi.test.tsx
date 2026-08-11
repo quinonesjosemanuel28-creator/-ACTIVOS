@@ -52,17 +52,24 @@ describe('UI · gating del menú por rol (itemsVisibles)', () => {
     expect(l).toEqual(itemsVisibles({ usuario: null, acciones: [] }).map((i) => i.label));
   });
 
-  it('CONSULTOR: el menú del contable le queda VACÍO (todas las vistas exigen ver)', () => {
-    expect(labels('CONSULTOR')).toEqual([]);
+  it('CONSULTOR: del menú solo alcanza Alumnos — nada del contable', () => {
+    expect(labels('CONSULTOR')).toEqual(['Alumnos']);
+  });
+
+  it('LECTOR y EDITOR no ven Alumnos (la familia de acciones no se cruza)', () => {
+    expect(labels('LECTOR')).not.toContain('Alumnos');
+    expect(labels('EDITOR')).not.toContain('Alumnos');
+    expect(labels('ADMIN')).toContain('Alumnos');
   });
 });
 
 describe('UI · matriz vista ↔ acción y helper puedeUI', () => {
-  it('datos exige importar y usuarios exige gestionar_usuarios', () => {
+  it('datos exige importar, usuarios gestionar_usuarios y alumnos ver_alumnos', () => {
     expect(ACCION_POR_VISTA.datos).toBe('importar');
     expect(ACCION_POR_VISTA.usuarios).toBe('gestionar_usuarios');
-    // todas las demás vistas son de lectura
-    const lecturas = Object.entries(ACCION_POR_VISTA).filter(([v]) => v !== 'datos' && v !== 'usuarios');
+    expect(ACCION_POR_VISTA.alumnos).toBe('ver_alumnos');
+    // todas las demás vistas son lecturas del contable
+    const lecturas = Object.entries(ACCION_POR_VISTA).filter(([v]) => !['datos', 'usuarios', 'alumnos'].includes(v));
     expect(lecturas.every(([, a]) => a === 'ver')).toBe(true);
   });
 

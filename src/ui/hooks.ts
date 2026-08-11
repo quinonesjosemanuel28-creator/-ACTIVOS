@@ -305,3 +305,39 @@ export function useReiniciarCierres() {
   const inval = useInvalidarTodo();
   return useMutation({ mutationFn: (confirm: string) => api.reiniciarCierres(confirm), onSuccess: inval });
 }
+
+// ───────────────────────── Módulo de alumnos ─────────────────────────
+// El ámbito por fila (mi cartera vs todas) lo resuelve el SERVER con la
+// sesión: estos hooks no filtran nada, muestran lo que la API devuelva.
+export function useAlumnos(q?: string) {
+  return useQuery({ queryKey: ['alumnos', 'lista', q ?? ''], queryFn: () => api.alumnos(q) });
+}
+export function useAlumno(id: string | null) {
+  return useQuery({ queryKey: ['alumnos', 'ficha', id], queryFn: () => api.alumno(id!), enabled: !!id });
+}
+export function useDiagnosticos(alumnoId: string | null) {
+  return useQuery({
+    queryKey: ['alumnos', 'diagnosticos', alumnoId],
+    queryFn: () => api.diagnosticos(alumnoId!),
+    enabled: !!alumnoId,
+  });
+}
+function useInvalidarAlumnos() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: ['alumnos'] });
+}
+export function useCrearAlumno() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({ mutationFn: (a: unknown) => api.crearAlumno(a), onSuccess: inval });
+}
+export function useEditarAlumno() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({ mutationFn: (v: { id: string; data: unknown }) => api.editarAlumno(v.id, v.data), onSuccess: inval });
+}
+export function useEmitirLink() {
+  return useMutation({ mutationFn: (alumnoId: string) => api.emitirLinkDiagnostico(alumnoId) });
+}
+export function useEditarDiagnostico() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({ mutationFn: (v: { id: string; patch: unknown }) => api.editarDiagnostico(v.id, v.patch), onSuccess: inval });
+}

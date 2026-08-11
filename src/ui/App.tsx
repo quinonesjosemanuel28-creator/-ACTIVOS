@@ -22,6 +22,7 @@ import { VistaAsistente } from './views/VistaAsistente';
 import { VistaComisiones } from './views/VistaComisiones';
 import { VistaDatos } from './views/VistaDatos';
 import { VistaUsuarios } from './views/VistaUsuarios';
+import { VistaAlumnos } from './views/VistaAlumnos';
 
 /**
  * /formulario/<token> es la ÚNICA ruta pública de la SPA: el alumno llega por
@@ -57,33 +58,38 @@ function AppConSesion() {
   // Sin sesión (401) → solo existe el login.
   if (!sesion.data) return <VistaLogin />;
 
-  // El Dashboard entero es contable. Un rol sin 'ver' (CONSULTOR) no tiene
-  // ninguna pantalla acá todavía: montarlo sería pedirle /api/meses y comerse
-  // un 403 por cada panel. Su panel llega con el módulo de alumnos.
+  // El Dashboard entero es contable. Un rol sin 'ver' (CONSULTOR) no lo monta
+  // — pediría /api/meses y se comería un 403 por panel. Va directo a su panel
+  // de alumnos, con un shell propio sin nada del contable.
   if (!accionesDe(sesion.data.usuario.rol).includes('ver')) {
-    return <PanelEnConstruccion nombre={sesion.data.usuario.nombre} />;
+    return <PanelConsultor nombre={sesion.data.usuario.nombre} />;
   }
 
   return <Dashboard />;
 }
 
-/** Rol sin acceso al contable y sin panel propio construido todavía. */
-function PanelEnConstruccion({ nombre }: { nombre: string }) {
+/** Shell del consultor: solo el módulo de alumnos. Cero contable, ni en el menú. */
+function PanelConsultor({ nombre }: { nombre: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
-      <div className="max-w-md text-center">
-        <h2 className="font-display text-2xl font-700 text-navy-900 dark:text-navy-50">Hola, {nombre}</h2>
-        <p className="mt-2 text-sm text-navy-500 dark:text-navy-300">
-          Tu panel de alumnos todavía está en construcción. Cuando esté listo vas a ver acá tu cartera,
-          los diagnósticos y el índice de claridad de cada alumno.
-        </p>
+    <div className="min-h-screen bg-navy-50 dark:bg-navy-950">
+      <header className="flex items-center justify-between border-b border-navy-100 bg-white px-4 py-3 dark:border-navy-800 dark:bg-navy-900">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy-900 font-display text-xl font-700 text-gold-400">+</span>
+          <div>
+            <p className="font-display text-sm font-700 leading-none text-navy-900 dark:text-navy-50">Activos</p>
+            <p className="text-xs text-navy-400">Panel de consultoría · {nombre}</p>
+          </div>
+        </div>
         <button
           onClick={() => void api.logout().finally(() => window.location.reload())}
-          className="mt-6 rounded-lg border border-navy-200 px-4 py-2 text-sm font-600 text-navy-700 hover:bg-navy-50 dark:border-navy-700 dark:text-navy-200 dark:hover:bg-navy-800"
+          className="rounded-lg border border-navy-200 px-3 py-1.5 text-sm font-600 text-navy-700 hover:bg-navy-50 dark:border-navy-700 dark:text-navy-200 dark:hover:bg-navy-800"
         >
-          Cerrar sesión
+          Salir
         </button>
-      </div>
+      </header>
+      <main className="mx-auto max-w-6xl p-4 md:p-6">
+        <VistaAlumnos />
+      </main>
     </div>
   );
 }
@@ -111,7 +117,7 @@ function Dashboard() {
         <main className="flex-1 p-4 md:p-6">
           {isLoading ? (
             <div className="flex min-h-[50vh] items-center justify-center"><Spinner className="h-8 w-8" /></div>
-          ) : !data?.meses.length && vista !== 'datos' && vista !== 'usuarios' ? (
+          ) : !data?.meses.length && vista !== 'datos' && vista !== 'usuarios' && vista !== 'alumnos' ? (
             <SinDatos />
           ) : !vistaPermitida ? (
             <VistaEjecutiva />
@@ -129,6 +135,7 @@ function Dashboard() {
               {vista === 'egresos' && <VistaEgresos />}
               {vista === 'comisiones' && <VistaComisiones />}
               {vista === 'asistente' && <VistaAsistente />}
+              {vista === 'alumnos' && <VistaAlumnos />}
               {vista === 'datos' && <VistaDatos />}
               {vista === 'usuarios' && <VistaUsuarios />}
             </>

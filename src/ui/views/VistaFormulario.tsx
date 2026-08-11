@@ -24,8 +24,32 @@ import {
 import { formularioApi, ErrorFormulario, type FormularioAbierto, type MotivoToken } from '../lib/formularioApi';
 import { Button, Card, Input, Select, Spinner, Textarea } from '../components/ui/primitives';
 
-type Valores = Record<string, string | string[]>;
-type SinDato = Record<string, boolean>;
+export type Valores = Record<string, string | string[]>;
+export type SinDato = Record<string, boolean>;
+
+/**
+ * Estado del formulario a partir de respuestas GUARDADAS (para la corrección
+ * desde el panel): números a texto de input, multi de JSON a array, casillas a
+ * su mapa. Inversa de armarPayload.
+ */
+export function estadoDesdeRespuestas(respuestas: Record<string, unknown>): { valores: Valores; sinDato: SinDato } {
+  const valores: Valores = {};
+  const sinDato: SinDato = {};
+  for (const p of BLOQUES.flatMap((b) => b.preguntas)) {
+    const v = respuestas[p.campo];
+    if (p.tipo === 'multi') {
+      if (typeof v === 'string' && v.startsWith('[')) {
+        try { valores[p.campo] = JSON.parse(v) as string[]; } catch { valores[p.campo] = []; }
+      }
+    } else if (typeof v === 'number') {
+      valores[p.campo] = String(v);
+    } else if (typeof v === 'string') {
+      valores[p.campo] = v;
+    }
+    if (p.nlc) sinDato[p.campo] = respuestas[`${p.campo}_sin_dato`] === true;
+  }
+  return { valores, sinDato };
+}
 
 /**
  * Payload del envío a partir del estado del formulario. Pura y exportada para
@@ -75,7 +99,7 @@ export function preguntasFichaPendiente(abierto: Pick<FormularioAbierto, 'fichaP
 
 // ───────────────────────── Campos ─────────────────────────
 
-interface PropsCampo {
+export interface PropsCampo {
   pregunta: Pregunta | PreguntaFicha;
   moneda: string;
   valor: string | string[] | undefined;
@@ -85,7 +109,8 @@ interface PropsCampo {
   onSinDato: (marcado: boolean) => void;
 }
 
-function Campo({ pregunta: p, moneda, valor, marcadoSinDato, error, onValor, onSinDato }: PropsCampo) {
+/** Un campo del formulario. Exportado: el panel del consultor corrige con el MISMO render. */
+export function Campo({ pregunta: p, moneda, valor, marcadoSinDato, error, onValor, onSinDato }: PropsCampo) {
   const nlc = 'nlc' in p && p.nlc;
   const ayuda = 'ayuda' in p ? p.ayuda : undefined;
 

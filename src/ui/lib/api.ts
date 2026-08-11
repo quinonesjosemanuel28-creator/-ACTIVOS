@@ -10,6 +10,7 @@ import type { Egreso } from '@domain/types';
 import type { ResumenEgresos } from '@domain/egresos/metrics';
 import type { ComisionesDelMes } from '@domain/comisiones/calculo';
 import type { Accion, Rol, UsuarioPublico } from '@domain/auth/permisos';
+import type { Alumno, Diagnostico, TokenDiagnostico } from '@domain/alumnos/tipos';
 
 // ───────────────────── Auth / sesión ─────────────────────
 
@@ -296,4 +297,15 @@ export const api = {
   borrarDatosDemo: () => req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-demo', { method: 'DELETE' }),
   reiniciarCierres: (confirm: string) =>
     req<{ cierresBorrados: number; pagosBorrados: number }>('/cierres-reset', { method: 'POST', body: JSON.stringify({ confirm }) }),
+
+  // Módulo de alumnos (el ámbito por fila lo aplica el server; acá no se filtra nada)
+  alumnos: (q?: string) => req<Alumno[]>(`/alumnos${qs({ q })}`),
+  alumno: (id: string) => req<Alumno>(`/alumnos/${id}`),
+  crearAlumno: (a: unknown) => req<Alumno>('/alumnos', { method: 'POST', body: JSON.stringify(a) }),
+  editarAlumno: (id: string, a: unknown) => req<Alumno>(`/alumnos/${id}`, { method: 'PUT', body: JSON.stringify(a) }),
+  emitirLinkDiagnostico: (alumnoId: string) =>
+    req<TokenDiagnostico>(`/alumnos/${alumnoId}/token`, { method: 'POST' }),
+  diagnosticos: (alumnoId: string) => req<Diagnostico[]>(`/alumnos/${alumnoId}/diagnosticos`),
+  editarDiagnostico: (id: string, patch: unknown) =>
+    req<Diagnostico>(`/diagnosticos/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
 };
