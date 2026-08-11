@@ -107,7 +107,7 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 | 2 | Rol consultor y reglas de acceso | hecho |
 | 3 | Formulario público con token por alumno | hecho |
 | 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | hecho |
-| 5 | Exportación del diagnóstico para la skill | pendiente |
+| 5 | Exportación del diagnóstico para la skill | hecho |
 | 6 | Asistente IA sobre el módulo (vistas filtradas + herramientas) | pendiente |
 
 Actualizar este estado a medida que se avanza.
@@ -166,3 +166,22 @@ Para no volver a discutirlas:
 - **Dos shells según el rol:** CONSULTOR entra a un shell propio sin nada del contable (ni `useMeses`, que le daría 403); ADMIN ve "Alumnos" como vista del dashboard. LECTOR/EDITOR no la ven.
 - **Una sola definición de las preguntas:** el panel corrige con el MISMO `Campo` y los mismos `BLOQUES` del formulario público (catálogo del dominio). Los faltantes se muestran como "para sacar en la llamada", con el texto de cada pregunta y en orden de formulario.
 - **Verificado en navegador real** (Playwright sobre el build de producción): alta → link → envío sin sesión → índice y faltantes → corrección → índice recalculado.
+
+### Cerradas en el ticket 5 (agosto 2026)
+
+- **Tres metas a 90 días en el bloque 8** (`meta_clientes_90d`, `meta_capital_90d`, `meta_ganancia_90d`): son las preguntas 21-23 de la skill, las que calibran las metas numéricas de los OKRs. **Obligatorias, sin casilla y FUERA del índice de claridad** — son intenciones, no mediciones. Si entraran, el denominador pasaría de 19 a 22 y el índice dejaría de ser comparable contra el de los 90 días. Hay test que fija la invariante.
+- **La exportación es un MAPEO, no un volcado.** La skill se organiza en 30 preguntas (Ordenar/Optimizar/Escalar) y el formulario en 48 sobre otros ocho bloques. Del cruce: 16 coinciden, 6 en parte (llevan nota), 5 el formulario no las releva y se exportan como *"no relevado — preguntarlo en la llamada"* para que la skill no las invente.
+- **Los tres estados de una respuesta nunca se confunden** en el documento: respondido / "el alumno no lo conoce" / sin responder. Cero es un dato. Cuando varios campos contestan una pregunta de la skill, cada valor va con su etiqueta.
+- **La moneda del documento es la fotografiada en el diagnóstico**, no la actual de la ficha.
+- **La sección 12 del plan sale pre-armada** desde las casillas, con prioridad Alta/Media según la obligatoriedad de la pregunta (heurística, el consultor la ajusta).
+- `GET /api/diagnosticos/:id/exportacion` con el mismo ámbito que la lectura. En el panel: copiar (para pegar en Claude) y descargar `.md`.
+
+### Definido para los tickets 6+ (seguimiento)
+
+- **El seguimiento va por FASES (30/60/90), no por semanas.** El plan ya viene estructurado así (sección 6 de la skill); las semanas serían una capa inventada encima que hay que mantener a mano. Se cae el campo `semana` de `tareas`, la aritmética de fechas y la pantalla de asignar acciones a semanas.
+- **La tabla es `acciones`** (`plan_id`, `fase` 1/2/3, `texto`, `orden`), tomadas de la sección 6 del plan. Los OKRs y KRs se cargan igual, para el tablero del consultor y la comparación a los 90 días, pero el checklist del alumno sale de las acciones por fase.
+- **El link de seguimiento NO puede reusar el token del diagnóstico:** aquel es de un solo uso y 30 días; este es reusable, dura los 90 días del plan y tiene que ser estable (vive en la conversación de WhatsApp). Va tabla propia y revocable.
+- **Los tildes son append-only** (`checkins`), no un UPDATE destructivo: nunca se pierde historia y el timestamp da la señal de ritmo ("sin movimiento hace 12 días") sin modelar semanas.
+- **El link muestra SOLO las acciones**, con la fase actual desplegada y las otras plegadas según la fecha. Nada de diagnóstico, índice, bloqueos ni matriz de riesgos: eso tiene marco de consultor.
+- **El alumno no tiene login.** El tilde es lo que él *declara*, no un hecho verificado; el consultor valida en la llamada.
+- **La skill debería emitir un bloque estructurado** junto al `.docx`, para cargar los OKRs y las acciones de un solo pegado. Si hay que tipearlos a mano, el módulo no se usa.
