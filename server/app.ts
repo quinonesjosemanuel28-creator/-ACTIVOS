@@ -43,6 +43,8 @@ import { asistenteDisponible } from '../src/infrastructure/anthropic/cliente';
 import type { FiltrosEgresos } from '../src/application/egresos/useCases';
 import * as uc from '../src/application/useCases';
 import * as ucc from '../src/application/cierres/useCases';
+import * as ual from '../src/application/alumnos/useCases';
+import type { MotivoTokenInvalido } from '../src/domain/alumnos/tipos';
 import type { Programa } from '../src/domain/types';
 import type { Filtro } from '../src/application/ports';
 import type { FiltrosCierres } from '../src/application/cierres/ports';
@@ -52,6 +54,8 @@ export interface OpcionesApp {
   cookieSegura?: boolean;
   /** Limitador de login (inyectable para tests). */
   limitadorLogin?: ReturnType<typeof crearLimitadorLogin>;
+  /** Limitador del formulario público de diagnóstico (inyectable para tests). */
+  limitadorFormulario?: ReturnType<typeof crearLimitadorLogin>;
   /**
    * Carpeta del frontend compilado (vite build → dist). Si se pasa, Express
    * sirve esos archivos y hace fallback SPA (index.html) para las rutas del
@@ -68,10 +72,34 @@ const STATUS_AUTH: Record<uauth.ErrorAuth['codigo'], number> = {
   CONFLICTO: 409,
 };
 
+/**
+ * Token del formulario público → respuesta. 410 (Gone) para el que existió y ya
+ * no sirve: le dice al alumno que el link es real pero se agotó, así sabe que
+ * tiene que pedir otro en vez de pensar que se equivocó al copiarlo.
+ */
+const STATUS_TOKEN: Record<MotivoTokenInvalido, number> = {
+  inexistente: 404,
+  vencido: 410,
+  usado: 410,
+};
+
+const MENSAJE_TOKEN: Record<MotivoTokenInvalido, string> = {
+  inexistente: 'Este link no es válido. Pedile uno nuevo a tu consultor.',
+  vencido: 'Este link venció. Pedile uno nuevo a tu consultor.',
+  usado: 'Este formulario ya fue enviado. Si necesitás corregir algo, escribile a tu consultor.',
+};
+
 export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): express.Express {
-  const { repos, reposDash, reposCierres, reposEgresos, reposLiquidacion, reposFunnelCanal, reposAuth } = infra;
+  const { repos, reposDash, reposCierres, reposEgresos, reposLiquidacion, reposFunnelCanal, reposAuth, reposAlumnos } = infra;
   const cookieSegura = opciones.cookieSegura ?? process.env.NODE_ENV === 'production';
   const limitador = opciones.limitadorLogin ?? crearLimitadorLogin();
+  /**
+   * Limitador del formulario público (mismo mecanismo que el del login, por IP).
+   * El token es de 256 bits, así que adivinarlo no es el riesgo real: esto corta
+   * el sondeo automatizado y evita que la única ruta sin sesión de la app quede
+   * como un pozo abierto. Tolerante, porque un alumno legítimo puede recargar.
+   */
+  const limitadorFormulario = opciones.limitadorFormulario ?? crearLimitadorLogin({ max: 30 });
   const { autenticar, requiere } = crearGuardias(reposAuth);
 
   const app = express();
@@ -106,6 +134,13 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
           res.status(400).json({ error: 'Validación', detalles: err.flatten() });
         } else if (err instanceof uauth.ErrorAuth) {
           res.status(STATUS_AUTH[err.codigo]).json({ error: err.message });
+        } else if (err instanceof ual.ErrorAlumnos) {
+          if (err.codigo === 'TOKEN_INVALIDO') {
+            const motivo = err.motivo ?? 'inexistente';
+            res.status(STATUS_TOKEN[motivo]).json({ error: MENSAJE_TOKEN[motivo], motivo });
+          } else {
+            res.status(err.codigo === 'NO_ENCONTRADO' ? 404 : 400).json({ error: err.message });
+          }
         } else {
           res.status(400).json({ error: err instanceof Error ? err.message : 'Error desconocido' });
         }
@@ -138,6 +173,38 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
     if (token) await uauth.logout(reposAuth, token);
     borrarCookieSesion(res, cookieSegura);
     return { ok: true };
+  }));
+
+  // ────────────── Formulario público de diagnóstico (token = credencial) ──────────────
+  // Las ÚNICAS rutas sin sesión además de health y login/logout. Van ANTES del
+  // gate a propósito: el alumno no tiene cuenta — su token de un solo uso ES la
+  // credencial. Por eso acá NO se responde nada que exceda lo que el dueño del
+  // link tiene derecho a ver, y el limitador por IP corta el sondeo de tokens.
+  const conLimiteFormulario = (fn: (req: express.Request, res: express.Response) => unknown) =>
+    h(async (req, res) => {
+      const ip = req.ip ?? 'desconocida';
+      if (!limitadorFormulario.permitido(ip)) {
+        res.status(429).json({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' });
+        return;
+      }
+      try {
+        const out = await fn(req, res);
+        limitadorFormulario.exito(ip);
+        return out;
+      } catch (err) {
+        // Solo el token inválido cuenta como intento: un envío con errores de
+        // validación es un alumno legítimo corrigiendo su formulario.
+        if (err instanceof ual.ErrorAlumnos && err.codigo === 'TOKEN_INVALIDO') limitadorFormulario.fallo(ip);
+        throw err;
+      }
+    });
+
+  app.get('/api/formulario/:token', conLimiteFormulario((req) => ual.abrirFormulario(reposAlumnos, param(req, 'token'))));
+  app.post('/api/formulario/:token', conLimiteFormulario(async (req) => {
+    const d = await ual.enviarDiagnostico(reposAlumnos, param(req, 'token'), req.body);
+    // Mínimo indispensable: la ruta es pública. El índice y el detalle son
+    // material del CONSULTOR (fase del panel), no de la pantalla de gracias.
+    return { enviado: true, id: d.id };
   }));
 
   // ───────────────────── Gate global: de acá en adelante, SESIÓN ─────────────────────
@@ -285,6 +352,38 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   // Reseteo seguro: destructivo → solo ADMIN.
   app.delete('/api/cierres-demo', requiere('importar'), h(() => ucc.borrarDatosDemo(reposCierres)));
   app.post('/api/cierres-reset', requiere('importar'), h((req) => ucc.reiniciarCierresYPagos(reposCierres, req.body)));
+
+  // ───────────────────── Módulo de gestión de alumnos ─────────────────────
+  // Acciones de la familia ALUMNOS ('ver_alumnos'/'editar_alumnos'): las tienen
+  // CONSULTOR y ADMIN — un LECTOR o EDITOR del contable recibe 403 acá, espejo
+  // exacto de lo que le pasa al consultor en el contable. Además de la acción,
+  // cada consulta baja el ÁMBITO de la sesión (alcanceDe): el consultor solo
+  // alcanza su cartera, y la ficha ajena responde 404, no 403 — no se revela
+  // que existe.
+  app.get('/api/alumnos', requiere('ver_alumnos'), h((req, res) =>
+    ual.listarAlumnos(reposAlumnos, alcanceDe(res), {
+      q: typeof req.query.q === 'string' ? req.query.q : undefined,
+      // Cosmético (útil para ADMIN); con ámbito acotado el caso de uso lo pisa.
+      consultorId: typeof req.query.consultor === 'string' ? req.query.consultor : undefined,
+    }),
+  ));
+  app.post('/api/alumnos', requiere('editar_alumnos'), h((req, res) =>
+    ual.crearAlumno(reposAlumnos, usuarioDe(res).id, req.body),
+  ));
+  app.get('/api/alumnos/:id', requiere('ver_alumnos'), h(async (req, res) => {
+    const alumno = await ual.obtenerAlumno(reposAlumnos, alcanceDe(res), param(req, 'id'));
+    if (!alumno) throw new ual.ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+    return alumno;
+  }));
+  app.put('/api/alumnos/:id', requiere('editar_alumnos'), h((req, res) =>
+    ual.editarAlumno(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body),
+  ));
+  app.post('/api/alumnos/:id/token', requiere('editar_alumnos'), h((req, res) =>
+    ual.emitirToken(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
+  app.get('/api/alumnos/:id/diagnosticos', requiere('ver_alumnos'), h((req, res) =>
+    ual.listarDiagnosticos(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
 
   // ───────────────────── Frontend compilado (producción) ─────────────────────
   // Una ruta /api/* que no matcheó nada llega acá → 404 JSON (no el index.html),
