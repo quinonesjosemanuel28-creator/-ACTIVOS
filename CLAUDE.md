@@ -109,11 +109,10 @@ Toda ruta declara su acción con `requiere(...)`, **incluidas las de lectura**. 
 
 | # | Ticket | Estado |
 |---|---|---|
-| 0–3 | Exploración · migraciones · rol consultor y ámbito · formulario público | hecho |
-| 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | siguiente |
-| 5 | Exportación del diagnóstico para la skill | pendiente |
+| 0–4 | Exploración · migraciones · rol y ámbito · formulario público · panel del consultor | hecho |
+| 5 | Exportación del diagnóstico para la skill | siguiente |
 | 6 | Asistente IA sobre el módulo | pendiente |
 
-**Pendiente que arrastra el ticket 4:** el mecanismo de ámbito por fila está listo y testeado, pero todavía no hay endpoints ni repos de alumnos. Quien construya el panel tiene que aplicarlo **en la consulta** — no alcanza con exigir `ver_alumnos`.
+El flujo de fase 1 está completo punta a punta: alta → link → el alumno envía → ficha con índice de claridad y faltantes → corrección del consultor en la llamada (marca `editado_por_consultor`, recalcula el índice; la corrección NO crea fila — "fila nueva" es solo para envíos del formulario). El CONSULTOR tiene shell propio sin contable; ADMIN entra por la vista "Alumnos" del dashboard.
 
 Las 4 tablas del módulo están en `TABLAS_SENSIBLES` (excluidas del asistente IA) a propósito, hasta el ticket 6.

@@ -106,7 +106,7 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 | 1 | Migraciones de las tablas del módulo | hecho |
 | 2 | Rol consultor y reglas de acceso | hecho |
 | 3 | Formulario público con token por alumno | hecho |
-| 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | pendiente |
+| 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | hecho |
 | 5 | Exportación del diagnóstico para la skill | pendiente |
 | 6 | Asistente IA sobre el módulo (vistas filtradas + herramientas) | pendiente |
 
@@ -158,3 +158,11 @@ Para no volver a discutirlas:
 - **El envío inválido no consume el token** (el alumno corrige y reenvía con el mismo link) y **la ficha se completa recién después de guardar el diagnóstico**: si el diagnóstico no entró, la ficha no se toca.
 - **Repos ya cableados** (`reposAlumnos` en los dos motores) y **el ámbito por fila aplicado en la consulta**: los listados fuerzan titular en el WHERE, la ficha ajena responde 404 con el mismo cuerpo que la inexistente. El ticket 4 los consume, no los reconstruye — el párrafo de "pendiente" de arriba queda saldado en la API; falta solo la PANTALLA del panel.
 - **La ruta del alumno es `/formulario/<token>`**, única ruta pública de la SPA (por pathname, sin router). El endpoint privado del panel emite el token en `POST /api/alumnos/:id/token`.
+
+### Cerradas en el ticket 4 (agosto 2026)
+
+- **La corrección del consultor NO crea fila.** "Cada envío es una fila nueva" es para los ENVÍOS del formulario; la corrección ajusta la fila y queda marcada con `editado_por_consultor` — para eso el esquema tiene DOS columnas (`origen` = quién lo cargó; el flag = el consultor lo tocó después). El índice se recalcula; fecha, origen y la foto de programa/moneda no se tocan. `PUT /api/diagnosticos/:id`.
+- **El patch viaja mínimo:** solo los campos tocados (`armarPatch` en la UI, Zod sin defaults en el server — un default(false) pisaría casillas del alumno). Cargar un dato resuelve el "no lo sé"; marcar la casilla borra el valor. Ausente = no tocar.
+- **Dos shells según el rol:** CONSULTOR entra a un shell propio sin nada del contable (ni `useMeses`, que le daría 403); ADMIN ve "Alumnos" como vista del dashboard. LECTOR/EDITOR no la ven.
+- **Una sola definición de las preguntas:** el panel corrige con el MISMO `Campo` y los mismos `BLOQUES` del formulario público (catálogo del dominio). Los faltantes se muestran como "para sacar en la llamada", con el texto de cada pregunta y en orden de formulario.
+- **Verificado en navegador real** (Playwright sobre el build de producción): alta → link → envío sin sesión → índice y faltantes → corrección → índice recalculado.
