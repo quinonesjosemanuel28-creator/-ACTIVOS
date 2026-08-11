@@ -22,7 +22,15 @@ import {
   type MotivoTokenInvalido,
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
-import { aRespuestas, alumnoInputSchema, alumnoPatchSchema, diagnosticoInputSchema } from './schemas';
+import { PREGUNTAS_FICHA, type CampoFicha } from '../../domain/alumnos/formulario';
+import {
+  aRespuestas,
+  alumnoInputSchema,
+  alumnoPatchSchema,
+  diagnosticoInputSchema,
+  fichaPublicaSchema,
+  type FichaPublica,
+} from './schemas';
 import type { FiltrosAlumnos, ReposAlumnos } from './ports';
 
 export class ErrorAlumnos extends Error {
@@ -163,18 +171,39 @@ export async function emitirToken(
   return token;
 }
 
+/** Valor de la ficha para un campo del bloque 0 público. */
+function valorFicha(alumno: Alumno, campo: CampoFicha): string | number | null {
+  switch (campo) {
+    case 'edad': return alumno.edad;
+    case 'zona': return alumno.zona;
+    case 'whatsapp': return alumno.whatsapp;
+    case 'marca_comercial': return alumno.marcaComercial;
+    case 'canal_origen': return alumno.canalOrigen;
+  }
+}
+
+/** Campos del bloque 0 que la ficha todavía no tiene (para preguntarlos en el formulario). */
+function fichaPendienteDe(alumno: Alumno): CampoFicha[] {
+  return PREGUNTAS_FICHA.filter((p) => valorFicha(alumno, p.campo) === null).map((p) => p.campo);
+}
+
 /** Lo mínimo que el formulario público necesita saber para saludar al alumno. */
 export interface FormularioAbierto {
   nombre: string;
   programa: string;
   moneda: string;
+  /**
+   * Campos del bloque 0 que faltan en la ficha, para que el formulario los
+   * pregunte. Solo NOMBRES de campo, jamás valores: la ruta es pública.
+   */
+  fichaPendiente: CampoFicha[];
 }
 
 /**
- * Abre el formulario público con un token. Devuelve SOLO nombre, programa y
- * moneda: la ruta no tiene sesión, así que todo lo que se devuelva acá es
- * público para quien tenga el link. Ni consultor, ni WhatsApp, ni diagnósticos
- * anteriores.
+ * Abre el formulario público con un token. Devuelve SOLO el saludo (nombre,
+ * programa, moneda) y qué campos de ficha faltan: la ruta no tiene sesión, así
+ * que todo lo que se devuelva acá es público para quien tenga el link. Ni
+ * consultor, ni valores de la ficha, ni diagnósticos anteriores.
  */
 export async function abrirFormulario(
   repos: ReposAlumnos,
@@ -189,7 +218,28 @@ export async function abrirFormulario(
   if (!alumno || !alumno.activo) {
     throw new ErrorAlumnos('TOKEN_INVALIDO', 'El link no es válido.', 'inexistente');
   }
-  return { nombre: alumno.nombre, programa: alumno.programa, moneda: alumno.moneda };
+  return {
+    nombre: alumno.nombre,
+    programa: alumno.programa,
+    moneda: alumno.moneda,
+    fichaPendiente: fichaPendienteDe(alumno),
+  };
+}
+
+/**
+ * Completa la ficha con lo que aportó el alumno — SOLO los huecos. Lo que el
+ * consultor ya cargó no se pisa jamás desde una ruta pública, y nombre,
+ * programa y moneda ni siquiera se aceptan (no están en el esquema).
+ */
+function completarFicha(alumno: Alumno, aporte: FichaPublica): Alumno | null {
+  let cambio = false;
+  const actualizado = { ...alumno };
+  if (alumno.edad === null && aporte.edad != null) { actualizado.edad = aporte.edad; cambio = true; }
+  if (alumno.zona === null && aporte.zona != null) { actualizado.zona = aporte.zona; cambio = true; }
+  if (alumno.whatsapp === null && aporte.whatsapp != null) { actualizado.whatsapp = aporte.whatsapp; cambio = true; }
+  if (alumno.marcaComercial === null && aporte.marca_comercial != null) { actualizado.marcaComercial = aporte.marca_comercial; cambio = true; }
+  if (alumno.canalOrigen === null && aporte.canal_origen != null) { actualizado.canalOrigen = aporte.canal_origen; cambio = true; }
+  return cambio ? actualizado : null;
 }
 
 /**
@@ -213,7 +263,20 @@ export async function enviarDiagnostico(
     throw new ErrorAlumnos('TOKEN_INVALIDO', 'El link no es válido.', 'inexistente');
   }
 
+  // El mismo body trae respuestas + complemento de ficha (bloque 0). Cada
+  // esquema toma lo suyo; Zod descarta lo que no le corresponde.
   const datos = diagnosticoInputSchema.parse(entrada);
+  const aporte = fichaPublicaSchema.parse(entrada);
+
+  // Las obligatorias del bloque 0 se exigen SI la ficha no las tiene: acá, no
+  // solo en la UI — la regla de la casa es que el borde real es el server.
+  const faltantes = PREGUNTAS_FICHA.filter(
+    (p) => p.obl && valorFicha(alumno, p.campo) === null && aporte[p.campo] == null,
+  );
+  if (faltantes.length > 0) {
+    throw new ErrorAlumnos('VALIDACION', `Falta completar: ${faltantes.map((p) => p.label).join(' · ')}.`);
+  }
+
   const respuestas = aRespuestas(datos as Record<string, unknown>);
   const claridad = calcularClaridad(respuestas);
 
@@ -234,6 +297,11 @@ export async function enviarDiagnostico(
   };
   await repos.diagnosticos.guardar(diagnostico);
   await repos.tokens.marcarUsado(token, ahora, diagnostico.id);
+
+  // Recién acá se toca la ficha: si el diagnóstico no entró, la ficha tampoco.
+  const fichaCompletada = completarFicha(alumno, aporte);
+  if (fichaCompletada) await repos.alumnos.guardar(fichaCompletada);
+
   return diagnostico;
 }
 

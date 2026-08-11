@@ -4,10 +4,10 @@
  * El borde donde entra el dato crudo del alumno, sin sesión. Todo lo que
  * llegue por la ruta pública pasa por acá antes de tocar la base.
  *
- * El esquema se GENERA desde `CATALOGO`, una tabla declarativa que espeja
- * pregunta por pregunta la especificación funcional. Escribir 45 validaciones a
- * mano invitaba a que una se desalineara del documento sin que nadie lo note;
- * así se audita leyendo la tabla al lado del .md.
+ * El esquema se GENERA desde el catálogo del formulario que vive en el DOMINIO
+ * (domain/alumnos/formulario.ts) — el mismo del que la UI toma las preguntas.
+ * Escribir 45 validaciones a mano invitaba a que una se desalineara del
+ * documento sin que nadie lo note; así, validación y render se mueven juntos.
  *
  * Dos reglas que no son evidentes:
  *
@@ -28,98 +28,19 @@ import {
   type RespuestasDiagnostico,
 } from '../../domain/alumnos/tipos';
 import { METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/claridad';
-
-type TipoCampo = 'numero' | 'moneda' | 'porcentaje' | 'texto' | 'texto_largo' | 'opcion' | 'multi';
-
-interface DefinicionCampo {
-  tipo: TipoCampo;
-  /** Obligatoria para poder enviar el formulario. */
-  obl: boolean;
-  /** Admite la casilla "No lo tengo claro". */
-  nlc: boolean;
-  /** Opciones cerradas (opción / multi). Se validan acá, NUNCA con CHECK en la base. */
-  opciones?: readonly string[];
-}
+import { PREGUNTA_POR_CAMPO, PREGUNTAS_FICHA, type Pregunta } from '../../domain/alumnos/formulario';
 
 const PROGRAMAS = ['De Cero a Gestor Financiero', 'Prestamista a Empresario', 'Prestamista a Empresario Elite'] as const;
-const CANALES_ORIGEN = ['Instagram', 'TikTok', 'YouTube', 'Referido de un alumno', 'Publicidad', 'Otro'] as const;
+const CANALES_ORIGEN = PREGUNTAS_FICHA.find((p) => p.campo === 'canal_origen')!.opciones as [string, ...string[]];
 
-/** Espeja la sección 3 de la especificación funcional. Un renglón por pregunta. */
-const CATALOGO: Record<CampoRespuesta, DefinicionCampo> = {
-  // ── Bloque 1 — Diagnóstico general ──
-  antiguedad_meses: { tipo: 'numero', obl: true, nlc: false },
-  tipo_dedicacion: { tipo: 'opcion', obl: true, nlc: false,
-    opciones: ['Ingreso extra', 'Negocio principal', 'Proyecto en crecimiento', 'Negocio principal y en crecimiento'] },
-  objetivo_6m: { tipo: 'texto_largo', obl: true, nlc: false },
-  vision_negocio: { tipo: 'opcion', obl: true, nlc: false,
-    opciones: ['Seguir prestando individualmente', 'Armar una empresa financiera', 'Todavía no lo tengo definido'] },
-  bloqueo_principal: { tipo: 'texto_largo', obl: true, nlc: false },
-
-  // ── Bloque 2 — Capital y rentabilidad ──
-  capital_colocado: { tipo: 'moneda', obl: true, nlc: true },
-  origen_capital: { tipo: 'opcion', obl: true, nlc: false, opciones: ['Propio', 'De terceros', 'Mixto'] },
-  costo_capital_mensual: { tipo: 'porcentaje', obl: false, nlc: true },
-  capital_disponible: { tipo: 'moneda', obl: true, nlc: true },
-  recupero_mensual: { tipo: 'moneda', obl: false, nlc: true },
-  separacion_dinero: { tipo: 'opcion', obl: true, nlc: false,
-    opciones: ['Sí, totalmente separado', 'Parcialmente', 'No, es la misma caja'] },
-  ganancia_mensual: { tipo: 'moneda', obl: true, nlc: true },
-  retiro_mensual: { tipo: 'moneda', obl: false, nlc: true },
-  gastos_operativos: { tipo: 'moneda', obl: false, nlc: true },
-
-  // ── Bloque 3 — Clientes y cartera ──
-  clientes_activos: { tipo: 'numero', obl: true, nlc: true },
-  clientes_nuevos_mes: { tipo: 'numero', obl: false, nlc: true },
-  ticket_promedio: { tipo: 'moneda', obl: true, nlc: true },
-  estructura_plazos: { tipo: 'texto_largo', obl: true, nlc: false },
-  plazo_promedio_meses: { tipo: 'numero', obl: false, nlc: true },
-  perfil_cliente: { tipo: 'multi', obl: true, nlc: false,
-    opciones: ['Empleados en relación de dependencia', 'Monotributistas', 'Comerciantes', 'Jubilados', 'Empleados públicos', 'Informales', 'Otro'] },
-  recurrencia: { tipo: 'porcentaje', obl: false, nlc: true },
-
-  // ── Bloque 4 — Precio y condiciones ──
-  tasa_declarada: { tipo: 'texto', obl: true, nlc: true },
-  ejemplo_total_100k: { tipo: 'moneda', obl: true, nlc: true },
-  punitorio: { tipo: 'texto', obl: true, nlc: true },
-  tasa_competencia: { tipo: 'texto', obl: false, nlc: true },
-
-  // ── Bloque 5 — Aprobación y riesgo ──
-  documentacion_solicitada: { tipo: 'multi', obl: true, nlc: false,
-    opciones: ['DNI', 'Recibo de sueldo', 'Constancia de monotributo', 'Comprobante de domicilio', 'Verificación de redes sociales', 'Referencias personales', 'Ninguna'] },
-  firma_documentacion: { tipo: 'opcion', obl: true, nlc: false,
-    opciones: ['Sí, contrato y pagaré', 'Solo contrato', 'Solo pagaré', 'No, presto de palabra'] },
-  porcentaje_documentado: { tipo: 'porcentaje', obl: false, nlc: true },
-  criterio_monto: { tipo: 'texto_largo', obl: true, nlc: false },
-  criterios_aprobacion: { tipo: 'opcion', obl: true, nlc: false,
-    opciones: ['Sí, escritos', 'Los tengo en la cabeza pero no escritos', 'No tengo criterios definidos'] },
-  herramienta_consulta: { tipo: 'texto', obl: true, nlc: false },
-  politica_garantias: { tipo: 'texto_largo', obl: true, nlc: false },
-
-  // ── Bloque 6 — Cobranza y mora ──
-  mora_clientes: { tipo: 'porcentaje', obl: true, nlc: true },
-  monto_en_mora: { tipo: 'moneda', obl: true, nlc: true },
-  proceso_cobranza: { tipo: 'opcion', obl: true, nlc: false,
-    opciones: ['Sí, con pasos definidos', 'Solo aviso el día del vencimiento', 'Solo reclamo cuando ya se atrasó', 'No tengo proceso'] },
-  descripcion_cobranza: { tipo: 'texto_largo', obl: true, nlc: false },
-  dificultad_cobranza: { tipo: 'texto_largo', obl: true, nlc: false },
-
-  // ── Bloque 7 — Procesos, ventas y escala ──
-  sistema_registro: { tipo: 'multi', obl: true, nlc: false,
-    opciones: ['Cuaderno', 'Excel o Sheets', 'App de préstamos', 'Controla', 'Otro sistema'] },
-  canales_captacion: { tipo: 'multi', obl: true, nlc: false,
-    opciones: ['Referidos de clientes', 'Vendedores comisionistas', 'WhatsApp e historias', 'Instagram', 'Folletos y volantes', 'Publicidad paga', 'Comerciantes aliados'] },
-  equipo: { tipo: 'texto_largo', obl: true, nlc: false },
-  situacion_fiscal: { tipo: 'opcion', obl: true, nlc: false,
-    opciones: ['Sin formalizar', 'Monotributo', 'SAS o SRL constituida', 'En trámite'] },
-  unidad_ventas: { tipo: 'opcion', obl: true, nlc: false,
-    opciones: ['No, solo presto dinero', 'Sí, ya vendo productos', 'No, pero me interesa arrancar'] },
-  prioridad_declarada: { tipo: 'multi', obl: true, nlc: false,
-    opciones: ['Ventas', 'Aprobación', 'Cobranza', 'Capital', 'Procesos', 'Formalización'] },
-
-  // ── Bloque 8 — Proyección ──
-  vision_12m: { tipo: 'texto_largo', obl: true, nlc: false },
-  freno_percibido: { tipo: 'texto_largo', obl: true, nlc: false },
-};
+/** Vista campo → definición sobre el catálogo del dominio. */
+const CATALOGO: Record<CampoRespuesta, Pregunta> = Object.fromEntries(
+  CAMPOS_RESPUESTA.map((campo) => {
+    const pregunta = PREGUNTA_POR_CAMPO.get(campo);
+    if (!pregunta) throw new Error(`El catálogo del formulario no define la pregunta "${campo}"`);
+    return [campo, pregunta];
+  }),
+) as Record<CampoRespuesta, Pregunta>;
 
 export { CATALOGO as CATALOGO_DIAGNOSTICO };
 
@@ -138,7 +59,7 @@ const textoOpcional = z
   .nullable()
   .optional();
 
-function validadorDe(def: DefinicionCampo): z.ZodTypeAny {
+function validadorDe(def: Pregunta): z.ZodTypeAny {
   switch (def.tipo) {
     case 'numero':
       return z.number().min(0, 'No puede ser negativo').nullable().optional();
@@ -222,6 +143,22 @@ export type AlumnoInput = z.infer<typeof alumnoInputSchema>;
 /** Edición de la ficha: los mismos campos, todos opcionales. */
 export const alumnoPatchSchema = alumnoInputSchema.partial();
 export type AlumnoPatch = z.infer<typeof alumnoPatchSchema>;
+
+/**
+ * Bloque 0 por el link público — semántica completar-si-falta. Claves en
+ * snake_case porque son los nombres de campo de la especificación (los que
+ * viajan en el mismo body que las respuestas). `nombre`, `programa` y `moneda`
+ * NO están acá a propósito: son identidad fijada por el consultor, y el link
+ * público jamás los toca.
+ */
+export const fichaPublicaSchema = z.object({
+  edad: z.number().int().min(16, 'Edad inválida').max(100, 'Edad inválida').nullable().optional(),
+  zona: textoOpcional,
+  whatsapp: textoOpcional,
+  marca_comercial: textoOpcional,
+  canal_origen: z.enum(CANALES_ORIGEN).nullable().optional(),
+});
+export type FichaPublica = z.infer<typeof fichaPublicaSchema>;
 
 /**
  * Normaliza la salida de Zod al formato de la base: los multi van como JSON en

@@ -30,9 +30,13 @@ const json = { 'content-type': 'application/json' };
 
 const FICHA = { nombre: 'Gonzalo', programa: 'Prestamista a Empresario', moneda: 'ARS' };
 
-/** Las 36 obligatorias de los bloques 1–8 (mismo payload que la integración). */
+/** Obligatorias del bloque 0 pendiente + bloques 1–8 (mismo payload que la integración). */
 function diagnosticoCompleto(): Record<string, unknown> {
   return {
+    edad: 38,
+    zona: 'Córdoba Capital',
+    whatsapp: '+5493510000000',
+    canal_origen: 'Instagram',
     antiguedad_meses: 24,
     tipo_dedicacion: 'Negocio principal',
     objetivo_6m: 'Duplicar la cartera',
@@ -151,9 +155,10 @@ describe('HTTP · formulario público (sin sesión)', () => {
     const res = await fetch(`${ctx.base}/api/formulario/${token}`);
     expect(res.status).toBe(200);
     const datos = (await res.json()) as Record<string, unknown>;
-    // Ruta pública: ni consultor, ni WhatsApp, ni ids. Exactamente tres campos.
-    expect(Object.keys(datos).sort()).toEqual(['moneda', 'nombre', 'programa']);
+    // Ruta pública: saludo + qué campos de ficha faltan (nombres, no valores).
+    expect(Object.keys(datos).sort()).toEqual(['fichaPendiente', 'moneda', 'nombre', 'programa']);
     expect(datos.nombre).toBe('Gonzalo');
+    expect(datos.fichaPendiente).toEqual(['edad', 'zona', 'whatsapp', 'marca_comercial', 'canal_origen']);
   });
 
   it('un token inventado → 404 con mensaje para el alumno', async () => {

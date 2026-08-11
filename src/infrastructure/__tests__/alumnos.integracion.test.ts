@@ -15,9 +15,15 @@ import type { ReposAlumnos } from '../../application/alumnos/ports';
 
 const hasherFake: Hasher = { hash: async (p) => `fake:${p}`, verificar: async (p, h) => h === `fake:${p}` };
 
-/** Respuestas que satisfacen las 36 obligatorias de los bloques 1–8. */
+/** Respuestas que satisfacen las obligatorias: bloque 0 pendiente + bloques 1–8. */
 function diagnosticoCompleto(): Record<string, unknown> {
   return {
+    // Bloque 0 — lo que la ficha del test no tiene (completar-si-falta)
+    edad: 38,
+    zona: 'Córdoba Capital',
+    whatsapp: '+5493510000000',
+    canal_origen: 'Instagram',
+
     antiguedad_meses: 24,
     tipo_dedicacion: 'Negocio principal',
     objetivo_6m: 'Duplicar la cartera',
@@ -183,9 +189,14 @@ describe('Alumnos · token del formulario público', () => {
     const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
 
     const abierto = await ua.abrirFormulario(repos, t.token);
-    expect(abierto).toEqual({ nombre: 'Gonzalo', programa: 'Prestamista a Empresario', moneda: 'ARS' });
-    // La ruta es pública: nada de consultor, WhatsApp ni id.
-    expect(Object.keys(abierto)).toEqual(['nombre', 'programa', 'moneda']);
+    // Saludo + QUÉ falta en la ficha (nombres de campo, jamás valores).
+    expect(abierto).toEqual({
+      nombre: 'Gonzalo',
+      programa: 'Prestamista a Empresario',
+      moneda: 'ARS',
+      fichaPendiente: ['zona', 'marca_comercial', 'canal_origen'], // edad y whatsapp ya están
+    });
+    expect(Object.keys(abierto)).toEqual(['nombre', 'programa', 'moneda', 'fichaPendiente']);
   });
 
   it('el token es largo y aleatorio (no secuencial: es la credencial del alumno)', async () => {
@@ -336,5 +347,74 @@ describe('Alumnos · envío del diagnóstico', () => {
     const { repos, token, alumno, alcanceOtro } = await conToken();
     await ua.enviarDiagnostico(repos, token, diagnosticoCompleto());
     await expect(ua.listarDiagnosticos(repos, alcanceOtro, alumno.id)).rejects.toThrow(/inexistente/i);
+  });
+});
+
+describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => {
+  it('el envío llena los huecos de la ficha', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, FICHA); // sin zona/whatsapp/canal
+    const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
+
+    await ua.enviarDiagnostico(repos, t.token, diagnosticoCompleto());
+
+    const ficha = await ua.obtenerAlumno(repos, alcanceConsu, alumno.id);
+    expect(ficha!.zona).toBe('Córdoba Capital');
+    expect(ficha!.whatsapp).toBe('+5493510000000');
+    expect(ficha!.canalOrigen).toBe('Instagram');
+  });
+
+  it('lo que el consultor ya cargó NO se pisa desde el link', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, { ...FICHA, zona: 'Salta', whatsapp: '+5490000000000' });
+    const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
+
+    await ua.enviarDiagnostico(repos, t.token, diagnosticoCompleto()); // trae otra zona y otro whatsapp
+
+    const ficha = await ua.obtenerAlumno(repos, alcanceConsu, alumno.id);
+    expect(ficha!.zona).toBe('Salta');
+    expect(ficha!.whatsapp).toBe('+5490000000000');
+    expect(ficha!.canalOrigen).toBe('Instagram'); // el hueco sí se llenó
+  });
+
+  it('nombre y programa son intocables desde la ruta pública', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
+
+    await ua.enviarDiagnostico(repos, t.token, {
+      ...diagnosticoCompleto(),
+      nombre: 'Hacker', // ni el esquema del diagnóstico ni el de ficha los aceptan
+      programa: 'De Cero a Gestor Financiero',
+      moneda: 'USD',
+    });
+
+    const ficha = await ua.obtenerAlumno(repos, alcanceConsu, alumno.id);
+    expect(ficha!.nombre).toBe('Gonzalo');
+    expect(ficha!.programa).toBe('Prestamista a Empresario');
+    expect(ficha!.moneda).toBe('ARS');
+  });
+
+  it('una obligatoria del bloque 0 que falta en ficha Y en envío → rechazo sin consumir nada', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, FICHA); // sin zona
+    const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
+
+    const { zona: _, ...sinZona } = diagnosticoCompleto();
+    await expect(ua.enviarDiagnostico(repos, t.token, sinZona)).rejects.toThrow(/ciudad y provincia/i);
+
+    expect(await ua.listarDiagnosticos(repos, alcanceConsu, alumno.id)).toHaveLength(0);
+    await expect(ua.abrirFormulario(repos, t.token)).resolves.toBeTruthy(); // token vivo
+  });
+
+  it('si la ficha YA tiene la obligatoria, el envío no necesita traerla', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, {
+      ...FICHA, zona: 'Salta', whatsapp: '+5490000000000', canalOrigen: 'TikTok',
+    });
+    const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
+
+    const { edad: _e, zona: _z, whatsapp: _w, canal_origen: _c, ...soloRespuestas } = diagnosticoCompleto();
+    await expect(ua.enviarDiagnostico(repos, t.token, soloRespuestas)).resolves.toBeTruthy();
   });
 });
