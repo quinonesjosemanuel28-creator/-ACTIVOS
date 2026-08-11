@@ -281,6 +281,12 @@ CREATE TABLE IF NOT EXISTS diagnosticos (
   prioridad_declarada              TEXT,
 
   -- Bloque 8 — Proyección
+  -- Metas del trimestre: alimentan las metas numéricas de los OKRs del plan.
+  -- Sin par _sin_dato a propósito: son intenciones, no mediciones, y quedan
+  -- fuera del índice de claridad (que se calcula sobre las 19 con casilla).
+  meta_clientes_90d                INTEGER,
+  meta_capital_90d                 DOUBLE PRECISION,
+  meta_ganancia_90d                DOUBLE PRECISION,
   vision_12m                       TEXT,
   freno_percibido                  TEXT,
 
@@ -354,6 +360,11 @@ ALTER TABLE egresos ADD COLUMN IF NOT EXISTS cotizacion DOUBLE PRECISION;
 ALTER TABLE egresos ADD COLUMN IF NOT EXISTS recurrente INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE egresos ADD COLUMN IF NOT EXISTS medio_pago TEXT;
 ALTER TABLE egresos ADD COLUMN IF NOT EXISTS comentarios TEXT;
+-- Módulo de alumnos · metas a 90 días (ticket 5). Aditivas: una base creada
+-- con el ticket 1 no tiene estas columnas.
+ALTER TABLE diagnosticos ADD COLUMN IF NOT EXISTS meta_clientes_90d INTEGER;
+ALTER TABLE diagnosticos ADD COLUMN IF NOT EXISTS meta_capital_90d DOUBLE PRECISION;
+ALTER TABLE diagnosticos ADD COLUMN IF NOT EXISTS meta_ganancia_90d DOUBLE PRECISION;
 `;
 
 export async function migrarPg(pool: Pool): Promise<void> {

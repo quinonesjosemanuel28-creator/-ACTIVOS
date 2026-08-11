@@ -308,4 +308,6 @@ export const api = {
   diagnosticos: (alumnoId: string) => req<Diagnostico[]>(`/alumnos/${alumnoId}/diagnosticos`),
   editarDiagnostico: (id: string, patch: unknown) =>
     req<Diagnostico>(`/diagnosticos/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  exportarDiagnostico: (id: string) =>
+    req<{ nombreArchivo: string; contenido: string }>(`/diagnosticos/${id}/exportacion`),
 };

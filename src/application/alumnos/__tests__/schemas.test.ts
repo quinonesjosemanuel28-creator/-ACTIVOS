@@ -57,21 +57,31 @@ function base(): Record<string, unknown> {
     situacion_fiscal: 'Monotributo',
     unidad_ventas: 'No, solo presto dinero',
     prioridad_declarada: ['Cobranza'],
+    meta_clientes_90d: 90,
+    meta_capital_90d: 20_000_000,
+    meta_ganancia_90d: 1_500_000,
     vision_12m: 'Financiera formal',
     freno_percibido: 'Procesos',
   };
 }
 
 describe('Diagnóstico · el catálogo coincide con la especificación', () => {
-  it('45 preguntas en el diagnóstico (las 7 del bloque 0 son la ficha del alumno)', () => {
-    expect(CAMPOS_RESPUESTA).toHaveLength(45);
-    expect(CAMPOS_RESPUESTA.length + 7).toBe(52); // total del documento
+  it('48 preguntas en el diagnóstico: las 45 del documento + las 3 metas a 90 días', () => {
+    expect(CAMPOS_RESPUESTA).toHaveLength(48);
+    expect(CAMPOS_RESPUESTA.length + 7).toBe(55); // 52 del documento + 3 metas
   });
 
-  it('19 con casilla y 36 obligatorias (42 con las 6 del bloque 0)', () => {
+  it('las metas a 90 días son obligatorias pero NO suman al índice: siguen siendo 19 casillas', () => {
+    // La invariante que protege el índice de claridad: mide cuánto SABE el
+    // alumno de su negocio (19 métricas duras). Las metas son intenciones; si
+    // entraran, el denominador cambiaría y el índice dejaría de ser comparable
+    // contra el de los 90 días, que es la métrica de resultado del programa.
     expect(CAMPOS_CON_CASILLA).toHaveLength(19);
-    expect(CAMPOS_OBLIGATORIOS).toHaveLength(36);
-    expect(CAMPOS_OBLIGATORIOS.length + 6).toBe(42);
+    for (const meta of ['meta_clientes_90d', 'meta_capital_90d', 'meta_ganancia_90d'] as const) {
+      expect(CAMPOS_CON_CASILLA).not.toContain(meta);
+      expect(CAMPOS_OBLIGATORIOS).toContain(meta);
+    }
+    expect(CAMPOS_OBLIGATORIOS).toHaveLength(39); // 36 + las 3 metas
   });
 
   it('GUARDA DE DERIVA · las casillas del catálogo son exactamente las métricas del dominio', () => {

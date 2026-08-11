@@ -15,6 +15,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { alcanzaFila, titularSegunAlcance, type Alcance } from '../../domain/auth/permisos';
 import { calcularClaridad, METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/claridad';
 import { esCampoMulti } from '../../domain/alumnos/tipos';
+import { exportarDiagnostico } from '../../domain/alumnos/exportacion';
 import {
   DIAS_VIGENCIA_TOKEN,
   estadoToken,
@@ -358,6 +359,28 @@ export async function editarDiagnostico(
   };
   await repos.diagnosticos.actualizar(actualizado);
   return actualizado;
+}
+
+/**
+ * Diagnóstico exportado en el formato que consume la skill del plan de 90
+ * días. Mismo ámbito que la lectura: el diagnóstico de un alumno ajeno no
+ * existe. Devuelve texto plano (Markdown) para copiar y pegar en Claude.
+ */
+export async function exportarDiagnosticoParaSkill(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  diagnosticoId: string,
+): Promise<{ nombreArchivo: string; contenido: string }> {
+  const d = await repos.diagnosticos.obtener(diagnosticoId);
+  const alumno = d ? await repos.alumnos.obtener(d.alumnoId) : null;
+  if (!d || !alumno || !alcanzaFila(alcance, alumno.consultorId)) {
+    throw new ErrorAlumnos('NO_ENCONTRADO', 'Diagnóstico inexistente.');
+  }
+  const slug = alumno.nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_');
+  return {
+    nombreArchivo: `Diagnostico_${slug}_${d.fecha.slice(0, 10)}.md`,
+    contenido: exportarDiagnostico(alumno, d),
+  };
 }
 
 /** Diagnósticos de un alumno, respetando el ámbito del que consulta. */

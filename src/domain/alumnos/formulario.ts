@@ -129,7 +129,14 @@ export const BLOQUES: readonly Bloque[] = [
   },
   {
     titulo: 'Proyección',
+    descripcion: 'Adónde querés llegar. De acá salen las metas numéricas de tu plan de 90 días.',
     preguntas: [
+      // Las tres metas del trimestre. Sin casilla a propósito: son intenciones,
+      // no mediciones — el alumno siempre tiene una, aunque sea aproximada.
+      // Quedan fuera del índice de claridad (ver tipos.ts).
+      { campo: 'meta_clientes_90d', label: '¿A cuántos clientes querés llegar en los próximos 90 días?', tipo: 'numero', obl: true, nlc: false, ayuda: 'Un número, aunque sea aproximado.' },
+      { campo: 'meta_capital_90d', label: '¿Cuánto capital calculás que necesitás tener colocado para llegar a ese objetivo?', tipo: 'moneda', obl: true, nlc: false },
+      { campo: 'meta_ganancia_90d', label: '¿Cuánta ganancia neta mensual querés estar generando dentro de 90 días?', tipo: 'moneda', obl: true, nlc: false },
       { campo: 'vision_12m', label: '¿Dónde querés estar con este negocio dentro de 12 meses?', tipo: 'texto_largo', obl: true, nlc: false },
       { campo: 'freno_percibido', label: '¿Qué es lo que más te frena para llegar ahí?', tipo: 'texto_largo', obl: true, nlc: false },
     ],

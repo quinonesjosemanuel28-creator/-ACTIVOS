@@ -235,6 +235,12 @@ CREATE TABLE IF NOT EXISTS diagnosticos (
   unidad_ventas                    TEXT,
   prioridad_declarada              TEXT,
 
+  -- Metas del trimestre: alimentan las metas numéricas de los OKRs del plan.
+  -- Sin par _sin_dato a propósito: son intenciones, no mediciones, y quedan
+  -- fuera del índice de claridad (que se calcula sobre las 19 con casilla).
+  meta_clientes_90d                INTEGER,
+  meta_capital_90d                 REAL,
+  meta_ganancia_90d                REAL,
   vision_12m                       TEXT,
   freno_percibido                  TEXT,
 
@@ -289,6 +295,11 @@ export function migrar(db: Database.Database): void {
   agregarColumnaSiFalta(db, 'egresos', 'recurrente', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'egresos', 'medio_pago', 'TEXT');
   agregarColumnaSiFalta(db, 'egresos', 'comentarios', 'TEXT');
+  // Módulo de alumnos · metas a 90 días (ticket 5). Aditivas: una base local
+  // creada con el ticket 1 no tiene estas columnas.
+  agregarColumnaSiFalta(db, 'diagnosticos', 'meta_clientes_90d', 'INTEGER');
+  agregarColumnaSiFalta(db, 'diagnosticos', 'meta_capital_90d', 'REAL');
+  agregarColumnaSiFalta(db, 'diagnosticos', 'meta_ganancia_90d', 'REAL');
   // Comisiones: flags de setting a nivel de pago + registro de liquidaciones.
   agregarColumnaSiFalta(db, 'pagos', 'aplica_setting', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'pagos', 'setter', 'TEXT');

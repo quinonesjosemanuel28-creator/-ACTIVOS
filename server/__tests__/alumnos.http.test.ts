@@ -80,6 +80,9 @@ function diagnosticoCompleto(): Record<string, unknown> {
     situacion_fiscal: 'Monotributo',
     unidad_ventas: 'No, solo presto dinero',
     prioridad_declarada: ['Cobranza'],
+    meta_clientes_90d: 90,
+    meta_capital_90d: 20_000_000,
+    meta_ganancia_90d: 1_500_000,
     vision_12m: 'Financiera formal',
     freno_percibido: 'Procesos',
   };
@@ -333,6 +336,28 @@ describe('HTTP · rutas privadas: ámbito por fila de punta a punta', () => {
     const { alumnoId } = await crearAlumnoConToken(ctx.cookies.otroConsultor);
     const ficha = await fetch(`${ctx.base}/api/alumnos/${alumnoId}`, { headers: { cookie: ctx.cookies.admin } });
     expect(ficha.status).toBe(200);
+  });
+
+  it('exportar para el plan: dueño 200 con el Markdown; LECTOR 403; ajeno 404', async () => {
+    const { token } = await crearAlumnoConToken(ctx.cookies.consultor);
+    const envio = await fetch(`${ctx.base}/api/formulario/${token}`, {
+      method: 'POST', headers: json, body: JSON.stringify(diagnosticoCompleto()),
+    });
+    const { id } = (await envio.json()) as { id: string };
+    const url = `${ctx.base}/api/diagnosticos/${id}/exportacion`;
+
+    expect((await fetch(url, { headers: { cookie: ctx.cookies.lector } })).status).toBe(403);
+    expect((await fetch(url, { headers: { cookie: ctx.cookies.otroConsultor } })).status).toBe(404);
+
+    const propio = await fetch(url, { headers: { cookie: ctx.cookies.consultor } });
+    expect(propio.status).toBe(200);
+    const r = (await propio.json()) as { nombreArchivo: string; contenido: string };
+    expect(r.nombreArchivo).toMatch(/^Diagnostico_Gonzalo_\d{4}-\d{2}-\d{2}\.md$/);
+    expect(r.contenido).toContain('# Diagnóstico — Gonzalo');
+    expect(r.contenido).toContain('## Bloque 1 · ORDENAR');
+    expect(r.contenido).toContain('**30. ');
+    // Las metas a 90 días que agregamos llegan hasta el documento.
+    expect(r.contenido).toContain('ARS 20.000.000');
   });
 
   it('corregir un diagnóstico: dueño 200 con índice recalculado; LECTOR 403; ajeno 404', async () => {

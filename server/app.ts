@@ -389,6 +389,11 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   app.put('/api/diagnosticos/:id', requiere('editar_alumnos'), h((req, res) =>
     ual.editarDiagnostico(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body),
   ));
+  // Exportación para la skill del plan de 90 días: el consultor copia el texto
+  // y lo pega en Claude. La generación del plan vive fuera de la app.
+  app.get('/api/diagnosticos/:id/exportacion', requiere('ver_alumnos'), h((req, res) =>
+    ual.exportarDiagnosticoParaSkill(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
 
   // ───────────────────── Frontend compilado (producción) ─────────────────────
   // Una ruta /api/* que no matcheó nada llega acá → 404 JSON (no el index.html),

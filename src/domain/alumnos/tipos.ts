@@ -164,6 +164,14 @@ export const CAMPOS_RESPUESTA = [
   'unidad_ventas',
   'prioridad_declarada',
   // Bloque 8 — Proyección
+  // Las tres metas a 90 días son INTENCIONES, no mediciones: no llevan casilla
+  // y quedan FUERA del índice de claridad (que mide cuánto sabe el alumno de su
+  // negocio hoy, sobre 19 métricas duras). Meterlas ahí cambiaría el
+  // denominador y el índice dejaría de ser comparable contra el de los 90 días,
+  // que es la métrica de resultado del programa.
+  'meta_clientes_90d',
+  'meta_capital_90d',
+  'meta_ganancia_90d',
   'vision_12m',
   'freno_percibido',
 ] as const;

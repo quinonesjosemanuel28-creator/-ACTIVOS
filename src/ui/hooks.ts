@@ -341,3 +341,8 @@ export function useEditarDiagnostico() {
   const inval = useInvalidarAlumnos();
   return useMutation({ mutationFn: (v: { id: string; patch: unknown }) => api.editarDiagnostico(v.id, v.patch), onSuccess: inval });
 }
+
+/** Exportación del diagnóstico para la skill del plan (copiar / descargar). */
+export function useExportarDiagnostico() {
+  return useMutation({ mutationFn: (id: string) => api.exportarDiagnostico(id) });
+}

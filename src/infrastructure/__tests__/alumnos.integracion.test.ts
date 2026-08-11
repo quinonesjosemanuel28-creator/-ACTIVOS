@@ -74,6 +74,9 @@ function diagnosticoCompleto(): Record<string, unknown> {
     unidad_ventas: 'No, solo presto dinero',
     prioridad_declarada: ['Cobranza'],
 
+    meta_clientes_90d: 90,
+    meta_capital_90d: 20_000_000,
+    meta_ganancia_90d: 1_500_000,
     vision_12m: 'Una financiera formal con 3 empleados',
     freno_percibido: 'No tengo procesos',
   };

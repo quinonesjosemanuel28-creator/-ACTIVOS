@@ -9,7 +9,7 @@
  * formulario público (Campo + BLOQUES): una sola definición de las preguntas.
  */
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, Copy, GraduationCap, Link2, Pencil, Plus, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, FileDown, GraduationCap, Link2, Pencil, Plus, UserRound, X } from 'lucide-react';
 import type { Alumno, Diagnostico } from '@domain/alumnos/tipos';
 import { BLOQUES, PREGUNTA_POR_CAMPO } from '@domain/alumnos/formulario';
 import { calcularClaridad, nivelClaridad, type NivelClaridad } from '@domain/alumnos/claridad';
@@ -21,6 +21,7 @@ import {
   useEditarAlumno,
   useEditarDiagnostico,
   useEmitirLink,
+  useExportarDiagnostico,
 } from '../hooks';
 import { SectionHeader } from '../components/SectionHeader';
 import { Badge, Button, Card, Input, Select, Spinner } from '../components/ui/primitives';
@@ -392,6 +393,57 @@ function LinkDiagnostico({ alumno }: { alumno: Alumno }) {
 
 // ───────────────────── Detalle del diagnóstico ─────────────────────
 
+/**
+ * Exportación para la skill del plan de 90 días. Dos salidas del mismo texto:
+ * copiar (para pegar en Claude, que es el camino normal) y descargar el .md
+ * (para adjuntarlo o guardarlo). La generación del plan vive fuera de la app.
+ */
+function ExportarParaPlan({ diagnosticoId }: { diagnosticoId: string }) {
+  const exportar = useExportarDiagnostico();
+  const [copiado, setCopiado] = useState(false);
+  const [error, setError] = useState(false);
+
+  const copiar = async () => {
+    setError(false);
+    try {
+      const { contenido } = await exportar.mutateAsync(diagnosticoId);
+      await navigator.clipboard.writeText(contenido);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 4000);
+    } catch {
+      setError(true);
+    }
+  };
+
+  const descargar = async () => {
+    setError(false);
+    try {
+      const { contenido, nombreArchivo } = await exportar.mutateAsync(diagnosticoId);
+      const url = URL.createObjectURL(new Blob([contenido], { type: 'text/markdown;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombreArchivo;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError(true);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Button variant="gold" onClick={() => void copiar()} disabled={exportar.isPending} title="Copiar el diagnóstico para pegarlo en Claude">
+        {copiado ? <Check size={14} /> : <FileDown size={14} />}
+        <span className="ml-1">{copiado ? 'Copiado' : 'Exportar para el plan'}</span>
+      </Button>
+      <Button variant="ghost" size="icon" onClick={() => void descargar()} disabled={exportar.isPending} title="Descargar como .md">
+        <Download size={14} />
+      </Button>
+      {error && <span className="text-xs text-signal-red">No se pudo exportar.</span>}
+    </div>
+  );
+}
+
 function DetalleDiagnostico({ diagnostico: d, moneda }: { diagnostico: Diagnostico; moneda: string }) {
   const guardar = useEditarDiagnostico();
   const original = useMemo(() => estadoDesdeRespuestas(d.respuestas), [d.respuestas]);
@@ -433,10 +485,13 @@ function DetalleDiagnostico({ diagnostico: d, moneda }: { diagnostico: Diagnosti
             <span className="ml-2 text-xs text-navy-400">({d.metricasRespondidas}/{d.metricasAplicables} métricas con dato)</span>
           </p>
         </div>
-        <Button variant="ghost" onClick={() => { setCorrigiendo((v) => !v); setValores(original.valores); setSinDato(original.sinDato); setError(null); }}>
-          {corrigiendo ? <X size={14} /> : <Pencil size={14} />}
-          <span className="ml-1">{corrigiendo ? 'Descartar' : 'Corregir respuestas'}</span>
-        </Button>
+        <div className="flex gap-2">
+          <ExportarParaPlan diagnosticoId={d.id} />
+          <Button variant="ghost" onClick={() => { setCorrigiendo((v) => !v); setValores(original.valores); setSinDato(original.sinDato); setError(null); }}>
+            {corrigiendo ? <X size={14} /> : <Pencil size={14} />}
+            <span className="ml-1">{corrigiendo ? 'Descartar' : 'Corregir respuestas'}</span>
+          </Button>
+        </div>
       </div>
 
       {faltantes.length > 0 && !corrigiendo && (
