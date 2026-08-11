@@ -334,4 +334,29 @@ describe('HTTP · rutas privadas: ámbito por fila de punta a punta', () => {
     const ficha = await fetch(`${ctx.base}/api/alumnos/${alumnoId}`, { headers: { cookie: ctx.cookies.admin } });
     expect(ficha.status).toBe(200);
   });
+
+  it('corregir un diagnóstico: dueño 200 con índice recalculado; LECTOR 403; ajeno 404', async () => {
+    const { token } = await crearAlumnoConToken(ctx.cookies.consultor);
+    const envio = await fetch(`${ctx.base}/api/formulario/${token}`, {
+      method: 'POST', headers: json,
+      body: JSON.stringify({ ...diagnosticoCompleto(), mora_clientes: null, mora_clientes_sin_dato: true }),
+    });
+    const { id } = (await envio.json()) as { id: string };
+    const cuerpo = JSON.stringify({ mora_clientes: 9 });
+
+    expect((await fetch(`${ctx.base}/api/diagnosticos/${id}`, {
+      method: 'PUT', headers: { ...json, cookie: ctx.cookies.lector }, body: cuerpo,
+    })).status).toBe(403);
+    expect((await fetch(`${ctx.base}/api/diagnosticos/${id}`, {
+      method: 'PUT', headers: { ...json, cookie: ctx.cookies.otroConsultor }, body: cuerpo,
+    })).status).toBe(404);
+
+    const propio = await fetch(`${ctx.base}/api/diagnosticos/${id}`, {
+      method: 'PUT', headers: { ...json, cookie: ctx.cookies.consultor }, body: cuerpo,
+    });
+    expect(propio.status).toBe(200);
+    const d = (await propio.json()) as { indiceClaridad: number; editadoPorConsultor: boolean };
+    expect(d.indiceClaridad).toBe(100);
+    expect(d.editadoPorConsultor).toBe(true);
+  });
 });

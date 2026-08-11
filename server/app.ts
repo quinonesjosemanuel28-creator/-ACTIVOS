@@ -384,6 +384,11 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   app.get('/api/alumnos/:id/diagnosticos', requiere('ver_alumnos'), h((req, res) =>
     ual.listarDiagnosticos(reposAlumnos, alcanceDe(res), param(req, 'id')),
   ));
+  // Corrección durante la llamada: ajusta la fila y la marca como editada por
+  // el consultor (no crea envío nuevo). Fuera de ámbito responde 404.
+  app.put('/api/diagnosticos/:id', requiere('editar_alumnos'), h((req, res) =>
+    ual.editarDiagnostico(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body),
+  ));
 
   // ───────────────────── Frontend compilado (producción) ─────────────────────
   // Una ruta /api/* que no matcheó nada llega acá → 404 JSON (no el index.html),

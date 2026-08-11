@@ -124,6 +124,20 @@ export const diagnosticoInputSchema = z
 
 export type DiagnosticoInput = z.infer<typeof diagnosticoInputSchema>;
 
+/**
+ * Corrección del consultor durante la llamada: cualquier subconjunto de las 45
+ * respuestas y sus casillas. SIN defaults a propósito — acá "ausente" significa
+ * "no tocar lo guardado", y un default(false) pisaría casillas que el alumno
+ * marcó. Tampoco exige obligatorias: es un parche, no un envío.
+ */
+const formaPatch: Record<string, z.ZodTypeAny> = {};
+for (const campo of CAMPOS_RESPUESTA) {
+  formaPatch[campo] = validadorDe(CATALOGO[campo]);
+  if (CATALOGO[campo].nlc) formaPatch[`${campo}${SUFIJO_SIN_DATO}`] = z.boolean().optional();
+}
+export const diagnosticoPatchSchema = z.object(formaPatch);
+export type DiagnosticoPatch = z.infer<typeof diagnosticoPatchSchema>;
+
 // ───────────────────────── Bloque 0 · ficha del alumno ─────────────────────────
 
 export const alumnoInputSchema = z.object({

@@ -189,6 +189,30 @@ export function crearDiagnosticosRepo(db: Database.Database): DiagnosticosRepo {
          VALUES (${COLUMNAS_DIAGNOSTICO.map(() => '?').join(',')})`,
       ).run(...valoresDe(d));
     },
+    async actualizar(d) {
+      // Corrección del consultor: SOLO respuestas, índice y el flag. La
+      // identidad del envío (fecha, origen, alumno, foto programa/moneda) no
+      // aparece en el SET a propósito.
+      const set = [
+        'editado_por_consultor = ?',
+        'indice_claridad = ?',
+        'metricas_aplicables = ?',
+        'metricas_respondidas = ?',
+        ...COLUMNAS_RESPUESTA.map((c) => `${c} = ?`),
+      ];
+      db.prepare(`UPDATE diagnosticos SET ${set.join(', ')} WHERE id = ?`).run(
+        d.editadoPorConsultor ? 1 : 0,
+        d.indiceClaridad,
+        d.metricasAplicables,
+        d.metricasRespondidas,
+        ...COLUMNAS_RESPUESTA.map((col) => {
+          const v = d.respuestas[col];
+          if (ES_CASILLA.has(col)) return v === true ? 1 : 0;
+          return v ?? null;
+        }),
+        d.id,
+      );
+    },
   };
 }
 

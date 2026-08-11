@@ -32,7 +32,14 @@ export interface DiagnosticosRepo {
   obtener(id: string): Promise<Diagnostico | null>;
   /** Todos los envíos del alumno, del más nuevo al más viejo. Nunca se pisan. */
   listarPorAlumno(alumnoId: string): Promise<Diagnostico[]>;
+  /** INSERT puro: un envío jamás pisa a otro. */
   guardar(diagnostico: Diagnostico): Promise<void>;
+  /**
+   * Corrección del consultor sobre una fila EXISTENTE: respuestas, índice y el
+   * flag editado_por_consultor. No toca fecha, origen, alumno ni la foto de
+   * programa/moneda — la identidad del envío es intocable.
+   */
+  actualizar(diagnostico: Diagnostico): Promise<void>;
 }
 
 export interface TokensRepo {

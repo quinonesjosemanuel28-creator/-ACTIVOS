@@ -174,6 +174,24 @@ export function crearDiagnosticosRepoPg(pool: Pool): DiagnosticosRepo {
         valoresDe(d),
       );
     },
+    async actualizar(d) {
+      // Corrección del consultor: SOLO respuestas, índice y el flag — la
+      // identidad del envío no aparece en el SET (espejo del repo SQLite).
+      const columnas = ['editado_por_consultor', 'indice_claridad', 'metricas_aplicables', 'metricas_respondidas', ...COLUMNAS_RESPUESTA];
+      const set = columnas.map((c, i) => `${c} = $${i + 1}`);
+      await pool.query(`UPDATE diagnosticos SET ${set.join(', ')} WHERE id = $${columnas.length + 1}`, [
+        d.editadoPorConsultor ? 1 : 0,
+        d.indiceClaridad,
+        d.metricasAplicables,
+        d.metricasRespondidas,
+        ...COLUMNAS_RESPUESTA.map((col) => {
+          const v = d.respuestas[col];
+          if (ES_CASILLA.has(col)) return v === true ? 1 : 0;
+          return v ?? null;
+        }),
+        d.id,
+      ]);
+    },
   };
 }
 

@@ -350,6 +350,81 @@ describe('Alumnos · envío del diagnóstico', () => {
   });
 });
 
+describe('Alumnos · corrección del consultor sobre un diagnóstico', () => {
+  async function conDiagnostico() {
+    const ctx = await setup();
+    const alumno = await ua.crearAlumno(ctx.repos, ctx.consu.id, FICHA);
+    const t = await ua.emitirToken(ctx.repos, ctx.alcanceConsu, alumno.id);
+    // El alumno no supo la mora: entra con 18/19 = 95.
+    const flojo = { ...diagnosticoCompleto(), mora_clientes: null, mora_clientes_sin_dato: true };
+    const d = await ua.enviarDiagnostico(ctx.repos, t.token, flojo);
+    return { ...ctx, alumno, d };
+  }
+
+  it('corrige la fila, recalcula el índice y marca editadoPorConsultor — sin fila nueva', async () => {
+    const { repos, alcanceConsu, alumno, d } = await conDiagnostico();
+    expect(d.indiceClaridad).toBe(95);
+
+    // En la llamada aparece el dato: el consultor lo carga.
+    const editado = await ua.editarDiagnostico(repos, alcanceConsu, d.id, { mora_clientes: 12 });
+
+    expect(editado.indiceClaridad).toBe(100);
+    expect(editado.editadoPorConsultor).toBe(true);
+    expect(editado.respuestas.mora_clientes).toBe(12);
+    // Cargar el dato resolvió el "no lo sé".
+    expect(editado.respuestas.mora_clientes_sin_dato).toBe(false);
+
+    // Misma fila: no es un envío nuevo, y la identidad no se movió.
+    const todos = await ua.listarDiagnosticos(repos, alcanceConsu, alumno.id);
+    expect(todos).toHaveLength(1);
+    expect(todos[0]!.id).toBe(d.id);
+    expect(todos[0]!.fecha).toBe(d.fecha);
+    expect(todos[0]!.origen).toBe('alumno'); // lo cargó el alumno; el flag dice que se corrigió
+    expect(todos[0]!.moneda).toBe(d.moneda);
+    expect(todos[0]!.indiceClaridad).toBe(100);
+  });
+
+  it('marcar la casilla en la corrección borra el valor guardado (la casilla manda)', async () => {
+    const { repos, alcanceConsu, d } = await conDiagnostico();
+    const editado = await ua.editarDiagnostico(repos, alcanceConsu, d.id, { ganancia_mensual_sin_dato: true });
+    expect(editado.respuestas.ganancia_mensual).toBeNull();
+    expect(editado.respuestas.ganancia_mensual_sin_dato).toBe(true);
+    expect(editado.indiceClaridad).toBe(89); // 17 de 19
+  });
+
+  it('lo que el patch no trae queda como estaba', async () => {
+    const { repos, alcanceConsu, d } = await conDiagnostico();
+    const editado = await ua.editarDiagnostico(repos, alcanceConsu, d.id, { equipo: 'Yo + un cobrador' });
+    expect(editado.respuestas.equipo).toBe('Yo + un cobrador');
+    expect(editado.respuestas.capital_colocado).toBe(13_000_000); // intacto
+    expect(editado.respuestas.mora_clientes_sin_dato).toBe(true); // la casilla del alumno sigue
+  });
+
+  it('un multi corregido viaja como array y se guarda como JSON', async () => {
+    const { repos, alcanceConsu, d } = await conDiagnostico();
+    const editado = await ua.editarDiagnostico(repos, alcanceConsu, d.id, {
+      perfil_cliente: ['Jubilados', 'Informales'],
+    });
+    expect(JSON.parse(editado.respuestas.perfil_cliente as string)).toEqual(['Jubilados', 'Informales']);
+  });
+
+  it('una opción fuera de lista se rechaza sin tocar la fila', async () => {
+    const { repos, alcanceConsu, d } = await conDiagnostico();
+    await expect(
+      ua.editarDiagnostico(repos, alcanceConsu, d.id, { origen_capital: 'Del banco' }),
+    ).rejects.toThrow();
+    const intacto = await repos.diagnosticos.obtener(d.id);
+    expect(intacto!.editadoPorConsultor).toBe(false);
+  });
+
+  it('el diagnóstico de un alumno ajeno no se puede corregir (inexistente); ADMIN sí', async () => {
+    const { repos, alcanceOtro, alcanceAdmin, d } = await conDiagnostico();
+    await expect(ua.editarDiagnostico(repos, alcanceOtro, d.id, { mora_clientes: 5 })).rejects.toThrow(/inexistente/i);
+    const porAdmin = await ua.editarDiagnostico(repos, alcanceAdmin, d.id, { mora_clientes: 5 });
+    expect(porAdmin.indiceClaridad).toBe(100);
+  });
+});
+
 describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => {
   it('el envío llena los huecos de la ficha', async () => {
     const { repos, consu, alcanceConsu } = await setup();

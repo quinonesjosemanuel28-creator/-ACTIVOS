@@ -13,7 +13,8 @@
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import { alcanzaFila, titularSegunAlcance, type Alcance } from '../../domain/auth/permisos';
-import { calcularClaridad } from '../../domain/alumnos/claridad';
+import { calcularClaridad, METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/claridad';
+import { esCampoMulti } from '../../domain/alumnos/tipos';
 import {
   DIAS_VIGENCIA_TOKEN,
   estadoToken,
@@ -28,6 +29,7 @@ import {
   alumnoInputSchema,
   alumnoPatchSchema,
   diagnosticoInputSchema,
+  diagnosticoPatchSchema,
   fichaPublicaSchema,
   type FichaPublica,
 } from './schemas';
@@ -303,6 +305,59 @@ export async function enviarDiagnostico(
   if (fichaCompletada) await repos.alumnos.guardar(fichaCompletada);
 
   return diagnostico;
+}
+
+/**
+ * Corrección del consultor sobre un diagnóstico EXISTENTE, durante la llamada.
+ *
+ * No crea una fila nueva: la regla "cada envío es una fila nueva" es para los
+ * ENVÍOS del formulario. La corrección ajusta la fila y queda registrada con
+ * `editadoPorConsultor` — para eso existen las dos columnas (origen dice quién
+ * lo cargó; el flag dice que el consultor lo tocó después). La identidad del
+ * envío (fecha, origen, foto de programa/moneda) no se toca, y el índice de
+ * claridad se recalcula con las respuestas corregidas.
+ */
+export async function editarDiagnostico(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  diagnosticoId: string,
+  entrada: unknown,
+): Promise<Diagnostico> {
+  const d = await repos.diagnosticos.obtener(diagnosticoId);
+  const alumno = d ? await repos.alumnos.obtener(d.alumnoId) : null;
+  // Fuera de ámbito = inexistente: mismo trato que la ficha ajena.
+  if (!d || !alumno || !alcanzaFila(alcance, alumno.consultorId)) {
+    throw new ErrorAlumnos('NO_ENCONTRADO', 'Diagnóstico inexistente.');
+  }
+
+  const patch = diagnosticoPatchSchema.parse(entrada) as Record<string, unknown>;
+
+  const respuestas = { ...d.respuestas };
+  for (const [campo, valor] of Object.entries(patch)) {
+    if (valor === undefined) continue; // ausente = no tocar lo guardado
+    respuestas[campo] = esCampoMulti(campo) && Array.isArray(valor) ? JSON.stringify(valor) : (valor as never);
+  }
+
+  // Coherencia casilla ↔ valor, con las mismas reglas del envío:
+  for (const m of METRICAS_CLARIDAD) {
+    const flag = `${m}${SUFIJO_SIN_DATO}`;
+    // Cargar un dato resuelve el "no lo sé" (salvo que el patch diga otra cosa).
+    if (patch[flag] === undefined && patch[m] != null) respuestas[flag] = false;
+    // Y la casilla marcada MANDA: nunca queda un valor junto a "sin dato".
+    if (respuestas[flag] === true) respuestas[m] = null;
+  }
+
+  const claridad = calcularClaridad(respuestas);
+  const actualizado: Diagnostico = {
+    ...d,
+    editadoPorConsultor: true,
+    respuestas,
+    indiceClaridad: claridad.indice,
+    metricasAplicables: claridad.aplicables,
+    metricasRespondidas: claridad.respondidas,
+  };
+  await repos.diagnosticos.actualizar(actualizado);
+  return actualizado;
 }
 
 /** Diagnósticos de un alumno, respetando el ámbito del que consulta. */
