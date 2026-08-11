@@ -7,6 +7,7 @@ import { Sidebar, MobileNav } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { Spinner } from './components/ui/primitives';
 import { VistaLogin } from './views/VistaLogin';
+import { VistaFormulario } from './views/VistaFormulario';
 import { VistaEjecutiva } from './views/VistaEjecutiva';
 import { VistaAlertas } from './views/VistaAlertas';
 import { VistaCashFlow } from './views/VistaCashFlow';
@@ -22,7 +23,21 @@ import { VistaComisiones } from './views/VistaComisiones';
 import { VistaDatos } from './views/VistaDatos';
 import { VistaUsuarios } from './views/VistaUsuarios';
 
+/**
+ * /formulario/<token> es la ÚNICA ruta pública de la SPA: el alumno llega por
+ * link, sin cuenta. Se resuelve a nivel módulo (el pathname no cambia sin
+ * recargar) y ANTES de tocar la sesión: el formulario ni pregunta si hay login.
+ * El server hace el fallback SPA de esa URL a index.html en producción.
+ */
+const TOKEN_FORMULARIO =
+  typeof window === 'undefined' ? undefined : /^\/formulario\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname)?.[1];
+
 export function App() {
+  if (TOKEN_FORMULARIO) return <VistaFormulario token={TOKEN_FORMULARIO} />;
+  return <AppConSesion />;
+}
+
+function AppConSesion() {
   const sesion = useSesion();
 
   // Publica la sesión (usuario + acciones) en el store ANTES de pintar, para

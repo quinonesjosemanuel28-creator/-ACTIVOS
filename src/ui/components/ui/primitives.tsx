@@ -99,6 +99,21 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
 );
 Input.displayName = 'Input';
 
+// ───────────────────────── Textarea ─────────────────────────
+export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  ({ className, ...props }, ref) => (
+    <textarea
+      ref={ref}
+      className={cn(
+        'min-h-[5.5rem] w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 placeholder:text-navy-300 focus:outline-none focus:ring-2 focus:ring-gold-400 dark:border-navy-600 dark:bg-navy-800 dark:text-navy-50',
+        className,
+      )}
+      {...props}
+    />
+  ),
+);
+Textarea.displayName = 'Textarea';
+
 // ───────────────────────── Spinner ─────────────────────────
 export function Spinner({ className }: { className?: string }) {
   return (
