@@ -72,4 +72,10 @@ describe('Auth · helpers de usuario', () => {
     expect(TABLAS_SENSIBLES).toContain('usuarios');
     expect(TABLAS_SENSIBLES).toContain('sesiones');
   });
+
+  it('las tablas del módulo de alumnos están excluidas del asistente (temporal, ticket 6)', () => {
+    for (const t of ['alumnos', 'diagnosticos', 'diagnostico_tokens', 'alumno_consultor_historial']) {
+      expect(TABLAS_SENSIBLES).toContain(t);
+    }
+  });
 });

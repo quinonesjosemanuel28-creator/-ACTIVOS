@@ -79,6 +79,15 @@ describe('sqlGuard · bloquea tablas sensibles (auth)', () => {
   it('no bloquea por subcadena (p. ej. una columna "usuarios_totales")', () => {
     expect(esSoloLectura('SELECT usuarios_totales FROM metricas').ok).toBe(true);
   });
+
+  it('rechaza las tablas del módulo de alumnos (exclusión temporal, ticket 6)', () => {
+    expect(esSoloLectura('SELECT * FROM alumnos').ok).toBe(false);
+    expect(esSoloLectura('SELECT capital_colocado FROM diagnosticos').ok).toBe(false);
+    expect(esSoloLectura('SELECT token FROM diagnostico_tokens').ok).toBe(false);
+    expect(esSoloLectura('SELECT * FROM alumno_consultor_historial').ok).toBe(false);
+    // un consultor pidiendo la cartera de otro vía JOIN escondido, tampoco
+    expect(esSoloLectura('SELECT c.* FROM cierres c, alumnos a').ok).toBe(false);
+  });
 });
 
 describe('conLimite', () => {

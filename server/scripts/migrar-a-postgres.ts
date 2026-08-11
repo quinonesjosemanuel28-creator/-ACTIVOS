@@ -13,20 +13,9 @@
 import 'dotenv/config';
 import { getDb } from '../../src/infrastructure/sqlite/db';
 import { getPoolPg, cerrarPoolPg } from '../../src/infrastructure/postgres/db';
-
-// Orden respetando claves foráneas (cobros→ventas, pagos→cierres).
-const TABLAS = [
-  'ventas',
-  'cobros',
-  'egresos',
-  'funnel',
-  'parametros',
-  'cierre_mes',
-  'cierres',
-  'pagos',
-  'funnel_canal',
-  'comisiones_liquidacion',
-] as const;
+// Qué se copia y qué se excluye (y por qué) vive en tablas.ts, con un test
+// estructural que exige que toda tabla del esquema esté en una de las listas.
+import { TABLAS } from './tablas';
 
 const db = getDb();
 const pool = await getPoolPg(); // corre las migraciones de esquema en PG

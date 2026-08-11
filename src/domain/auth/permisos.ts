@@ -109,5 +109,22 @@ export function normalizarEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** Tablas de auth que el Asistente IA NUNCA debe ver ni consultar. */
-export const TABLAS_SENSIBLES: readonly string[] = ['usuarios', 'sesiones'] as const;
+/**
+ * Tablas que el Asistente IA no debe ver ni consultar.
+ *
+ * - usuarios/sesiones: exclusión PERMANENTE (hashes de contraseña, tokens).
+ * - Módulo de alumnos: exclusión TEMPORAL, no de arquitectura. El text-to-SQL
+ *   arma la consulta sobre el esquema crudo y pasaría por encima del ámbito
+ *   por consultor (ticket 2): un consultor podría pedir la cartera de otro.
+ *   En el ticket 6 el asistente se reactiva sobre el módulo consultando
+ *   vistas ya filtradas por sesión, y estas entradas se retiran de acá.
+ */
+export const TABLAS_SENSIBLES: readonly string[] = [
+  'usuarios',
+  'sesiones',
+  // ── módulo de alumnos (retirar en el ticket 6) ──
+  'alumnos',
+  'diagnosticos',
+  'diagnostico_tokens',
+  'alumno_consultor_historial',
+] as const;
