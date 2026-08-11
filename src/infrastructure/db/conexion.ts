@@ -12,6 +12,7 @@ import type { EgresosAdminRepo } from '../../application/egresos/ports';
 import type { LiquidacionRepo } from '../../application/comisiones/ports';
 import type { FunnelCanalRepo } from '../../application/funnel/ports';
 import type { ReposAuth } from '../../application/auth/ports';
+import type { ReposAlumnos } from '../../application/alumnos/ports';
 import { armarRepositoriosDashboard } from '../adapters/dashboardRepos';
 import { getDb } from '../sqlite/db';
 import { crearRepositorios } from '../sqlite/repos';
@@ -20,6 +21,12 @@ import { crearEgresosAdminRepo } from '../sqlite/egresosRepos';
 import { crearLiquidacionRepo } from '../sqlite/comisionesRepos';
 import { crearFunnelCanalRepo } from '../sqlite/funnelCanalRepos';
 import { crearUsuariosRepo, crearSesionesRepo } from '../sqlite/authRepos';
+import {
+  crearAlumnosRepo,
+  crearDiagnosticosRepo,
+  crearHistorialRepo,
+  crearTokensRepo,
+} from '../sqlite/alumnosRepos';
 import { getPoolPg } from '../postgres/db';
 import { crearRepositoriosPg } from '../postgres/repos';
 import { crearReposCierresPg } from '../postgres/cierresRepos';
@@ -27,6 +34,12 @@ import { crearEgresosAdminRepoPg } from '../postgres/egresosRepos';
 import { crearLiquidacionRepoPg } from '../postgres/comisionesRepos';
 import { crearFunnelCanalRepoPg } from '../postgres/funnelCanalRepos';
 import { crearUsuariosRepoPg, crearSesionesRepoPg } from '../postgres/authRepos';
+import {
+  crearAlumnosRepoPg,
+  crearDiagnosticosRepoPg,
+  crearHistorialRepoPg,
+  crearTokensRepoPg,
+} from '../postgres/alumnosRepos';
 import { hasherBcrypt } from '../auth/hasher';
 
 export interface Infraestructura {
@@ -41,6 +54,8 @@ export interface Infraestructura {
   reposFunnelCanal: FunnelCanalRepo;
   /** Repos de auth (usuarios + sesiones) + hasher bcrypt. */
   reposAuth: ReposAuth;
+  /** Repos del módulo de alumnos: ficha, diagnósticos, tokens e historial. */
+  reposAlumnos: ReposAlumnos;
 }
 
 export async function crearInfraestructura(): Promise<Infraestructura> {
@@ -59,6 +74,12 @@ export async function crearInfraestructura(): Promise<Infraestructura> {
       reposLiquidacion: crearLiquidacionRepoPg(pool),
       reposFunnelCanal,
       reposAuth: { usuarios: crearUsuariosRepoPg(pool), sesiones: crearSesionesRepoPg(pool), hasher: hasherBcrypt },
+      reposAlumnos: {
+        alumnos: crearAlumnosRepoPg(pool),
+        diagnosticos: crearDiagnosticosRepoPg(pool),
+        tokens: crearTokensRepoPg(pool),
+        historial: crearHistorialRepoPg(pool),
+      },
     };
   }
   return infraestructuraDesdeDb(getDb());
@@ -84,5 +105,11 @@ export function infraestructuraDesdeDb(
     reposLiquidacion: crearLiquidacionRepo(db),
     reposFunnelCanal,
     reposAuth: { usuarios: crearUsuariosRepo(db), sesiones: crearSesionesRepo(db), hasher },
+    reposAlumnos: {
+      alumnos: crearAlumnosRepo(db),
+      diagnosticos: crearDiagnosticosRepo(db),
+      tokens: crearTokensRepo(db),
+      historial: crearHistorialRepo(db),
+    },
   };
 }
