@@ -109,9 +109,8 @@ Toda ruta declara su acción con `requiere(...)`, **incluidas las de lectura**. 
 
 | # | Ticket | Estado |
 |---|---|---|
-| 0–2 | Exploración · migraciones · rol consultor y ámbito por fila | hecho |
-| 3 | Formulario público con token por alumno | siguiente |
-| 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | pendiente |
+| 0–3 | Exploración · migraciones · rol consultor y ámbito · formulario público | hecho |
+| 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | siguiente |
 | 5 | Exportación del diagnóstico para la skill | pendiente |
 | 6 | Asistente IA sobre el módulo | pendiente |
 

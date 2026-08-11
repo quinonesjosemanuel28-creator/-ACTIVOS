@@ -105,7 +105,7 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 | 0 | Informe de exploración del repo | hecho |
 | 1 | Migraciones de las tablas del módulo | hecho |
 | 2 | Rol consultor y reglas de acceso | hecho |
-| 3 | Formulario público con token por alumno | pendiente |
+| 3 | Formulario público con token por alumno | hecho |
 | 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | pendiente |
 | 5 | Exportación del diagnóstico para la skill | pendiente |
 | 6 | Asistente IA sobre el módulo (vistas filtradas + herramientas) | pendiente |
@@ -148,3 +148,13 @@ Para no volver a discutirlas:
 - **Red que falla cerrada:** `exigirAmbitoTotal()` corta la consulta si alguna vez una sesión con ámbito acotado llega al contable. Hoy no se dispara nunca; el día que alguien le dé `'ver'` a un rol acotado, la consulta muere en vez de devolver la tabla entera.
 - **UI del consultor:** el menú del contable le queda vacío y el dashboard no se monta (sería un 403 por panel). Ve una pantalla de "panel en construcción" hasta el ticket 4.
 - **Sigue pendiente para el ticket 4:** no hay endpoints ni repos de alumnos todavía. El mecanismo de ámbito está listo y testeado, pero quien construya el panel tiene que aplicarlo en la consulta (`titularSegunAlcance` en los listados, `alcanzaFila` en la ficha) — no alcanza con exigir `ver_alumnos`.
+
+### Cerradas en el ticket 3 (agosto 2026)
+
+- **El catálogo del formulario vive en el dominio** (`domain/alumnos/formulario.ts`): texto, tipo, opciones, obligatoriedad y casilla de cada pregunta. La validación Zod y el render derivan del mismo lugar, con guardas de deriva que atan catálogo ↔ métricas del índice ↔ esquema de los DOS motores.
+- **Obligatoria con casilla = "contestá o declará que no sabés".** Se salda con el número o marcando la casilla; en blanco sin decir nada no pasa. Y la casilla marcada LIMPIA el valor: la base nunca guarda un número que el alumno declaró desconocer.
+- **El token es la credencial** (256 bits, `randomBytes`): un solo uso, 30 días, reenviar vence el anterior. La ruta pública responde lo mínimo (saludo + `fichaPendiente`, solo nombres de campo) y tiene limitador por IP donde el error de validación NO cuenta como intento.
+- **Bloque 0 completar-si-falta:** el link llena los huecos de la ficha (edad, zona, whatsapp, marca, canal) pero jamás pisa lo cargado; `nombre`/`programa`/`moneda` ni figuran en el esquema público. Las obligatorias del bloque 0 se exigen en el server cuando faltan.
+- **El envío inválido no consume el token** (el alumno corrige y reenvía con el mismo link) y **la ficha se completa recién después de guardar el diagnóstico**: si el diagnóstico no entró, la ficha no se toca.
+- **Repos ya cableados** (`reposAlumnos` en los dos motores) y **el ámbito por fila aplicado en la consulta**: los listados fuerzan titular en el WHERE, la ficha ajena responde 404 con el mismo cuerpo que la inexistente. El ticket 4 los consume, no los reconstruye — el párrafo de "pendiente" de arriba queda saldado en la API; falta solo la PANTALLA del panel.
+- **La ruta del alumno es `/formulario/<token>`**, única ruta pública de la SPA (por pathname, sin router). El endpoint privado del panel emite el token en `POST /api/alumnos/:id/token`.
