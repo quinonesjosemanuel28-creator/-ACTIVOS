@@ -113,7 +113,10 @@ Toda ruta declara su acción con `requiere(...)`, **incluidas las de lectura**. 
 | 6 | Cargar el plan (OKRs + acciones por fase) y seguimiento del alumno | siguiente |
 | 7 | Asistente IA sobre el módulo | pendiente |
 
-El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así de la skill). Ver "Definido para los tickets 6+" en `MODULO-ALUMNOS.md` antes de arrancarlo: el link del alumno **no** puede reusar el token del diagnóstico.
+El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así de la skill). Antes de arrancar el ticket 6, leer:
+
+- `CONTRATO-PLAN.md` — el bloque JSON que la skill emite y la app parsea. Tiene los dos lados del contrato.
+- "Definido para los tickets 6+" en `MODULO-ALUMNOS.md` — el link del alumno **no** puede reusar el token del diagnóstico.
 
 El flujo de fase 1 está completo punta a punta: alta → link → el alumno envía → ficha con índice de claridad y faltantes → corrección del consultor en la llamada (marca `editado_por_consultor`, recalcula el índice; la corrección NO crea fila — "fila nueva" es solo para envíos del formulario). El CONSULTOR tiene shell propio sin contable; ADMIN entra por la vista "Alumnos" del dashboard.
 

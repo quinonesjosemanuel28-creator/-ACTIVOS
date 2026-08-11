@@ -184,4 +184,4 @@ Para no volver a discutirlas:
 - **Los tildes son append-only** (`checkins`), no un UPDATE destructivo: nunca se pierde historia y el timestamp da la señal de ritmo ("sin movimiento hace 12 días") sin modelar semanas.
 - **El link muestra SOLO las acciones**, con la fase actual desplegada y las otras plegadas según la fecha. Nada de diagnóstico, índice, bloqueos ni matriz de riesgos: eso tiene marco de consultor.
 - **El alumno no tiene login.** El tilde es lo que él *declara*, no un hecho verificado; el consultor valida en la llamada.
-- **La skill debería emitir un bloque estructurado** junto al `.docx`, para cargar los OKRs y las acciones de un solo pegado. Si hay que tipearlos a mano, el módulo no se usa.
+- **La skill emite un bloque JSON** junto al `.docx`, para cargar los OKRs y las acciones de un solo pegado. Si hay que tipearlos a mano, el módulo no se usa. **El contrato está en `CONTRATO-PLAN.md`** — tiene los dos lados: lo que la app parsea y el texto que va en la skill. Leerlo antes de arrancar el ticket 6.
