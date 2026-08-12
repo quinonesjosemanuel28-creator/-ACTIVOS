@@ -11,6 +11,7 @@ import type { ResumenEgresos } from '@domain/egresos/metrics';
 import type { ComisionesDelMes } from '@domain/comisiones/calculo';
 import type { Accion, Rol, UsuarioPublico } from '@domain/auth/permisos';
 import type { Alumno, Diagnostico, TokenDiagnostico } from '@domain/alumnos/tipos';
+import type { PlanCompleto } from '@domain/alumnos/plan';
 
 // ───────────────────── Auth / sesión ─────────────────────
 
@@ -310,4 +311,25 @@ export const api = {
     req<Diagnostico>(`/diagnosticos/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   exportarDiagnostico: (id: string) =>
     req<{ nombreArchivo: string; contenido: string }>(`/diagnosticos/${id}/exportacion`),
+
+  // Plan de 90 días (el bloque JSON de la skill; ver CONTRATO-PLAN.md)
+  previaPlan: (alumnoId: string, bloque: string) =>
+    req<PreviaPlanUI>(`/alumnos/${alumnoId}/plan/previa`, { method: 'POST', body: JSON.stringify({ bloque }) }),
+  cargarPlan: (alumnoId: string, bloque: string, fechaInicio?: string) =>
+    req<PlanCompleto>(`/alumnos/${alumnoId}/plan`, { method: 'POST', body: JSON.stringify({ bloque, fechaInicio }) }),
+  planes: (alumnoId: string) => req<PlanCompleto[]>(`/alumnos/${alumnoId}/planes`),
 };
+
+/** Lo que devuelve la previa: el bloque validado + lo que hay que mirar antes de confirmar. */
+export interface PreviaPlanUI {
+  bloque: {
+    version: number;
+    alumno: string;
+    fecha_inicio: string;
+    etapa?: string | null;
+    objetivo_90d?: string | null;
+    okrs: { orden: number; objetivo: string; krs: { texto: string; meta?: string | null }[] }[];
+    fases: { fase: 1 | 2 | 3; titulo?: string | null; acciones: { texto: string; okr?: number }[] }[];
+  };
+  advertencias: string[];
+}

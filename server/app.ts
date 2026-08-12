@@ -395,6 +395,19 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
     ual.exportarDiagnosticoParaSkill(reposAlumnos, alcanceDe(res), param(req, 'id')),
   ));
 
+  // El plan de 90 días entra pegando el bloque JSON de la skill
+  // (CONTRATO-PLAN.md). Dos pasos: previa (valida y junta advertencias, sin
+  // escribir) → carga (transaccional, con la fecha corregida si hizo falta).
+  app.post('/api/alumnos/:id/plan/previa', requiere('editar_alumnos'), h((req, res) =>
+    ual.previaPlan(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body?.bloque),
+  ));
+  app.post('/api/alumnos/:id/plan', requiere('editar_alumnos'), h((req, res) =>
+    ual.cargarPlan(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body?.bloque, req.body?.fechaInicio),
+  ));
+  app.get('/api/alumnos/:id/planes', requiere('ver_alumnos'), h((req, res) =>
+    ual.listarPlanes(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
+
   // ───────────────────── Frontend compilado (producción) ─────────────────────
   // Una ruta /api/* que no matcheó nada llega acá → 404 JSON (no el index.html),
   // así un endpoint inexistente nunca devuelve la SPA por error.

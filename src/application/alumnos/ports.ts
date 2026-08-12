@@ -10,6 +10,7 @@
  * un botón escondido.
  */
 import type { Alumno, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
+import type { PlanCompleto } from '../../domain/alumnos/plan';
 
 export interface FiltrosAlumnos {
   /**
@@ -68,9 +69,22 @@ export interface HistorialRepo {
   cerrarTramoVigente(alumnoId: string, hasta: string): Promise<void>;
 }
 
+export interface PlanesRepo {
+  /**
+   * Guarda el agregado ENTERO en una transacción: plan + okrs + krs +
+   * acciones. O entra todo o no entra nada — un plan a medias en la base es
+   * peor que ninguno.
+   */
+  guardarCompleto(pc: PlanCompleto): Promise<void>;
+  /** Planes del alumno con todo adentro, del más nuevo al más viejo por fecha_inicio. */
+  listarPorAlumno(alumnoId: string): Promise<PlanCompleto[]>;
+  obtener(planId: string): Promise<PlanCompleto | null>;
+}
+
 export interface ReposAlumnos {
   alumnos: AlumnosRepo;
   diagnosticos: DiagnosticosRepo;
   tokens: TokensRepo;
   historial: HistorialRepo;
+  planes: PlanesRepo;
 }

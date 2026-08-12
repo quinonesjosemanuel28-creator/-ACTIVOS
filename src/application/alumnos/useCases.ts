@@ -25,6 +25,8 @@ import {
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
 import { PREGUNTAS_FICHA, type CampoFicha } from '../../domain/alumnos/formulario';
+import type { Accion, Kr, Okr, Plan, PlanCompleto } from '../../domain/alumnos/plan';
+import { advertenciasDe, bloquePlanSchema, extraerBloque, type BloquePlan } from './planSchemas';
 import {
   aRespuestas,
   alumnoInputSchema,
@@ -381,6 +383,131 @@ export async function exportarDiagnosticoParaSkill(
     nombreArchivo: `Diagnostico_${slug}_${d.fecha.slice(0, 10)}.md`,
     contenido: exportarDiagnostico(alumno, d),
   };
+}
+
+// ───────────────────────── Plan de 90 días ─────────────────────────
+
+/** Parsea lo pegado y valida el contrato. Errores de Zod suben tal cual (400). */
+function parsearBloque(texto: unknown): { crudo: Record<string, unknown>; bloque: BloquePlan } {
+  if (typeof texto !== 'string' || texto.trim() === '') {
+    throw new ErrorAlumnos('VALIDACION', 'Pegá el bloque JSON que emitió la skill.');
+  }
+  const crudo = extraerBloque(texto);
+  if (!crudo) {
+    throw new ErrorAlumnos('VALIDACION', 'No se encontró un bloque JSON en lo pegado. Copiá el bloque completo, con sus llaves.');
+  }
+  return { crudo: crudo as Record<string, unknown>, bloque: bloquePlanSchema.parse(crudo) };
+}
+
+export interface PreviaPlan {
+  /** Lo que se cargaría, ya validado. */
+  bloque: BloquePlan;
+  /** Lo que el consultor tiene que ver antes de confirmar. */
+  advertencias: string[];
+}
+
+/**
+ * Previa de la carga: valida el bloque y junta las advertencias SIN escribir
+ * nada. La UI la muestra y el consultor confirma (pudiendo corregir la fecha
+ * de inicio). Carga tolerante, previa ruidosa.
+ */
+export async function previaPlan(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  alumnoId: string,
+  texto: unknown,
+): Promise<PreviaPlan> {
+  const alumno = await obtenerAlumno(repos, alcance, alumnoId);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+
+  const { crudo, bloque } = parsearBloque(texto);
+  const advertencias = advertenciasDe(crudo, bloque, alumno.nombre);
+
+  // Un plan ya cargado con la misma fecha huele a doble pegado.
+  const existentes = await repos.planes.listarPorAlumno(alumnoId);
+  if (existentes.some((p) => p.plan.fechaInicio === bloque.fecha_inicio)) {
+    advertencias.push(
+      `Ya hay un plan cargado con inicio ${bloque.fecha_inicio}. Confirmar va a crear OTRO plan, no a reemplazarlo.`,
+    );
+  }
+  return { bloque, advertencias };
+}
+
+/**
+ * Carga el plan: crea el agregado entero (plan + okrs + krs + acciones) en una
+ * transacción. `fechaInicio` pisa la del bloque si el consultor la corrigió en
+ * la previa. No borra planes anteriores: los trimestres se acumulan.
+ */
+export async function cargarPlan(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  alumnoId: string,
+  texto: unknown,
+  fechaInicio?: string,
+  ahora = ahoraIso(),
+): Promise<PlanCompleto> {
+  const alumno = await obtenerAlumno(repos, alcance, alumnoId);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+
+  const { bloque } = parsearBloque(texto);
+  const inicio = fechaInicio ?? bloque.fecha_inicio;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio) || Number.isNaN(Date.parse(`${inicio}T00:00:00Z`))) {
+    throw new ErrorAlumnos('VALIDACION', 'La fecha de inicio va como YYYY-MM-DD.');
+  }
+
+  const plan: Plan = {
+    id: randomUUID(),
+    alumnoId: alumno.id,
+    fechaInicio: inicio,
+    etapa: bloque.etapa ?? null,
+    objetivo90d: bloque.objetivo_90d ?? null,
+    version: bloque.version,
+    creadoEn: ahora,
+  };
+
+  const okrPorOrden = new Map<number, string>();
+  const okrs: (Okr & { krs: Kr[] })[] = bloque.okrs.map((o) => {
+    const okrId = randomUUID();
+    okrPorOrden.set(o.orden, okrId);
+    return {
+      id: okrId,
+      planId: plan.id,
+      orden: o.orden,
+      objetivo: o.objetivo,
+      creadoEn: ahora,
+      krs: o.krs.map((k, i) => ({
+        id: randomUUID(),
+        okrId,
+        orden: i + 1,
+        texto: k.texto,
+        meta: k.meta ?? null,
+        creadoEn: ahora,
+      })),
+    };
+  });
+
+  const acciones: Accion[] = bloque.fases.flatMap((f) =>
+    f.acciones.map((a, i) => ({
+      id: randomUUID(),
+      planId: plan.id,
+      okrId: a.okr !== undefined ? okrPorOrden.get(a.okr)! : null,
+      fase: f.fase,
+      orden: i + 1,
+      texto: a.texto,
+      creadoEn: ahora,
+    })),
+  );
+
+  const completo: PlanCompleto = { plan, okrs, acciones };
+  await repos.planes.guardarCompleto(completo);
+  return completo;
+}
+
+/** Planes del alumno (todos los trimestres), respetando el ámbito. */
+export async function listarPlanes(repos: ReposAlumnos, alcance: Alcance, alumnoId: string): Promise<PlanCompleto[]> {
+  const alumno = await obtenerAlumno(repos, alcance, alumnoId);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+  return repos.planes.listarPorAlumno(alumnoId);
 }
 
 /** Diagnósticos de un alumno, respetando el ámbito del que consulta. */

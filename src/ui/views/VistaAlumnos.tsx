@@ -9,20 +9,25 @@
  * formulario público (Campo + BLOQUES): una sola definición de las preguntas.
  */
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, Copy, Download, FileDown, GraduationCap, Link2, Pencil, Plus, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardPaste, Copy, Download, FileDown, GraduationCap, Link2, Pencil, Plus, Target, UserRound, X } from 'lucide-react';
 import type { Alumno, Diagnostico } from '@domain/alumnos/tipos';
 import { BLOQUES, PREGUNTA_POR_CAMPO } from '@domain/alumnos/formulario';
 import { calcularClaridad, nivelClaridad, type NivelClaridad } from '@domain/alumnos/claridad';
 import {
   useAlumno,
   useAlumnos,
+  useCargarPlan,
   useCrearAlumno,
   useDiagnosticos,
   useEditarAlumno,
   useEditarDiagnostico,
   useEmitirLink,
   useExportarDiagnostico,
+  usePlanes,
+  usePreviaPlan,
 } from '../hooks';
+import type { PreviaPlanUI } from '../lib/api';
+import { Textarea } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import { Badge, Button, Card, Input, Select, Spinner } from '../components/ui/primitives';
 import { Campo, estadoDesdeRespuestas, type SinDato, type Valores } from './VistaFormulario';
@@ -266,7 +271,170 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
       </Card>
 
       {abierto && <DetalleDiagnostico key={abierto.id} diagnostico={abierto} moneda={abierto.moneda} />}
+
+      <PlanAlumno alumnoId={alumno.id} />
     </div>
+  );
+}
+
+// ───────────────────── Plan de 90 días ─────────────────────
+
+/**
+ * El plan cargado desde el bloque de la skill, y el flujo de carga en dos
+ * pasos: pegar → previa con advertencias → confirmar. La previa es donde el
+ * consultor ve qué parte del bloque NO entra al panel (claves fuera del
+ * contrato) antes de confirmar.
+ */
+function PlanAlumno({ alumnoId }: { alumnoId: string }) {
+  const { data: planes } = usePlanes(alumnoId);
+  const previa = usePreviaPlan();
+  const cargar = useCargarPlan();
+
+  const [pegando, setPegando] = useState(false);
+  const [texto, setTexto] = useState('');
+  const [vistaPrevia, setVistaPrevia] = useState<PreviaPlanUI | null>(null);
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const validar = async () => {
+    setError(null);
+    try {
+      const p = await previa.mutateAsync({ alumnoId, bloque: texto });
+      setVistaPrevia(p);
+      setFechaInicio(p.bloque.fecha_inicio);
+    } catch (err) {
+      setVistaPrevia(null);
+      setError(err instanceof Error ? err.message : 'No se pudo validar el bloque.');
+    }
+  };
+
+  const confirmar = async () => {
+    setError(null);
+    try {
+      await cargar.mutateAsync({ alumnoId, bloque: texto, fechaInicio: fechaInicio || undefined });
+      setPegando(false);
+      setTexto('');
+      setVistaPrevia(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cargar el plan.');
+    }
+  };
+
+  const vigente = planes?.[0];
+
+  return (
+    <Card className="space-y-4 p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 font-display text-lg font-700 text-navy-900 dark:text-navy-50">
+          <Target size={18} /> Plan de 90 días
+        </h3>
+        <Button variant={vigente ? 'ghost' : 'gold'} onClick={() => { setPegando((v) => !v); setVistaPrevia(null); setError(null); }}>
+          {pegando ? <X size={14} /> : <ClipboardPaste size={14} />}
+          <span className="ml-1">{pegando ? 'Cancelar' : vigente ? 'Cargar otro plan' : 'Cargar plan'}</span>
+        </Button>
+      </div>
+
+      {pegando && (
+        <div className="space-y-3">
+          <p className="text-xs text-navy-400">
+            Pegá el bloque JSON que emitió la skill junto al documento del plan. Primero se valida; nada se guarda hasta que confirmes.
+          </p>
+          <Textarea
+            className="min-h-[10rem] font-mono text-xs"
+            placeholder='{"version": 1, "alumno": "…", …}'
+            value={texto}
+            onChange={(e) => { setTexto(e.target.value); setVistaPrevia(null); }}
+          />
+          {!vistaPrevia && (
+            <Button onClick={() => void validar()} disabled={previa.isPending || texto.trim() === ''}>
+              {previa.isPending ? <Spinner className="h-4 w-4" /> : <Check size={16} />}
+              <span className="ml-1.5">Validar bloque</span>
+            </Button>
+          )}
+
+          {vistaPrevia && (
+            <div className="space-y-3 rounded-xl border border-navy-100 p-4 dark:border-navy-700">
+              <p className="text-sm font-600 text-navy-900 dark:text-navy-50">
+                {vistaPrevia.bloque.alumno} · {vistaPrevia.bloque.okrs.length} OKRs ·{' '}
+                {vistaPrevia.bloque.fases.map((f) => f.acciones.length).join('/')} acciones por fase
+              </p>
+              {vistaPrevia.bloque.objetivo_90d && (
+                <p className="text-xs text-navy-500 dark:text-navy-300">{vistaPrevia.bloque.objetivo_90d}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-600 text-navy-500 dark:text-navy-300">Arranca el</label>
+                <Input type="date" className="max-w-[11rem]" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+              </div>
+              {vistaPrevia.advertencias.length > 0 && (
+                <div className="rounded-lg border border-gold-400 bg-gold-400/10 p-3">
+                  <p className="text-xs font-600 uppercase tracking-wide text-gold-500">Antes de confirmar, mirá esto</p>
+                  <ul className="mt-1 list-inside list-disc space-y-1 text-xs text-navy-800 dark:text-navy-100">
+                    {vistaPrevia.advertencias.map((a) => <li key={a}>{a}</li>)}
+                  </ul>
+                </div>
+              )}
+              <Button className="w-full" onClick={() => void confirmar()} disabled={cargar.isPending}>
+                {cargar.isPending ? <Spinner className="h-4 w-4" /> : <Check size={16} />}
+                <span className="ml-1.5">Confirmar y cargar el plan</span>
+              </Button>
+            </div>
+          )}
+          {error && <p className="text-sm font-600 text-signal-red">{error}</p>}
+        </div>
+      )}
+
+      {!pegando && !vigente && (
+        <p className="text-sm text-navy-500 dark:text-navy-300">
+          Todavía no hay plan. Exportá el diagnóstico, generá el plan con la skill y pegá acá el bloque JSON.
+        </p>
+      )}
+
+      {vigente && !pegando && (
+        <div className="space-y-4">
+          <p className="text-xs text-navy-400">
+            Arrancó el {vigente.plan.fechaInicio}
+            {vigente.plan.etapa && <> · etapa: {vigente.plan.etapa}</>}
+            {planes!.length > 1 && <> · {planes!.length - 1} plan(es) anterior(es)</>}
+          </p>
+          {vigente.plan.objetivo90d && (
+            <p className="rounded-lg bg-navy-50 p-3 text-sm text-navy-800 dark:bg-navy-800 dark:text-navy-100">
+              {vigente.plan.objetivo90d}
+            </p>
+          )}
+          <div className="grid gap-3 lg:grid-cols-2">
+            {vigente.okrs.map((o) => (
+              <div key={o.id} className="rounded-xl border border-navy-100 p-3 dark:border-navy-700">
+                <p className="text-sm font-600 text-navy-900 dark:text-navy-50">{o.orden}. {o.objetivo}</p>
+                <ul className="mt-1.5 space-y-1">
+                  {o.krs.map((k) => (
+                    <li key={k.id} className="text-xs text-navy-600 dark:text-navy-300">
+                      • {k.texto}{k.meta && <span className="text-navy-400"> — {k.meta}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {([1, 2, 3] as const).map((fase) => (
+              <div key={fase} className="rounded-xl border border-navy-100 p-3 dark:border-navy-700">
+                <p className="text-xs font-600 uppercase tracking-wide text-navy-400">
+                  Fase {fase} · días {fase === 1 ? '1-30' : fase === 2 ? '31-60' : '61-90'}
+                </p>
+                <ul className="mt-1.5 space-y-1">
+                  {vigente.acciones.filter((a) => a.fase === fase).map((a) => (
+                    <li key={a.id} className="text-xs text-navy-700 dark:text-navy-200">☐ {a.texto}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-navy-400">
+            El link de seguimiento del alumno llega en la próxima fase — por ahora el checklist se ve solo acá.
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }
 

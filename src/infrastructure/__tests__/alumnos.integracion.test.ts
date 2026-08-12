@@ -428,6 +428,97 @@ describe('Alumnos · corrección del consultor sobre un diagnóstico', () => {
   });
 });
 
+describe('Alumnos · carga del plan de 90 días', () => {
+  const BLOQUE = JSON.stringify({
+    version: 1,
+    alumno: 'Gonzalo',
+    fecha_inicio: '2026-08-18',
+    etapa: 'Prestamista Operativo',
+    objetivo_90d: 'Ordenar para crecer.',
+    okrs: [
+      { orden: 1, objetivo: 'Ordenar la administración', krs: [{ texto: 'Tablero único', meta: '100%' }, { texto: 'Separar cajas' }] },
+      { orden: 2, objetivo: 'Profesionalizar cobranzas', krs: [{ texto: 'Protocolo por tramos' }] },
+    ],
+    fases: [
+      { fase: 1, acciones: [{ texto: 'Armar el tablero', okr: 1 }, { texto: 'Separar cuentas', okr: 1 }, { texto: 'Cargar créditos' }] },
+      { fase: 2, acciones: [{ texto: 'Escribir protocolo', okr: 2 }, { texto: 'Llamar morosos', okr: 2 }, { texto: 'Cierre semanal', okr: 1 }] },
+      { fase: 3, acciones: [{ texto: 'Pedir referidos' }, { texto: 'Tope por cliente' }, { texto: 'Revisar mora' }] },
+    ],
+  });
+
+  it('crea el agregado entero y lo devuelve completo', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+
+    const cargado = await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE);
+    expect(cargado.okrs).toHaveLength(2);
+    expect(cargado.okrs[0]!.krs).toHaveLength(2);
+    expect(cargado.acciones).toHaveLength(9);
+
+    const [leido] = await ua.listarPlanes(repos, alcanceConsu, alumno.id);
+    expect(leido!.plan.fechaInicio).toBe('2026-08-18');
+    expect(leido!.plan.etapa).toBe('Prestamista Operativo');
+    expect(leido!.okrs.map((o) => o.objetivo)).toEqual(['Ordenar la administración', 'Profesionalizar cobranzas']);
+    // Las acciones vuelven con su fase y su vínculo al OKR resuelto a id real.
+    const fase2 = leido!.acciones.filter((a) => a.fase === 2);
+    expect(fase2).toHaveLength(3);
+    const okr1 = leido!.okrs.find((o) => o.orden === 1)!;
+    expect(fase2.find((a) => a.texto === 'Cierre semanal')!.okrId).toBe(okr1.id);
+    // La acción sin okr queda suelta, no inventa vínculo.
+    expect(leido!.acciones.find((a) => a.texto === 'Cargar créditos')!.okrId).toBeNull();
+  });
+
+  it('el consultor corrige la fecha en la previa y la carga la respeta', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const cargado = await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE, '2026-09-01');
+    expect(cargado.plan.fechaInicio).toBe('2026-09-01');
+  });
+
+  it('cargar otro plan NO borra el anterior, y el más nuevo queda primero', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE, '2026-05-01');
+    await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE, '2026-08-18');
+
+    const planes = await ua.listarPlanes(repos, alcanceConsu, alumno.id);
+    expect(planes).toHaveLength(2);
+    expect(planes[0]!.plan.fechaInicio).toBe('2026-08-18');
+    expect(planes[1]!.plan.fechaInicio).toBe('2026-05-01');
+  });
+
+  it('la previa junta advertencias sin escribir nada', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    // La ficha dice "Gonzalo" y el bloque también: sin aviso de nombre. Pero le
+    // metemos una clave fuera de contrato y un plan previo con la misma fecha.
+    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE);
+
+    const conExtra = JSON.stringify({ ...JSON.parse(BLOQUE), modelos_economicos: { escenario: 'x' } });
+    const { advertencias } = await ua.previaPlan(repos, alcanceConsu, alumno.id, conExtra);
+    expect(advertencias.some((a) => a.includes('modelos_economicos'))).toBe(true);
+    expect(advertencias.some((a) => a.includes('Ya hay un plan cargado con inicio 2026-08-18'))).toBe(true);
+
+    // La previa NO escribió: sigue habiendo un solo plan.
+    expect(await ua.listarPlanes(repos, alcanceConsu, alumno.id)).toHaveLength(1);
+  });
+
+  it('el plan de un alumno ajeno ni se carga ni se lista', async () => {
+    const { repos, otro, alcanceConsu } = await setup();
+    const ajeno = await ua.crearAlumno(repos, otro.id, { ...FICHA, nombre: 'Ajeno' });
+    await expect(ua.cargarPlan(repos, alcanceConsu, ajeno.id, BLOQUE)).rejects.toThrow(/inexistente/i);
+    await expect(ua.listarPlanes(repos, alcanceConsu, ajeno.id)).rejects.toThrow(/inexistente/i);
+  });
+
+  it('un bloque roto no deja NADA en la base (o entra todo o no entra nada)', async () => {
+    const { repos, consu, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const roto = JSON.stringify({ ...JSON.parse(BLOQUE), fases: JSON.parse(BLOQUE).fases.slice(0, 2) });
+    await expect(ua.cargarPlan(repos, alcanceConsu, alumno.id, roto)).rejects.toThrow();
+    expect(await ua.listarPlanes(repos, alcanceConsu, alumno.id)).toHaveLength(0);
+  });
+});
+
 describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => {
   it('el envío llena los huecos de la ficha', async () => {
     const { repos, consu, alcanceConsu } = await setup();

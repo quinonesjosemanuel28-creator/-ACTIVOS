@@ -346,3 +346,23 @@ export function useEditarDiagnostico() {
 export function useExportarDiagnostico() {
   return useMutation({ mutationFn: (id: string) => api.exportarDiagnostico(id) });
 }
+
+/** Plan de 90 días: previa (valida sin guardar), carga y listado. */
+export function usePlanes(alumnoId: string | null) {
+  return useQuery({
+    queryKey: ['alumnos', 'planes', alumnoId],
+    queryFn: () => api.planes(alumnoId!),
+    enabled: !!alumnoId,
+  });
+}
+export function usePreviaPlan() {
+  return useMutation({ mutationFn: (v: { alumnoId: string; bloque: string }) => api.previaPlan(v.alumnoId, v.bloque) });
+}
+export function useCargarPlan() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { alumnoId: string; bloque: string; fechaInicio?: string }) =>
+      api.cargarPlan(v.alumnoId, v.bloque, v.fechaInicio),
+    onSuccess: inval,
+  });
+}

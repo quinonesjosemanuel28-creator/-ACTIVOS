@@ -16,10 +16,12 @@ import {
   type RespuestasDiagnostico,
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
+import type { Accion, Kr, Okr, Plan, PlanCompleto } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
   DiagnosticosRepo,
   HistorialRepo,
+  PlanesRepo,
   TokensRepo,
   TramoHistorial,
 } from '../../application/alumnos/ports';
@@ -285,6 +287,84 @@ export function crearHistorialRepoPg(pool: Pool): HistorialRepo {
         hasta,
         alumnoId,
       ]);
+    },
+  };
+}
+
+// ───────────────────────── Plan de 90 días ─────────────────────────
+
+interface PlanRow { id: string; alumno_id: string; fecha_inicio: string; etapa: string | null; objetivo_90d: string | null; version: number; creado_en: string }
+interface OkrRow { id: string; plan_id: string; orden: number; objetivo: string; creado_en: string }
+interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; creado_en: string }
+interface AccionRow { id: string; plan_id: string; okr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
+
+const toPlan = (r: PlanRow): Plan => ({
+  id: r.id, alumnoId: r.alumno_id, fechaInicio: r.fecha_inicio,
+  etapa: r.etapa, objetivo90d: r.objetivo_90d, version: r.version, creadoEn: r.creado_en,
+});
+
+export function crearPlanesRepoPg(pool: Pool): PlanesRepo {
+  const armarCompleto = async (p: PlanRow): Promise<PlanCompleto> => {
+    const okrRows = (await pool.query('SELECT * FROM okrs WHERE plan_id = $1 ORDER BY orden', [p.id])).rows as OkrRow[];
+    const okrs: (Okr & { krs: Kr[] })[] = [];
+    for (const o of okrRows) {
+      const krRows = (await pool.query('SELECT * FROM krs WHERE okr_id = $1 ORDER BY orden', [o.id])).rows as KrRow[];
+      okrs.push({
+        id: o.id, planId: o.plan_id, orden: o.orden, objetivo: o.objetivo, creadoEn: o.creado_en,
+        krs: krRows.map((k) => ({ id: k.id, okrId: k.okr_id, orden: k.orden, texto: k.texto, meta: k.meta, creadoEn: k.creado_en })),
+      });
+    }
+    const accionRows = (await pool.query('SELECT * FROM acciones WHERE plan_id = $1 ORDER BY fase, orden', [p.id])).rows as AccionRow[];
+    const acciones = accionRows.map((a): Accion => ({
+      id: a.id, planId: a.plan_id, okrId: a.okr_id, fase: a.fase as Accion['fase'],
+      orden: a.orden, texto: a.texto, creadoEn: a.creado_en,
+    }));
+    return { plan: toPlan(p), okrs, acciones };
+  };
+
+  return {
+    async guardarCompleto(pc) {
+      // Transacción explícita: o entra el agregado entero o no entra nada.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO planes (id, alumno_id, fecha_inicio, etapa, objetivo_90d, version, creado_en)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [pc.plan.id, pc.plan.alumnoId, pc.plan.fechaInicio, pc.plan.etapa, pc.plan.objetivo90d, pc.plan.version, pc.plan.creadoEn],
+        );
+        for (const o of pc.okrs) {
+          await client.query('INSERT INTO okrs (id, plan_id, orden, objetivo, creado_en) VALUES ($1,$2,$3,$4,$5)',
+            [o.id, o.planId, o.orden, o.objetivo, o.creadoEn]);
+          for (const k of o.krs) {
+            await client.query('INSERT INTO krs (id, okr_id, orden, texto, meta, creado_en) VALUES ($1,$2,$3,$4,$5,$6)',
+              [k.id, k.okrId, k.orden, k.texto, k.meta, k.creadoEn]);
+          }
+        }
+        for (const a of pc.acciones) {
+          await client.query('INSERT INTO acciones (id, plan_id, okr_id, fase, orden, texto, creado_en) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+            [a.id, a.planId, a.okrId, a.fase, a.orden, a.texto, a.creadoEn]);
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
+    async listarPorAlumno(alumnoId) {
+      const rows = (await pool.query(
+        'SELECT * FROM planes WHERE alumno_id = $1 ORDER BY fecha_inicio DESC, creado_en DESC', [alumnoId],
+      )).rows as PlanRow[];
+      const out: PlanCompleto[] = [];
+      for (const r of rows) out.push(await armarCompleto(r));
+      return out;
+    },
+    async obtener(planId) {
+      const r = await pool.query('SELECT * FROM planes WHERE id = $1', [planId]);
+      const row = r.rows[0] as PlanRow | undefined;
+      return row ? armarCompleto(row) : null;
     },
   };
 }

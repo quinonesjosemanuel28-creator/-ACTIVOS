@@ -360,6 +360,55 @@ describe('HTTP · rutas privadas: ámbito por fila de punta a punta', () => {
     expect(r.contenido).toContain('ARS 20.000.000');
   });
 
+  it('cargar el plan: previa con advertencias → carga → listado; LECTOR 403; ajeno 404', async () => {
+    const { alumnoId } = await crearAlumnoConToken(ctx.cookies.consultor);
+    const bloque = JSON.stringify({
+      version: 1,
+      alumno: 'Otro Nombre', // a propósito: la ficha dice "Gonzalo"
+      fecha_inicio: '2026-08-18',
+      okrs: [{ orden: 1, objetivo: 'Ordenar', krs: [{ texto: 'Tablero' }] }],
+      fases: [
+        { fase: 1, acciones: [{ texto: 'A', okr: 1 }, { texto: 'B' }, { texto: 'C' }] },
+        { fase: 2, acciones: [{ texto: 'D' }, { texto: 'E' }, { texto: 'F' }] },
+        { fase: 3, acciones: [{ texto: 'G' }, { texto: 'H' }, { texto: 'I' }] },
+      ],
+    });
+    const conConsultor = { ...json, cookie: ctx.cookies.consultor };
+
+    // LECTOR no toca el módulo.
+    expect((await fetch(`${ctx.base}/api/alumnos/${alumnoId}/plan/previa`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.lector }, body: JSON.stringify({ bloque }),
+    })).status).toBe(403);
+
+    // Previa: avisa el nombre distinto, no guarda.
+    const previa = await fetch(`${ctx.base}/api/alumnos/${alumnoId}/plan/previa`, {
+      method: 'POST', headers: conConsultor, body: JSON.stringify({ bloque }),
+    });
+    expect(previa.status).toBe(200);
+    const p = (await previa.json()) as { advertencias: string[] };
+    expect(p.advertencias.some((a) => a.includes('Otro Nombre'))).toBe(true);
+
+    // Carga con fecha corregida.
+    const carga = await fetch(`${ctx.base}/api/alumnos/${alumnoId}/plan`, {
+      method: 'POST', headers: conConsultor, body: JSON.stringify({ bloque, fechaInicio: '2026-09-01' }),
+    });
+    expect(carga.status).toBe(200);
+    const plan = (await carga.json()) as { plan: { fechaInicio: string }; acciones: unknown[] };
+    expect(plan.plan.fechaInicio).toBe('2026-09-01');
+    expect(plan.acciones).toHaveLength(9);
+
+    // Listado propio 200; ajeno 404.
+    expect((await fetch(`${ctx.base}/api/alumnos/${alumnoId}/planes`, { headers: { cookie: ctx.cookies.consultor } })).status).toBe(200);
+    expect((await fetch(`${ctx.base}/api/alumnos/${alumnoId}/planes`, { headers: { cookie: ctx.cookies.otroConsultor } })).status).toBe(404);
+
+    // Un bloque ilegible da 400 con mensaje útil, no un 500.
+    const roto = await fetch(`${ctx.base}/api/alumnos/${alumnoId}/plan/previa`, {
+      method: 'POST', headers: conConsultor, body: JSON.stringify({ bloque: 'esto no es json' }),
+    });
+    expect(roto.status).toBe(400);
+    expect(((await roto.json()) as { error: string }).error).toMatch(/bloque JSON/i);
+  });
+
   it('corregir un diagnóstico: dueño 200 con índice recalculado; LECTOR 403; ajeno 404', async () => {
     const { token } = await crearAlumnoConToken(ctx.cookies.consultor);
     const envio = await fetch(`${ctx.base}/api/formulario/${token}`, {

@@ -20,10 +20,12 @@ import {
   type RespuestasDiagnostico,
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
+import type { Accion, Kr, Okr, Plan, PlanCompleto } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
   DiagnosticosRepo,
   HistorialRepo,
+  PlanesRepo,
   TokensRepo,
   TramoHistorial,
 } from '../../application/alumnos/ports';
@@ -303,6 +305,77 @@ export function crearHistorialRepo(db: Database.Database): HistorialRepo {
         hasta,
         alumnoId,
       );
+    },
+  };
+}
+
+// ───────────────────────── Plan de 90 días ─────────────────────────
+
+interface PlanRow { id: string; alumno_id: string; fecha_inicio: string; etapa: string | null; objetivo_90d: string | null; version: number; creado_en: string }
+interface OkrRow { id: string; plan_id: string; orden: number; objetivo: string; creado_en: string }
+interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; creado_en: string }
+interface AccionRow { id: string; plan_id: string; okr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
+
+const toPlan = (r: PlanRow): Plan => ({
+  id: r.id, alumnoId: r.alumno_id, fechaInicio: r.fecha_inicio,
+  etapa: r.etapa, objetivo90d: r.objetivo_90d, version: r.version, creadoEn: r.creado_en,
+});
+
+export function crearPlanesRepo(db: Database.Database): PlanesRepo {
+  const armarCompleto = (p: PlanRow): PlanCompleto => {
+    const okrs = (db.prepare('SELECT * FROM okrs WHERE plan_id = ? ORDER BY orden').all(p.id) as OkrRow[]).map(
+      (o): Okr & { krs: Kr[] } => ({
+        id: o.id, planId: o.plan_id, orden: o.orden, objetivo: o.objetivo, creadoEn: o.creado_en,
+        krs: (db.prepare('SELECT * FROM krs WHERE okr_id = ? ORDER BY orden').all(o.id) as KrRow[]).map((k) => ({
+          id: k.id, okrId: k.okr_id, orden: k.orden, texto: k.texto, meta: k.meta, creadoEn: k.creado_en,
+        })),
+      }),
+    );
+    const acciones = (db.prepare('SELECT * FROM acciones WHERE plan_id = ? ORDER BY fase, orden').all(p.id) as AccionRow[]).map(
+      (a): Accion => ({
+        id: a.id, planId: a.plan_id, okrId: a.okr_id, fase: a.fase as Accion['fase'],
+        orden: a.orden, texto: a.texto, creadoEn: a.creado_en,
+      }),
+    );
+    return { plan: toPlan(p), okrs, acciones };
+  };
+
+  // Transacción de better-sqlite3: si algo tira, no queda NADA del plan.
+  const guardarTx = db.transaction((pc: PlanCompleto) => {
+    db.prepare(
+      `INSERT INTO planes (id, alumno_id, fecha_inicio, etapa, objetivo_90d, version, creado_en)
+       VALUES (?,?,?,?,?,?,?)`,
+    ).run(pc.plan.id, pc.plan.alumnoId, pc.plan.fechaInicio, pc.plan.etapa, pc.plan.objetivo90d, pc.plan.version, pc.plan.creadoEn);
+    for (const o of pc.okrs) {
+      db.prepare('INSERT INTO okrs (id, plan_id, orden, objetivo, creado_en) VALUES (?,?,?,?,?)').run(
+        o.id, o.planId, o.orden, o.objetivo, o.creadoEn,
+      );
+      for (const k of o.krs) {
+        db.prepare('INSERT INTO krs (id, okr_id, orden, texto, meta, creado_en) VALUES (?,?,?,?,?,?)').run(
+          k.id, k.okrId, k.orden, k.texto, k.meta, k.creadoEn,
+        );
+      }
+    }
+    for (const a of pc.acciones) {
+      db.prepare('INSERT INTO acciones (id, plan_id, okr_id, fase, orden, texto, creado_en) VALUES (?,?,?,?,?,?,?)').run(
+        a.id, a.planId, a.okrId, a.fase, a.orden, a.texto, a.creadoEn,
+      );
+    }
+  });
+
+  return {
+    async guardarCompleto(pc) {
+      guardarTx(pc);
+    },
+    async listarPorAlumno(alumnoId) {
+      const rows = db
+        .prepare('SELECT * FROM planes WHERE alumno_id = ? ORDER BY fecha_inicio DESC, creado_en DESC')
+        .all(alumnoId) as PlanRow[];
+      return rows.map(armarCompleto);
+    },
+    async obtener(planId) {
+      const row = db.prepare('SELECT * FROM planes WHERE id = ?').get(planId) as PlanRow | undefined;
+      return row ? armarCompleto(row) : null;
     },
   };
 }

@@ -25,6 +25,7 @@ import {
   crearAlumnosRepo,
   crearDiagnosticosRepo,
   crearHistorialRepo,
+  crearPlanesRepo,
   crearTokensRepo,
 } from '../sqlite/alumnosRepos';
 import { getPoolPg } from '../postgres/db';
@@ -38,6 +39,7 @@ import {
   crearAlumnosRepoPg,
   crearDiagnosticosRepoPg,
   crearHistorialRepoPg,
+  crearPlanesRepoPg,
   crearTokensRepoPg,
 } from '../postgres/alumnosRepos';
 import { hasherBcrypt } from '../auth/hasher';
@@ -79,6 +81,7 @@ export async function crearInfraestructura(): Promise<Infraestructura> {
         diagnosticos: crearDiagnosticosRepoPg(pool),
         tokens: crearTokensRepoPg(pool),
         historial: crearHistorialRepoPg(pool),
+        planes: crearPlanesRepoPg(pool),
       },
     };
   }
@@ -110,6 +113,7 @@ export function infraestructuraDesdeDb(
       diagnosticos: crearDiagnosticosRepo(db),
       tokens: crearTokensRepo(db),
       historial: crearHistorialRepo(db),
+      planes: crearPlanesRepo(db),
     },
   };
 }
