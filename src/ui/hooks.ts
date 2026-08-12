@@ -366,3 +366,26 @@ export function useCargarPlan() {
     onSuccess: inval,
   });
 }
+
+/** Avance del plan + gestión del link de seguimiento. */
+export function useAvancePlan(planId: string | null) {
+  return useQuery({
+    queryKey: ['alumnos', 'avance', planId],
+    queryFn: () => api.avancePlan(planId!),
+    enabled: !!planId,
+  });
+}
+export function useEmitirLinkSeguimiento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: string) => api.emitirLinkSeguimiento(planId),
+    onSuccess: (_r, planId) => qc.invalidateQueries({ queryKey: ['alumnos', 'avance', planId] }),
+  });
+}
+export function useRevocarLinkSeguimiento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: string) => api.revocarLinkSeguimiento(planId),
+    onSuccess: (_r, planId) => qc.invalidateQueries({ queryKey: ['alumnos', 'avance', planId] }),
+  });
+}

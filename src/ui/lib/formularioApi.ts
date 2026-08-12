@@ -57,3 +57,40 @@ export const formularioApi = {
   enviar: (token: string, respuestas: Record<string, unknown>) =>
     reqFormulario<{ enviado: boolean; id: string }>(token, { method: 'POST', body: JSON.stringify(respuestas) }),
 };
+
+// ───────────────────── Link de seguimiento (también público) ─────────────────────
+
+export interface AccionSeguimientoUI {
+  id: string;
+  texto: string;
+  hecha: boolean;
+}
+
+export interface SeguimientoAbiertoUI {
+  alumno: string;
+  fechaInicio: string;
+  faseActual: 1 | 2 | 3;
+  vencido: boolean;
+  fases: { fase: 1 | 2 | 3; acciones: AccionSeguimientoUI[] }[];
+}
+
+async function reqSeguimiento<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`/api/seguimiento/${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string; motivo?: MotivoToken | 'revocado' };
+    throw new ErrorFormulario(res.status, body.error ?? `Error ${res.status}`, body.motivo as MotivoToken);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const seguimientoApi = {
+  abrir: (token: string) => reqSeguimiento<SeguimientoAbiertoUI>(token),
+  marcar: (token: string, accionId: string, marcado: boolean) =>
+    reqSeguimiento<{ hecha: boolean }>(`${token}/acciones/${accionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ marcado }),
+    }),
+};

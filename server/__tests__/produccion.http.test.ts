@@ -57,12 +57,14 @@ describe('Producción · Express sirve el frontend + API', () => {
     expect(await res.text()).toContain('<div id="root">');
   });
 
-  it('fallback SPA: el link público /formulario/<token> también llega al index.html', async () => {
-    // Es la puerta de entrada del alumno: abre la URL en el celular y la SPA
+  it('fallback SPA: los links públicos /formulario y /seguimiento llegan al index.html', async () => {
+    // Las puertas de entrada del alumno: abre la URL en el celular y la SPA
     // resuelve el token del pathname. Si esto se cae, ningún link funciona.
-    const res = await fetch(`${base}/formulario/un-token-cualquiera`);
-    expect(res.status).toBe(200);
-    expect(await res.text()).toContain('<div id="root">');
+    for (const ruta of ['/formulario/un-token-cualquiera', '/seguimiento/otro-token']) {
+      const res = await fetch(`${base}${ruta}`);
+      expect(res.status).toBe(200);
+      expect(await res.text()).toContain('<div id="root">');
+    }
   });
 
   it('una ruta /api/* desconocida SIN sesión da 401 (no revela rutas, ni sirve la SPA)', async () => {

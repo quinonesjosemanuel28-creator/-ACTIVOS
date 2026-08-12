@@ -11,7 +11,7 @@ import type { ResumenEgresos } from '@domain/egresos/metrics';
 import type { ComisionesDelMes } from '@domain/comisiones/calculo';
 import type { Accion, Rol, UsuarioPublico } from '@domain/auth/permisos';
 import type { Alumno, Diagnostico, TokenDiagnostico } from '@domain/alumnos/tipos';
-import type { PlanCompleto } from '@domain/alumnos/plan';
+import type { Fase, PlanCompleto, TokenSeguimiento } from '@domain/alumnos/plan';
 
 // ───────────────────── Auth / sesión ─────────────────────
 
@@ -318,7 +318,28 @@ export const api = {
   cargarPlan: (alumnoId: string, bloque: string, fechaInicio?: string) =>
     req<PlanCompleto>(`/alumnos/${alumnoId}/plan`, { method: 'POST', body: JSON.stringify({ bloque, fechaInicio }) }),
   planes: (alumnoId: string) => req<PlanCompleto[]>(`/alumnos/${alumnoId}/planes`),
+  avancePlan: (planId: string) => req<AvancePlanUI>(`/planes/${planId}/avance`),
+  emitirLinkSeguimiento: (planId: string) =>
+    req<{ token: TokenSeguimiento; nuevo: boolean }>(`/planes/${planId}/link`, { method: 'POST' }),
+  revocarLinkSeguimiento: (planId: string) =>
+    req<{ revocados: number }>(`/planes/${planId}/link`, { method: 'DELETE' }),
 };
+
+/** El tablero de avance del plan (lo tildado es lo que el alumno DECLARA). */
+export interface AvancePlanUI {
+  planId: string;
+  fechaInicio: string;
+  faseActual: Fase;
+  vencido: boolean;
+  ultimaActividad: string | null;
+  fases: {
+    fase: Fase;
+    total: number;
+    hechas: number;
+    acciones: { id: string; texto: string; fase: Fase; hecha: boolean; okrOrden: number | null; ultimoCambio: string | null }[];
+  }[];
+  link: { token: string; expiraEn: string } | null;
+}
 
 /** Lo que devuelve la previa: el bloque validado + lo que hay que mirar antes de confirmar. */
 export interface PreviaPlanUI {

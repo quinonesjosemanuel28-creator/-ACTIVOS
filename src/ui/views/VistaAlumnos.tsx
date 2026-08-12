@@ -16,15 +16,18 @@ import { calcularClaridad, nivelClaridad, type NivelClaridad } from '@domain/alu
 import {
   useAlumno,
   useAlumnos,
+  useAvancePlan,
   useCargarPlan,
   useCrearAlumno,
   useDiagnosticos,
   useEditarAlumno,
   useEditarDiagnostico,
   useEmitirLink,
+  useEmitirLinkSeguimiento,
   useExportarDiagnostico,
   usePlanes,
   usePreviaPlan,
+  useRevocarLinkSeguimiento,
 } from '../hooks';
 import type { PreviaPlanUI } from '../lib/api';
 import { Textarea } from '../components/ui/primitives';
@@ -415,26 +418,107 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
               </div>
             ))}
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {([1, 2, 3] as const).map((fase) => (
-              <div key={fase} className="rounded-xl border border-navy-100 p-3 dark:border-navy-700">
-                <p className="text-xs font-600 uppercase tracking-wide text-navy-400">
-                  Fase {fase} · días {fase === 1 ? '1-30' : fase === 2 ? '31-60' : '61-90'}
-                </p>
-                <ul className="mt-1.5 space-y-1">
-                  {vigente.acciones.filter((a) => a.fase === fase).map((a) => (
-                    <li key={a.id} className="text-xs text-navy-700 dark:text-navy-200">☐ {a.texto}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-navy-400">
-            El link de seguimiento del alumno llega en la próxima fase — por ahora el checklist se ve solo acá.
-          </p>
+          <SeguimientoPlan planId={vigente.plan.id} />
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * El tablero de seguimiento del consultor: estado por acción, % por fase, la
+ * señal de ritmo ("última actividad") y la gestión del link del alumno. Lo
+ * tildado es lo que el alumno DECLARA — se valida en la llamada.
+ */
+function SeguimientoPlan({ planId }: { planId: string }) {
+  const { data: avance } = useAvancePlan(planId);
+  const emitir = useEmitirLinkSeguimiento();
+  const revocar = useRevocarLinkSeguimiento();
+  const [copiado, setCopiado] = useState(false);
+
+  if (!avance) return <div className="flex justify-center py-6"><Spinner className="h-5 w-5" /></div>;
+
+  const urlLink = avance.link ? `${window.location.origin}/seguimiento/${avance.link.token}` : null;
+  const diasSinActividad = avance.ultimaActividad
+    ? Math.floor((Date.now() - Date.parse(avance.ultimaActividad)) / 86_400_000)
+    : null;
+
+  const copiar = async () => {
+    if (!urlLink) return;
+    await navigator.clipboard.writeText(urlLink);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 4000);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-600 text-navy-900 dark:text-navy-50">Seguimiento</p>
+          {avance.vencido ? (
+            <Badge tone="neutral">trimestre terminado</Badge>
+          ) : diasSinActividad === null ? (
+            <Badge tone="neutral">el alumno todavía no tildó nada</Badge>
+          ) : diasSinActividad >= 10 ? (
+            <Badge tone="red">sin movimiento hace {diasSinActividad} días</Badge>
+          ) : (
+            <Badge tone="green">última actividad hace {diasSinActividad === 0 ? 'horas' : `${diasSinActividad} día(s)`}</Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {!avance.link ? (
+            <Button size="sm" variant="gold" onClick={() => void emitir.mutateAsync(planId)} disabled={emitir.isPending}>
+              <Link2 size={14} /><span className="ml-1">Generar link del alumno</span>
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => void copiar()}>
+                {copiado ? <Check size={14} className="text-signal-green" /> : <Copy size={14} />}
+                <span className="ml-1">{copiado ? 'Copiado' : 'Copiar link para WhatsApp'}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                title="Dar de baja este link (si se filtró). Después podés generar otro."
+                onClick={() => { if (window.confirm('¿Dar de baja el link actual? El alumno va a necesitar el nuevo.')) void revocar.mutateAsync(planId); }}
+              >
+                <X size={14} /><span className="ml-1">Revocar</span>
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+      {urlLink && (
+        <p className="break-all rounded-lg bg-navy-50 p-2 text-xs text-navy-600 dark:bg-navy-800 dark:text-navy-200">{urlLink}</p>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {avance.fases.map((f) => (
+          <div
+            key={f.fase}
+            className={`rounded-xl border p-3 ${f.fase === avance.faseActual && !avance.vencido ? 'border-gold-400' : 'border-navy-100 dark:border-navy-700'}`}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-600 uppercase tracking-wide text-navy-400">
+                Fase {f.fase} · días {f.fase === 1 ? '1-30' : f.fase === 2 ? '31-60' : '61-90'}
+              </p>
+              <span className={`text-xs font-700 ${f.hechas === f.total && f.total > 0 ? 'text-signal-green' : 'text-navy-500 dark:text-navy-300'}`}>
+                {f.hechas}/{f.total}
+              </span>
+            </div>
+            <ul className="mt-1.5 space-y-1">
+              {f.acciones.map((a) => (
+                <li key={a.id} className={`text-xs ${a.hecha ? 'text-navy-400 line-through' : 'text-navy-700 dark:text-navy-200'}`}>
+                  {a.hecha ? '☑' : '☐'} {a.texto}
+                  {a.okrOrden !== null && <span className="ml-1 text-navy-300">· OKR {a.okrOrden}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-navy-400">Lo tildado es lo que el alumno declara — validalo en la llamada.</p>
+    </div>
   );
 }
 

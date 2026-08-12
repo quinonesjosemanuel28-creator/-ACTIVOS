@@ -8,6 +8,7 @@ import { Topbar } from './components/Topbar';
 import { Spinner } from './components/ui/primitives';
 import { VistaLogin } from './views/VistaLogin';
 import { VistaFormulario } from './views/VistaFormulario';
+import { VistaSeguimiento } from './views/VistaSeguimiento';
 import { VistaEjecutiva } from './views/VistaEjecutiva';
 import { VistaAlertas } from './views/VistaAlertas';
 import { VistaCashFlow } from './views/VistaCashFlow';
@@ -25,16 +26,19 @@ import { VistaUsuarios } from './views/VistaUsuarios';
 import { VistaAlumnos } from './views/VistaAlumnos';
 
 /**
- * /formulario/<token> es la ÚNICA ruta pública de la SPA: el alumno llega por
- * link, sin cuenta. Se resuelve a nivel módulo (el pathname no cambia sin
- * recargar) y ANTES de tocar la sesión: el formulario ni pregunta si hay login.
- * El server hace el fallback SPA de esa URL a index.html en producción.
+ * Las DOS rutas públicas de la SPA: /formulario/<token> (el diagnóstico) y
+ * /seguimiento/<token> (el checklist del trimestre). El alumno llega por link,
+ * sin cuenta. Se resuelven a nivel módulo (el pathname no cambia sin recargar)
+ * y ANTES de tocar la sesión. El server hace el fallback SPA en producción.
  */
-const TOKEN_FORMULARIO =
-  typeof window === 'undefined' ? undefined : /^\/formulario\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname)?.[1];
+const RUTA_PUBLICA =
+  typeof window === 'undefined'
+    ? undefined
+    : /^\/(formulario|seguimiento)\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname);
 
 export function App() {
-  if (TOKEN_FORMULARIO) return <VistaFormulario token={TOKEN_FORMULARIO} />;
+  if (RUTA_PUBLICA?.[1] === 'formulario') return <VistaFormulario token={RUTA_PUBLICA[2]!} />;
+  if (RUTA_PUBLICA?.[1] === 'seguimiento') return <VistaSeguimiento token={RUTA_PUBLICA[2]!} />;
   return <AppConSesion />;
 }
 
