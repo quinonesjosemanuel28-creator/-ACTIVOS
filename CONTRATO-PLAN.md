@@ -165,6 +165,15 @@ trabajo (después de "Paso 5 — Entregar"):
 
 ---
 
+## Qué queda FUERA del contrato (decidido, no volver a discutir)
+
+- **Los modelos económicos / escenarios del plan NO se cargan al panel**
+  (decisión de José, agosto 2026). Son análisis de la consultoría y viven en el
+  `.docx`. Lo que hay que *seguir* de ellos ya entra como KRs (ej.: recargo
+  aplicado, mora bajo 8%, ventas financiadas medidas). Si la skill los emite
+  dentro del bloque, la previa los lista como ignorados — y eso es lo correcto,
+  no un bug.
+
 ## Del lado de la app (ticket 6)
 
 - Zod valida el bloque en el borde, con los mismos criterios de la tabla.
