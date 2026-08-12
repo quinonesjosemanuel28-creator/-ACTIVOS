@@ -43,4 +43,9 @@ export const TABLAS_NO_COPIADAS = [
   'diagnosticos',
   'diagnostico_tokens',
   'alumno_consultor_historial',
+  'planes',
+  'okrs',
+  'krs',
+  'acciones',
+  'checkins',
 ] as const;

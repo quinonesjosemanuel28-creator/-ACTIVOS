@@ -315,6 +315,62 @@ CREATE TABLE IF NOT EXISTS alumno_consultor_historial (
   creado_en     TEXT NOT NULL
 );
 
+-- ───────── Fase 2 del módulo: el plan de 90 días (ticket 6) ─────────
+-- Espejo EXACTO del bloque en sqlite/schema.ts. El plan entra pegando el
+-- bloque JSON de la skill (CONTRATO-PLAN.md). Cargar un plan nuevo NO borra
+-- el anterior; el vigente es el de fecha_inicio más reciente.
+
+CREATE TABLE IF NOT EXISTS planes (
+  id            TEXT PRIMARY KEY,
+  alumno_id     TEXT NOT NULL REFERENCES alumnos(id) ON DELETE CASCADE,
+  fecha_inicio  TEXT NOT NULL,
+  etapa         TEXT,
+  objetivo_90d  TEXT,
+  version       INTEGER NOT NULL DEFAULT 1,
+  creado_en     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS okrs (
+  id        TEXT PRIMARY KEY,
+  plan_id   TEXT NOT NULL REFERENCES planes(id) ON DELETE CASCADE,
+  orden     INTEGER NOT NULL,
+  objetivo  TEXT NOT NULL,
+  creado_en TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS krs (
+  id        TEXT PRIMARY KEY,
+  okr_id    TEXT NOT NULL REFERENCES okrs(id) ON DELETE CASCADE,
+  orden     INTEGER NOT NULL,
+  texto     TEXT NOT NULL,
+  meta      TEXT,
+  creado_en TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS acciones (
+  id        TEXT PRIMARY KEY,
+  plan_id   TEXT NOT NULL REFERENCES planes(id) ON DELETE CASCADE,
+  okr_id    TEXT REFERENCES okrs(id),
+  fase      INTEGER NOT NULL CHECK(fase IN (1, 2, 3)),
+  orden     INTEGER NOT NULL,
+  texto     TEXT NOT NULL,
+  creado_en TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS checkins (
+  id         TEXT PRIMARY KEY,
+  accion_id  TEXT NOT NULL REFERENCES acciones(id) ON DELETE CASCADE,
+  marcado    INTEGER NOT NULL,
+  origen     TEXT NOT NULL CHECK(origen IN ('alumno','consultor')),
+  creado_en  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_planes_alumno   ON planes(alumno_id);
+CREATE INDEX IF NOT EXISTS idx_okrs_plan       ON okrs(plan_id);
+CREATE INDEX IF NOT EXISTS idx_krs_okr         ON krs(okr_id);
+CREATE INDEX IF NOT EXISTS idx_acciones_plan   ON acciones(plan_id);
+CREATE INDEX IF NOT EXISTS idx_checkins_accion ON checkins(accion_id);
+
 CREATE INDEX IF NOT EXISTS idx_alumnos_consultor  ON alumnos(consultor_id);
 CREATE INDEX IF NOT EXISTS idx_diagnosticos_alumno ON diagnosticos(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_diagnosticos_fecha  ON diagnosticos(fecha);

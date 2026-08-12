@@ -230,9 +230,14 @@ export function normalizarEmail(email: string): string {
 export const TABLAS_SENSIBLES: readonly string[] = [
   'usuarios',
   'sesiones',
-  // ── módulo de alumnos (retirar en el ticket 6) ──
+  // ── módulo de alumnos (retirar cuando el asistente tenga vistas filtradas) ──
   'alumnos',
   'diagnosticos',
   'diagnostico_tokens',
   'alumno_consultor_historial',
+  'planes',
+  'okrs',
+  'krs',
+  'acciones',
+  'checkins',
 ] as const;
