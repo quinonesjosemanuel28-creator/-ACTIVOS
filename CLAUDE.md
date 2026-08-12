@@ -109,9 +109,8 @@ Toda ruta declara su acción con `requiere(...)`, **incluidas las de lectura**. 
 
 | # | Ticket | Estado |
 |---|---|---|
-| 0–5 | Exploración · migraciones · rol y ámbito · formulario · panel · exportación para la skill | hecho |
-| 6 | Cargar el plan (OKRs + acciones por fase) y seguimiento del alumno | siguiente |
-| 7 | Asistente IA sobre el módulo | pendiente |
+| 0–6 | Exploración · migraciones · rol y ámbito · formulario · panel · exportación · plan + seguimiento | hecho |
+| 7 | Asistente IA sobre el módulo | siguiente |
 
 El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así de la skill). Antes de arrancar el ticket 6, leer:
 

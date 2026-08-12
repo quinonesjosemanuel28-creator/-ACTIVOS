@@ -108,7 +108,8 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 | 3 | Formulario público con token por alumno | hecho |
 | 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | hecho |
 | 5 | Exportación del diagnóstico para la skill | hecho |
-| 6 | Asistente IA sobre el módulo (vistas filtradas + herramientas) | pendiente |
+| 6 | Plan de 90 días: carga por bloque + seguimiento del alumno | hecho |
+| 7 | Asistente IA sobre el módulo (vistas filtradas + herramientas) | pendiente |
 
 Actualizar este estado a medida que se avanza.
 
@@ -176,7 +177,7 @@ Para no volver a discutirlas:
 - **La sección 12 del plan sale pre-armada** desde las casillas, con prioridad Alta/Media según la obligatoriedad de la pregunta (heurística, el consultor la ajusta).
 - `GET /api/diagnosticos/:id/exportacion` con el mismo ámbito que la lectura. En el panel: copiar (para pegar en Claude) y descargar `.md`.
 
-### Definido para los tickets 6+ (seguimiento)
+### Cerradas en el ticket 6 (agosto 2026) — antes "definido para los tickets 6+"
 
 - **El seguimiento va por FASES (30/60/90), no por semanas.** El plan ya viene estructurado así (sección 6 de la skill); las semanas serían una capa inventada encima que hay que mantener a mano. Se cae el campo `semana` de `tareas`, la aritmética de fechas y la pantalla de asignar acciones a semanas.
 - **La tabla es `acciones`** (`plan_id`, `fase` 1/2/3, `texto`, `orden`), tomadas de la sección 6 del plan. Los OKRs y KRs se cargan igual, para el tablero del consultor y la comparación a los 90 días, pero el checklist del alumno sale de las acciones por fase.
