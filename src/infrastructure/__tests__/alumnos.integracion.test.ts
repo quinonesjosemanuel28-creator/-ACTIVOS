@@ -519,6 +519,126 @@ describe('Alumnos · carga del plan de 90 días', () => {
   });
 });
 
+describe('Alumnos · link de seguimiento y tildes', () => {
+  const BLOQUE_SEG = JSON.stringify({
+    version: 1,
+    alumno: 'Gonzalo',
+    fecha_inicio: '2026-08-18',
+    okrs: [{ orden: 1, objetivo: 'Ordenar', krs: [{ texto: 'Tablero' }] }],
+    fases: [
+      { fase: 1, acciones: [{ texto: 'Armar tablero', okr: 1 }, { texto: 'Separar cuentas' }, { texto: 'Cargar créditos' }] },
+      { fase: 2, acciones: [{ texto: 'Protocolo' }, { texto: 'Llamar morosos' }, { texto: 'Cierre semanal' }] },
+      { fase: 3, acciones: [{ texto: 'Referidos' }, { texto: 'Tope' }, { texto: 'Revisar mora' }] },
+    ],
+  });
+
+  async function conPlan() {
+    const ctx = await setup();
+    const alumno = await ua.crearAlumno(ctx.repos, ctx.consu.id, FICHA);
+    const plan = await ua.cargarPlan(ctx.repos, ctx.alcanceConsu, alumno.id, BLOQUE_SEG);
+    return { ...ctx, alumno, plan };
+  }
+
+  it('emitir es ESTABLE: dos veces devuelve el MISMO token (vive en WhatsApp)', async () => {
+    const { repos, alcanceConsu, plan } = await conPlan();
+    const a = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    const b = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    expect(a.nuevo).toBe(true);
+    expect(b.nuevo).toBe(false);
+    expect(b.token.token).toBe(a.token.token);
+  });
+
+  it('revocar + volver a emitir da un token nuevo, y el viejo dice "revocado"', async () => {
+    const { repos, alcanceConsu, plan } = await conPlan();
+    const viejo = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    const { revocados } = await ua.revocarLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    expect(revocados).toBe(1);
+
+    await expect(ua.abrirSeguimiento(repos, viejo.token.token)).rejects.toMatchObject({ motivo: 'revocado' });
+    const nuevo = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    expect(nuevo.nuevo).toBe(true);
+    expect(nuevo.token.token).not.toBe(viejo.token.token);
+  });
+
+  it('abrir devuelve SOLO las acciones por fase (ni OKRs, ni diagnóstico, ni índice)', async () => {
+    const { repos, alcanceConsu, plan } = await conPlan();
+    const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+
+    const abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
+    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'faseActual', 'fases', 'fechaInicio', 'vencido']);
+    expect(abierto.alumno).toBe('Gonzalo');
+    expect(abierto.faseActual).toBe(1);
+    expect(abierto.vencido).toBe(false);
+    expect(abierto.fases.map((f) => f.acciones.length)).toEqual([3, 3, 3]);
+    expect(abierto.fases[0]!.acciones.every((a) => !a.hecha)).toBe(true);
+  });
+
+  it('el tilde crea un checkin y el estado se refleja; destildar es OTRA fila', async () => {
+    const { repos, alcanceConsu, plan } = await conPlan();
+    const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    const accion = plan.acciones[0]!;
+
+    await ua.marcarAccion(repos, token.token, accion.id, true, '2026-08-20T10:00:00.000Z');
+    let abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
+    expect(abierto.fases[0]!.acciones.find((a) => a.id === accion.id)!.hecha).toBe(true);
+
+    await ua.marcarAccion(repos, token.token, accion.id, false, '2026-08-21T10:00:00.000Z');
+    abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-21T12:00:00.000Z');
+    expect(abierto.fases[0]!.acciones.find((a) => a.id === accion.id)!.hecha).toBe(false);
+
+    // Append-only: quedaron DOS filas, no una editada.
+    const checkins = await repos.checkins.listarPorPlan(plan.plan.id);
+    expect(checkins).toHaveLength(2);
+  });
+
+  it('pasado el día 90 el link se LEE pero no acepta tildes', async () => {
+    const { repos, alcanceConsu, plan } = await conPlan(); // inicio 2026-08-18
+    const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    const DIA_91 = '2026-11-17T10:00:00.000Z';
+
+    const abierto = await ua.abrirSeguimiento(repos, token.token, DIA_91);
+    expect(abierto.vencido).toBe(true);
+
+    await expect(
+      ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, true, DIA_91),
+    ).rejects.toThrow(/trimestre ya terminó/i);
+  });
+
+  it('una acción de OTRO plan no se puede tildar con este token', async () => {
+    const { repos, alcanceConsu, consu, plan } = await conPlan();
+    const otroAlumno = await ua.crearAlumno(repos, consu.id, { ...FICHA, nombre: 'Marta' });
+    const otroPlan = await ua.cargarPlan(repos, alcanceConsu, otroAlumno.id, BLOQUE_SEG);
+    const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+
+    await expect(
+      ua.marcarAccion(repos, token.token, otroPlan.acciones[0]!.id, true),
+    ).rejects.toThrow(/inexistente/i);
+  });
+
+  it('el avance del consultor: conteos, última actividad y el link vigente', async () => {
+    const { repos, alcanceConsu, plan } = await conPlan();
+    const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    const [a1, a2] = plan.acciones;
+    await ua.marcarAccion(repos, token.token, a1!.id, true, '2026-08-20T10:00:00.000Z');
+    await ua.marcarAccion(repos, token.token, a2!.id, true, '2026-08-22T10:00:00.000Z');
+
+    const avance = await ua.avancePlan(repos, alcanceConsu, plan.plan.id, '2026-08-25T12:00:00.000Z');
+    expect(avance.fases[0]!.hechas).toBe(2);
+    expect(avance.fases[0]!.total).toBe(3);
+    expect(avance.ultimaActividad).toBe('2026-08-22T10:00:00.000Z');
+    expect(avance.link?.token).toBe(token.token);
+    expect(avance.faseActual).toBe(1);
+    // La acción con OKR trae su orden para agrupar en el panel.
+    expect(avance.fases[0]!.acciones.find((a) => a.texto === 'Armar tablero')!.okrOrden).toBe(1);
+  });
+
+  it('el plan ajeno no emite link ni muestra avance', async () => {
+    const { repos, alcanceOtro, plan } = await conPlan();
+    await expect(ua.emitirLinkSeguimiento(repos, alcanceOtro, plan.plan.id)).rejects.toThrow(/inexistente/i);
+    await expect(ua.avancePlan(repos, alcanceOtro, plan.plan.id)).rejects.toThrow(/inexistente/i);
+  });
+});
+
 describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => {
   it('el envío llena los huecos de la ficha', async () => {
     const { repos, consu, alcanceConsu } = await setup();

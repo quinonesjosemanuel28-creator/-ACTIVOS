@@ -48,4 +48,5 @@ export const TABLAS_NO_COPIADAS = [
   'krs',
   'acciones',
   'checkins',
+  'seguimiento_tokens',
 ] as const;

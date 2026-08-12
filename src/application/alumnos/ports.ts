@@ -10,7 +10,7 @@
  * un botón escondido.
  */
 import type { Alumno, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
-import type { PlanCompleto } from '../../domain/alumnos/plan';
+import type { Checkin, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
 
 export interface FiltrosAlumnos {
   /**
@@ -81,10 +81,28 @@ export interface PlanesRepo {
   obtener(planId: string): Promise<PlanCompleto | null>;
 }
 
+export interface SeguimientoTokensRepo {
+  obtener(token: string): Promise<TokenSeguimiento | null>;
+  /** El token vivo del plan (sin revocar, sin vencer), si hay. */
+  vigenteDePlan(planId: string, ahoraIso: string): Promise<TokenSeguimiento | null>;
+  crear(t: TokenSeguimiento): Promise<void>;
+  /** Da de baja los tokens vivos del plan. Devuelve cuántos revocó. */
+  revocarDePlan(planId: string, ahoraIso: string): Promise<number>;
+}
+
+export interface CheckinsRepo {
+  /** APPEND-ONLY: no hay update ni delete de checkins, a propósito. */
+  crear(c: Checkin): Promise<void>;
+  /** Todos los checkins de las acciones del plan. */
+  listarPorPlan(planId: string): Promise<Checkin[]>;
+}
+
 export interface ReposAlumnos {
   alumnos: AlumnosRepo;
   diagnosticos: DiagnosticosRepo;
   tokens: TokensRepo;
   historial: HistorialRepo;
   planes: PlanesRepo;
+  seguimiento: SeguimientoTokensRepo;
+  checkins: CheckinsRepo;
 }

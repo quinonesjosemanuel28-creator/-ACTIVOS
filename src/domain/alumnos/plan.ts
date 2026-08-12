@@ -97,3 +97,66 @@ export function planVencido(fechaInicio: string, hoyIso: string): boolean {
   const hoy = Date.parse(`${hoyIso.slice(0, 10)}T00:00:00Z`);
   return Math.floor((hoy - inicio) / 86_400_000) >= 90;
 }
+
+// ───────────────────────── Link de seguimiento ─────────────────────────
+
+/**
+ * La credencial del alumno durante el trimestre. NO es el token del
+ * diagnóstico: aquel es de un solo uso y 30 días; este es REUSABLE (vive en la
+ * conversación de WhatsApp), dura la lectura del plan completo y es revocable.
+ */
+export interface TokenSeguimiento {
+  token: string;
+  planId: string;
+  expiraEn: string;
+  /** No null = el consultor lo dio de baja (link filtrado, reemplazado…). */
+  revocadoEn: string | null;
+  creadoEn: string;
+}
+
+/**
+ * El link se puede LEER más allá del día 90 (la conversación de cierre repasa
+ * el resumen final), por eso vive más que el plan: 90 días de trimestre + 30
+ * de gracia. Los TILDES igual se bloquean desde el día 90 (planVencido).
+ */
+export const DIAS_VIGENCIA_LINK = 120;
+
+export type MotivoSeguimientoInvalido = 'inexistente' | 'vencido' | 'revocado';
+
+export function estadoTokenSeguimiento(
+  t: TokenSeguimiento | null,
+  ahoraIso: string,
+): { valido: true } | { valido: false; motivo: MotivoSeguimientoInvalido } {
+  if (!t) return { valido: false, motivo: 'inexistente' };
+  if (t.revocadoEn !== null) return { valido: false, motivo: 'revocado' };
+  if (t.expiraEn <= ahoraIso) return { valido: false, motivo: 'vencido' };
+  return { valido: true };
+}
+
+// ───────────────────────── Estado del checklist ─────────────────────────
+
+/**
+ * Estado actual de cada acción a partir del historial append-only: gana el
+ * checkin MÁS NUEVO de cada acción. Puro; los repos entregan los checkins y
+ * acá se reduce, igual en el link del alumno y en el panel del consultor.
+ */
+export function estadoAcciones(checkins: readonly Checkin[]): Map<string, Checkin> {
+  const ultimo = new Map<string, Checkin>();
+  for (const c of checkins) {
+    const previo = ultimo.get(c.accionId);
+    if (!previo || c.creadoEn > previo.creadoEn) ultimo.set(c.accionId, c);
+  }
+  return ultimo;
+}
+
+/**
+ * Última vez que el ALUMNO movió algo (la señal de ritmo del panel). Los
+ * checkins del consultor no cuentan: miden otra cosa.
+ */
+export function ultimaActividadAlumno(checkins: readonly Checkin[]): string | null {
+  let ultima: string | null = null;
+  for (const c of checkins) {
+    if (c.origen === 'alumno' && (ultima === null || c.creadoEn > ultima)) ultima = c.creadoEn;
+  }
+  return ultima;
+}

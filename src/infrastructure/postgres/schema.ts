@@ -371,6 +371,22 @@ CREATE INDEX IF NOT EXISTS idx_krs_okr         ON krs(okr_id);
 CREATE INDEX IF NOT EXISTS idx_acciones_plan   ON acciones(plan_id);
 CREATE INDEX IF NOT EXISTS idx_checkins_accion ON checkins(accion_id);
 
+-- Link de seguimiento: la credencial del alumno para tildar su checklist.
+-- REUSABLE, a diferencia del token de diagnóstico (aquel es de un solo uso y
+-- 30 días; este vive en la conversación de WhatsApp durante el trimestre).
+-- ESTABLE: volver a pedirlo devuelve el vigente — solo revocar genera otro.
+-- Revocable desde el panel por si el link se filtra.
+CREATE TABLE IF NOT EXISTS seguimiento_tokens (
+  token        TEXT PRIMARY KEY,
+  plan_id      TEXT NOT NULL REFERENCES planes(id) ON DELETE CASCADE,
+  expira_en    TEXT NOT NULL,
+  revocado_en  TEXT,
+  creado_en    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_seguimiento_plan ON seguimiento_tokens(plan_id);
+
+
 CREATE INDEX IF NOT EXISTS idx_alumnos_consultor  ON alumnos(consultor_id);
 CREATE INDEX IF NOT EXISTS idx_diagnosticos_alumno ON diagnosticos(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_diagnosticos_fecha  ON diagnosticos(fecha);

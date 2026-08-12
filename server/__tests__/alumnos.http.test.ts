@@ -409,6 +409,66 @@ describe('HTTP · rutas privadas: ámbito por fila de punta a punta', () => {
     expect(((await roto.json()) as { error: string }).error).toMatch(/bloque JSON/i);
   });
 
+  it('seguimiento: el consultor emite el link, el alumno abre y tilda SIN cookie', async () => {
+    const { alumnoId } = await crearAlumnoConToken(ctx.cookies.consultor);
+    const conConsultor = { ...json, cookie: ctx.cookies.consultor };
+    const bloque = JSON.stringify({
+      version: 1, alumno: 'Gonzalo', fecha_inicio: '2026-08-18',
+      okrs: [{ orden: 1, objetivo: 'Ordenar', krs: [{ texto: 'Tablero' }] }],
+      fases: [
+        { fase: 1, acciones: [{ texto: 'A' }, { texto: 'B' }, { texto: 'C' }] },
+        { fase: 2, acciones: [{ texto: 'D' }, { texto: 'E' }, { texto: 'F' }] },
+        { fase: 3, acciones: [{ texto: 'G' }, { texto: 'H' }, { texto: 'I' }] },
+      ],
+    });
+    const carga = await fetch(`${ctx.base}/api/alumnos/${alumnoId}/plan`, {
+      method: 'POST', headers: conConsultor, body: JSON.stringify({ bloque }),
+    });
+    const plan = (await carga.json()) as { plan: { id: string }; acciones: { id: string }[] };
+
+    // LECTOR no emite links del módulo.
+    expect((await fetch(`${ctx.base}/api/planes/${plan.plan.id}/link`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.lector },
+    })).status).toBe(403);
+
+    // El consultor emite; volver a emitir devuelve el MISMO token (estable).
+    const e1 = await fetch(`${ctx.base}/api/planes/${plan.plan.id}/link`, { method: 'POST', headers: conConsultor });
+    expect(e1.status).toBe(200);
+    const r1 = (await e1.json()) as { token: { token: string }; nuevo: boolean };
+    const e2 = await fetch(`${ctx.base}/api/planes/${plan.plan.id}/link`, { method: 'POST', headers: conConsultor });
+    const r2 = (await e2.json()) as { token: { token: string }; nuevo: boolean };
+    expect(r1.nuevo).toBe(true);
+    expect(r2.nuevo).toBe(false);
+    expect(r2.token.token).toBe(r1.token.token);
+    const token = r1.token.token;
+    expect(token.length).toBeGreaterThan(20);
+
+    // El alumno abre SIN cookie y ve solo las acciones.
+    const abierto = await fetch(`${ctx.base}/api/seguimiento/${token}`);
+    expect(abierto.status).toBe(200);
+    const s = (await abierto.json()) as { alumno: string; fases: { acciones: { id: string; hecha: boolean }[] }[] };
+    expect(s.alumno).toBe('Gonzalo');
+
+    // Tilda una acción, también sin cookie.
+    const accionId = s.fases[0]!.acciones[0]!.id;
+    const tilde = await fetch(`${ctx.base}/api/seguimiento/${token}/acciones/${accionId}`, {
+      method: 'POST', headers: json, body: JSON.stringify({ marcado: true }),
+    });
+    expect(tilde.status).toBe(200);
+    expect(((await tilde.json()) as { hecha: boolean }).hecha).toBe(true);
+
+    // Y el consultor lo ve en el avance.
+    const avance = await fetch(`${ctx.base}/api/planes/${plan.plan.id}/avance`, { headers: { cookie: ctx.cookies.consultor } });
+    expect(avance.status).toBe(200);
+    const av = (await avance.json()) as { fases: { hechas: number }[]; ultimaActividad: string | null };
+    expect(av.fases[0]!.hechas).toBe(1);
+    expect(av.ultimaActividad).toBeTruthy();
+
+    // Token trucho → 404; el avance ajeno → 404.
+    expect((await fetch(`${ctx.base}/api/seguimiento/token-trucho`)).status).toBe(404);
+    expect((await fetch(`${ctx.base}/api/planes/${plan.plan.id}/avance`, { headers: { cookie: ctx.cookies.otroConsultor } })).status).toBe(404);
+  });
+
   it('corregir un diagnóstico: dueño 200 con índice recalculado; LECTOR 403; ajeno 404', async () => {
     const { token } = await crearAlumnoConToken(ctx.cookies.consultor);
     const envio = await fetch(`${ctx.base}/api/formulario/${token}`, {

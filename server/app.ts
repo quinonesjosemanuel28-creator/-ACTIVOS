@@ -45,6 +45,7 @@ import * as uc from '../src/application/useCases';
 import * as ucc from '../src/application/cierres/useCases';
 import * as ual from '../src/application/alumnos/useCases';
 import type { MotivoTokenInvalido } from '../src/domain/alumnos/tipos';
+import type { MotivoSeguimientoInvalido } from '../src/domain/alumnos/plan';
 import type { Programa } from '../src/domain/types';
 import type { Filtro } from '../src/application/ports';
 import type { FiltrosCierres } from '../src/application/cierres/ports';
@@ -56,6 +57,8 @@ export interface OpcionesApp {
   limitadorLogin?: ReturnType<typeof crearLimitadorLogin>;
   /** Limitador del formulario público de diagnóstico (inyectable para tests). */
   limitadorFormulario?: ReturnType<typeof crearLimitadorLogin>;
+  /** Limitador del link de seguimiento (inyectable para tests). */
+  limitadorSeguimiento?: ReturnType<typeof crearLimitadorLogin>;
   /**
    * Carpeta del frontend compilado (vite build → dist). Si se pasa, Express
    * sirve esos archivos y hace fallback SPA (index.html) para las rutas del
@@ -73,20 +76,25 @@ const STATUS_AUTH: Record<uauth.ErrorAuth['codigo'], number> = {
 };
 
 /**
- * Token del formulario público → respuesta. 410 (Gone) para el que existió y ya
- * no sirve: le dice al alumno que el link es real pero se agotó, así sabe que
- * tiene que pedir otro en vez de pensar que se equivocó al copiarlo.
+ * Token público (formulario o seguimiento) → respuesta. 410 (Gone) para el que
+ * existió y ya no sirve: le dice al alumno que el link es real pero se agotó,
+ * así sabe que tiene que pedir otro en vez de pensar que se equivocó al
+ * copiarlo.
  */
-const STATUS_TOKEN: Record<MotivoTokenInvalido, number> = {
+type MotivoLink = MotivoTokenInvalido | MotivoSeguimientoInvalido;
+
+const STATUS_TOKEN: Record<MotivoLink, number> = {
   inexistente: 404,
   vencido: 410,
   usado: 410,
+  revocado: 410,
 };
 
-const MENSAJE_TOKEN: Record<MotivoTokenInvalido, string> = {
+const MENSAJE_TOKEN: Record<MotivoLink, string> = {
   inexistente: 'Este link no es válido. Pedile uno nuevo a tu consultor.',
   vencido: 'Este link venció. Pedile uno nuevo a tu consultor.',
   usado: 'Este formulario ya fue enviado. Si necesitás corregir algo, escribile a tu consultor.',
+  revocado: 'Este link fue dado de baja. Pedile el nuevo a tu consultor.',
 };
 
 export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): express.Express {
@@ -94,12 +102,14 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   const cookieSegura = opciones.cookieSegura ?? process.env.NODE_ENV === 'production';
   const limitador = opciones.limitadorLogin ?? crearLimitadorLogin();
   /**
-   * Limitador del formulario público (mismo mecanismo que el del login, por IP).
-   * El token es de 256 bits, así que adivinarlo no es el riesgo real: esto corta
-   * el sondeo automatizado y evita que la única ruta sin sesión de la app quede
-   * como un pozo abierto. Tolerante, porque un alumno legítimo puede recargar.
+   * Limitadores de las rutas públicas (mismo mecanismo que el del login, por
+   * IP). Los tokens son de 256 bits, así que adivinarlos no es el riesgo real:
+   * esto corta el sondeo automatizado. Tolerantes, porque un alumno legítimo
+   * recarga y tilda muchas veces. Instancias separadas: que un alumno activo en
+   * su checklist no bloquee el formulario de diagnóstico, ni al revés.
    */
   const limitadorFormulario = opciones.limitadorFormulario ?? crearLimitadorLogin({ max: 30 });
+  const limitadorSeguimiento = opciones.limitadorSeguimiento ?? crearLimitadorLogin({ max: 60 });
   const { autenticar, requiere } = crearGuardias(reposAuth);
 
   const app = express();
@@ -180,24 +190,27 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   // gate a propósito: el alumno no tiene cuenta — su token de un solo uso ES la
   // credencial. Por eso acá NO se responde nada que exceda lo que el dueño del
   // link tiene derecho a ver, y el limitador por IP corta el sondeo de tokens.
-  const conLimiteFormulario = (fn: (req: express.Request, res: express.Response) => unknown) =>
-    h(async (req, res) => {
-      const ip = req.ip ?? 'desconocida';
-      if (!limitadorFormulario.permitido(ip)) {
-        res.status(429).json({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' });
-        return;
-      }
-      try {
-        const out = await fn(req, res);
-        limitadorFormulario.exito(ip);
-        return out;
-      } catch (err) {
-        // Solo el token inválido cuenta como intento: un envío con errores de
-        // validación es un alumno legítimo corrigiendo su formulario.
-        if (err instanceof ual.ErrorAlumnos && err.codigo === 'TOKEN_INVALIDO') limitadorFormulario.fallo(ip);
-        throw err;
-      }
-    });
+  const conLimite = (limitador: ReturnType<typeof crearLimitadorLogin>) =>
+    (fn: (req: express.Request, res: express.Response) => unknown) =>
+      h(async (req, res) => {
+        const ip = req.ip ?? 'desconocida';
+        if (!limitador.permitido(ip)) {
+          res.status(429).json({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' });
+          return;
+        }
+        try {
+          const out = await fn(req, res);
+          limitador.exito(ip);
+          return out;
+        } catch (err) {
+          // Solo el token inválido cuenta como intento: un error de validación
+          // es un alumno legítimo corrigiendo, no un sondeo.
+          if (err instanceof ual.ErrorAlumnos && err.codigo === 'TOKEN_INVALIDO') limitador.fallo(ip);
+          throw err;
+        }
+      });
+  const conLimiteFormulario = conLimite(limitadorFormulario);
+  const conLimiteSeguimiento = conLimite(limitadorSeguimiento);
 
   app.get('/api/formulario/:token', conLimiteFormulario((req) => ual.abrirFormulario(reposAlumnos, param(req, 'token'))));
   app.post('/api/formulario/:token', conLimiteFormulario(async (req) => {
@@ -206,6 +219,16 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
     // material del CONSULTOR (fase del panel), no de la pantalla de gracias.
     return { enviado: true, id: d.id };
   }));
+
+  // El link de seguimiento: el checklist del trimestre que el alumno tilda.
+  // Misma familia que el formulario (token = credencial, sin sesión), pero el
+  // token es REUSABLE: vive en el WhatsApp del alumno los ~90 días del plan.
+  app.get('/api/seguimiento/:token', conLimiteSeguimiento((req) =>
+    ual.abrirSeguimiento(reposAlumnos, param(req, 'token')),
+  ));
+  app.post('/api/seguimiento/:token/acciones/:accionId', conLimiteSeguimiento((req) =>
+    ual.marcarAccion(reposAlumnos, param(req, 'token'), param(req, 'accionId'), req.body?.marcado),
+  ));
 
   // ───────────────────── Gate global: de acá en adelante, SESIÓN ─────────────────────
   app.use('/api', autenticar);
@@ -406,6 +429,18 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   ));
   app.get('/api/alumnos/:id/planes', requiere('ver_alumnos'), h((req, res) =>
     ual.listarPlanes(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
+  // Link de seguimiento del plan: emitir es ESTABLE (devuelve el vigente si lo
+  // hay); revocar lo da de baja (link filtrado o reemplazo deliberado).
+  app.post('/api/planes/:id/link', requiere('editar_alumnos'), h((req, res) =>
+    ual.emitirLinkSeguimiento(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
+  app.delete('/api/planes/:id/link', requiere('editar_alumnos'), h((req, res) =>
+    ual.revocarLinkSeguimiento(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
+  // El tablero de avance: estado por acción, % por fase y última actividad.
+  app.get('/api/planes/:id/avance', requiere('ver_alumnos'), h((req, res) =>
+    ual.avancePlan(reposAlumnos, alcanceDe(res), param(req, 'id')),
   ));
 
   // ───────────────────── Frontend compilado (producción) ─────────────────────

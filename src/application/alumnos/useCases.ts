@@ -25,7 +25,23 @@ import {
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
 import { PREGUNTAS_FICHA, type CampoFicha } from '../../domain/alumnos/formulario';
-import type { Accion, Kr, Okr, Plan, PlanCompleto } from '../../domain/alumnos/plan';
+import {
+  DIAS_VIGENCIA_LINK,
+  estadoAcciones,
+  estadoTokenSeguimiento,
+  faseActual,
+  planVencido,
+  ultimaActividadAlumno,
+  type Accion,
+  type Checkin,
+  type Fase,
+  type Kr,
+  type MotivoSeguimientoInvalido,
+  type Okr,
+  type Plan,
+  type PlanCompleto,
+  type TokenSeguimiento,
+} from '../../domain/alumnos/plan';
 import { advertenciasDe, bloquePlanSchema, extraerBloque, type BloquePlan } from './planSchemas';
 import {
   aRespuestas,
@@ -43,7 +59,7 @@ export class ErrorAlumnos extends Error {
     public readonly codigo: 'NO_ENCONTRADO' | 'VALIDACION' | 'TOKEN_INVALIDO',
     mensaje: string,
     /** Detalle del token, para que el server elija el mensaje al alumno. */
-    public readonly motivo?: MotivoTokenInvalido,
+    public readonly motivo?: MotivoTokenInvalido | MotivoSeguimientoInvalido,
   ) {
     super(mensaje);
     this.name = 'ErrorAlumnos';
@@ -508,6 +524,201 @@ export async function listarPlanes(repos: ReposAlumnos, alcance: Alcance, alumno
   const alumno = await obtenerAlumno(repos, alcance, alumnoId);
   if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
   return repos.planes.listarPorAlumno(alumnoId);
+}
+
+/** Plan alcanzado por la sesión, o inexistente (mismo trato que la ficha ajena). */
+async function planAlcanzado(repos: ReposAlumnos, alcance: Alcance, planId: string): Promise<PlanCompleto> {
+  const pc = await repos.planes.obtener(planId);
+  const alumno = pc ? await repos.alumnos.obtener(pc.plan.alumnoId) : null;
+  if (!pc || !alumno || !alcanzaFila(alcance, alumno.consultorId)) {
+    throw new ErrorAlumnos('NO_ENCONTRADO', 'Plan inexistente.');
+  }
+  return pc;
+}
+
+// ───────────────────────── Link de seguimiento ─────────────────────────
+
+/**
+ * Emite (u obtiene) el link de seguimiento del plan. ESTABLE a propósito: si
+ * hay un token vivo se devuelve ESE — el link ya está en el WhatsApp del
+ * alumno, y generar otro cada vez lo rompería. Solo revocar + volver a emitir
+ * produce uno nuevo.
+ *
+ * Vence a los 120 días del INICIO del plan (90 de trimestre + 30 de gracia
+ * para leer el resumen en la llamada de cierre), y nunca a menos de 30 días de
+ * la emisión (por si se emite tarde).
+ */
+export async function emitirLinkSeguimiento(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  planId: string,
+  ahora = ahoraIso(),
+): Promise<{ token: TokenSeguimiento; nuevo: boolean }> {
+  const pc = await planAlcanzado(repos, alcance, planId);
+
+  const vigente = await repos.seguimiento.vigenteDePlan(planId, ahora);
+  if (vigente) return { token: vigente, nuevo: false };
+
+  const desdeInicio = Date.parse(`${pc.plan.fechaInicio}T00:00:00Z`) + DIAS_VIGENCIA_LINK * 86_400_000;
+  const minimo = Date.parse(ahora) + 30 * 86_400_000;
+  const token: TokenSeguimiento = {
+    token: nuevoToken(),
+    planId,
+    expiraEn: new Date(Math.max(desdeInicio, minimo)).toISOString(),
+    revocadoEn: null,
+    creadoEn: ahora,
+  };
+  await repos.seguimiento.crear(token);
+  return { token, nuevo: true };
+}
+
+/** Da de baja el link vivo del plan (se filtró, o se quiere uno nuevo). */
+export async function revocarLinkSeguimiento(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  planId: string,
+  ahora = ahoraIso(),
+): Promise<{ revocados: number }> {
+  await planAlcanzado(repos, alcance, planId);
+  return { revocados: await repos.seguimiento.revocarDePlan(planId, ahora) };
+}
+
+// ───────────────────────── El link del alumno (público) ─────────────────────────
+
+export interface AccionSeguimiento {
+  id: string;
+  texto: string;
+  hecha: boolean;
+}
+
+/** Lo MÍNIMO que el link muestra: acciones por fase. Ni diagnóstico, ni índice, ni OKRs. */
+export interface SeguimientoAbierto {
+  alumno: string;
+  fechaInicio: string;
+  faseActual: Fase;
+  /** Día 90+: se lee, no se tilda. */
+  vencido: boolean;
+  fases: { fase: Fase; acciones: AccionSeguimiento[] }[];
+}
+
+async function planDeToken(repos: ReposAlumnos, token: string, ahora: string): Promise<PlanCompleto> {
+  const fila = await repos.seguimiento.obtener(token);
+  const estado = estadoTokenSeguimiento(fila, ahora);
+  if (!estado.valido) throw new ErrorAlumnos('TOKEN_INVALIDO', 'El link no es válido.', estado.motivo);
+  const pc = await repos.planes.obtener(fila!.planId);
+  if (!pc) throw new ErrorAlumnos('TOKEN_INVALIDO', 'El link no es válido.', 'inexistente');
+  return pc;
+}
+
+/** Abre el checklist del alumno. Público: todo lo que devuelve lo ve quien tenga el link. */
+export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora = ahoraIso()): Promise<SeguimientoAbierto> {
+  const pc = await planDeToken(repos, token, ahora);
+  const alumno = await repos.alumnos.obtener(pc.plan.alumnoId);
+  const estado = estadoAcciones(await repos.checkins.listarPorPlan(pc.plan.id));
+
+  const fases: SeguimientoAbierto['fases'] = ([1, 2, 3] as const).map((fase) => ({
+    fase,
+    acciones: pc.acciones
+      .filter((a) => a.fase === fase)
+      .map((a) => ({ id: a.id, texto: a.texto, hecha: estado.get(a.id)?.marcado === true })),
+  }));
+
+  return {
+    alumno: alumno?.nombre ?? '',
+    fechaInicio: pc.plan.fechaInicio,
+    faseActual: faseActual(pc.plan.fechaInicio, ahora),
+    vencido: planVencido(pc.plan.fechaInicio, ahora),
+    fases,
+  };
+}
+
+/**
+ * El tilde del alumno: un checkin nuevo, append-only. Nunca un UPDATE — la
+ * historia completa queda, y el estado actual es el último checkin.
+ */
+export async function marcarAccion(
+  repos: ReposAlumnos,
+  token: string,
+  accionId: string,
+  marcado: unknown,
+  ahora = ahoraIso(),
+): Promise<{ hecha: boolean }> {
+  if (typeof marcado !== 'boolean') throw new ErrorAlumnos('VALIDACION', 'marcado tiene que ser true o false.');
+  const pc = await planDeToken(repos, token, ahora);
+
+  if (planVencido(pc.plan.fechaInicio, ahora)) {
+    throw new ErrorAlumnos('VALIDACION', 'El trimestre ya terminó: el checklist quedó congelado. Repasalo con tu consultor.');
+  }
+  const accion = pc.acciones.find((a) => a.id === accionId);
+  // La acción de OTRO plan no existe para este token (mismo trato que el ámbito).
+  if (!accion) throw new ErrorAlumnos('NO_ENCONTRADO', 'Acción inexistente.');
+
+  const checkin: Checkin = { id: randomUUID(), accionId, marcado, origen: 'alumno', creadoEn: ahora };
+  await repos.checkins.crear(checkin);
+  return { hecha: marcado };
+}
+
+// ───────────────────────── El avance (panel del consultor) ─────────────────────────
+
+export interface AvanceAccion extends AccionSeguimiento {
+  fase: Fase;
+  /** Orden del OKR al que aporta, si tiene. */
+  okrOrden: number | null;
+  /** Cuándo cambió por última vez (checkin más nuevo), si alguna vez cambió. */
+  ultimoCambio: string | null;
+}
+
+export interface AvancePlan {
+  planId: string;
+  fechaInicio: string;
+  faseActual: Fase;
+  vencido: boolean;
+  /** Última vez que el ALUMNO tildó algo. La señal de ritmo. */
+  ultimaActividad: string | null;
+  fases: { fase: Fase; total: number; hechas: number; acciones: AvanceAccion[] }[];
+  /** El link vivo, para copiarlo desde el panel (null = no emitido o revocado). */
+  link: { token: string; expiraEn: string } | null;
+}
+
+/** El tablero de seguimiento del consultor. Lo tildado es lo que el alumno DECLARA. */
+export async function avancePlan(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  planId: string,
+  ahora = ahoraIso(),
+): Promise<AvancePlan> {
+  const pc = await planAlcanzado(repos, alcance, planId);
+  const checkins = await repos.checkins.listarPorPlan(planId);
+  const estado = estadoAcciones(checkins);
+  const okrOrdenPorId = new Map(pc.okrs.map((o) => [o.id, o.orden]));
+
+  const fases: AvancePlan['fases'] = ([1, 2, 3] as const).map((fase) => {
+    const acciones = pc.acciones
+      .filter((a) => a.fase === fase)
+      .map((a): AvanceAccion => {
+        const ultimo = estado.get(a.id);
+        return {
+          id: a.id,
+          texto: a.texto,
+          fase,
+          hecha: ultimo?.marcado === true,
+          okrOrden: a.okrId ? okrOrdenPorId.get(a.okrId) ?? null : null,
+          ultimoCambio: ultimo?.creadoEn ?? null,
+        };
+      });
+    return { fase, total: acciones.length, hechas: acciones.filter((a) => a.hecha).length, acciones };
+  });
+
+  const vigente = await repos.seguimiento.vigenteDePlan(planId, ahora);
+  return {
+    planId,
+    fechaInicio: pc.plan.fechaInicio,
+    faseActual: faseActual(pc.plan.fechaInicio, ahora),
+    vencido: planVencido(pc.plan.fechaInicio, ahora),
+    ultimaActividad: ultimaActividadAlumno(checkins),
+    fases,
+    link: vigente ? { token: vigente.token, expiraEn: vigente.expiraEn } : null,
+  };
 }
 
 /** Diagnósticos de un alumno, respetando el ámbito del que consulta. */

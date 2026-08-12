@@ -240,4 +240,5 @@ export const TABLAS_SENSIBLES: readonly string[] = [
   'krs',
   'acciones',
   'checkins',
+  'seguimiento_tokens',
 ] as const;

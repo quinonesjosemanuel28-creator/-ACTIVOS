@@ -20,12 +20,14 @@ import {
   type RespuestasDiagnostico,
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
-import type { Accion, Kr, Okr, Plan, PlanCompleto } from '../../domain/alumnos/plan';
+import type { Accion, Checkin, Kr, Okr, Plan, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
+  CheckinsRepo,
   DiagnosticosRepo,
   HistorialRepo,
   PlanesRepo,
+  SeguimientoTokensRepo,
   TokensRepo,
   TramoHistorial,
 } from '../../application/alumnos/ports';
@@ -376,6 +378,65 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
     async obtener(planId) {
       const row = db.prepare('SELECT * FROM planes WHERE id = ?').get(planId) as PlanRow | undefined;
       return row ? armarCompleto(row) : null;
+    },
+  };
+}
+
+
+// ───────────────────────── Seguimiento: tokens y checkins ─────────────────────────
+
+interface SeguimientoRow { token: string; plan_id: string; expira_en: string; revocado_en: string | null; creado_en: string }
+interface CheckinRow { id: string; accion_id: string; marcado: number; origen: string; creado_en: string }
+
+const toSeguimiento = (r: SeguimientoRow): TokenSeguimiento => ({
+  token: r.token, planId: r.plan_id, expiraEn: r.expira_en, revocadoEn: r.revocado_en, creadoEn: r.creado_en,
+});
+const toCheckin = (r: CheckinRow): Checkin => ({
+  id: r.id, accionId: r.accion_id, marcado: r.marcado === 1,
+  origen: r.origen as Checkin['origen'], creadoEn: r.creado_en,
+});
+
+export function crearSeguimientoRepo(db: Database.Database): SeguimientoTokensRepo {
+  return {
+    async obtener(token) {
+      const row = db.prepare('SELECT * FROM seguimiento_tokens WHERE token = ?').get(token) as SeguimientoRow | undefined;
+      return row ? toSeguimiento(row) : null;
+    },
+    async vigenteDePlan(planId, ahoraIso) {
+      const row = db
+        .prepare('SELECT * FROM seguimiento_tokens WHERE plan_id = ? AND revocado_en IS NULL AND expira_en > ? ORDER BY creado_en DESC LIMIT 1')
+        .get(planId, ahoraIso) as SeguimientoRow | undefined;
+      return row ? toSeguimiento(row) : null;
+    },
+    async crear(t) {
+      db.prepare('INSERT INTO seguimiento_tokens (token, plan_id, expira_en, revocado_en, creado_en) VALUES (?,?,?,?,?)').run(
+        t.token, t.planId, t.expiraEn, t.revocadoEn, t.creadoEn,
+      );
+    },
+    async revocarDePlan(planId, ahoraIso) {
+      return db
+        .prepare('UPDATE seguimiento_tokens SET revocado_en = ? WHERE plan_id = ? AND revocado_en IS NULL')
+        .run(ahoraIso, planId).changes;
+    },
+  };
+}
+
+export function crearCheckinsRepo(db: Database.Database): CheckinsRepo {
+  return {
+    async crear(c) {
+      // Solo INSERT: los checkins no se editan ni se borran, a propósito.
+      db.prepare('INSERT INTO checkins (id, accion_id, marcado, origen, creado_en) VALUES (?,?,?,?,?)').run(
+        c.id, c.accionId, c.marcado ? 1 : 0, c.origen, c.creadoEn,
+      );
+    },
+    async listarPorPlan(planId) {
+      const rows = db
+        .prepare(
+          `SELECT ch.* FROM checkins ch JOIN acciones a ON a.id = ch.accion_id
+           WHERE a.plan_id = ? ORDER BY ch.creado_en DESC`,
+        )
+        .all(planId) as CheckinRow[];
+      return rows.map(toCheckin);
     },
   };
 }
