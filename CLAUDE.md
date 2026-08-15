@@ -10,16 +10,16 @@ Dashboard financiero CFO-grade de +Activos Academy (módulo contable, **en produ
 
 | Rama | Rol |
 |---|---|
-| `claude/festive-sagan-yXyjY` | **Rama de desarrollo. Acá se trabaja.** |
+| `desarrollo` | **Rama de desarrollo y rama por defecto del repo. Acá se trabaja.** |
 | `produccion` | Producción. **Railway despliega solo de acá.** No pushear sin pedirlo. |
-| `claude/frontend-developer-setup-pDsEf` | Rama por defecto de GitHub, **obsoleta**: le faltan ~18 commits. No trabajar acá. |
+| `claude/frontend-developer-setup-pDsEf` | Vieja rama por defecto, **obsoleta**: le faltan ~18 commits. No trabajar acá. |
 | `claude/epic-carson-7520ho`, `claude/margin-calculator-closers-er6dqd` | Proyectos aparte (web institucional, calculadora de márgenes), sobre base vieja. |
 
 Si caíste en otra rama:
 
 ```bash
-git fetch origin claude/festive-sagan-yXyjY
-git checkout -B trabajo origin/claude/festive-sagan-yXyjY
+git fetch origin desarrollo
+git checkout -B trabajo origin/desarrollo
 ```
 
 **2. Si vas a tocar el módulo de alumnos, leé `MODULO-ALUMNOS.md` primero.** Está solo en la rama de desarrollo. Tiene el modelo de datos, las decisiones ya cerradas y el orden de construcción por tickets. No lo saltees: la mitad de las decisiones de diseño ya están tomadas ahí y volver atrás cuesta caro.

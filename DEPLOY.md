@@ -7,8 +7,8 @@ Checklist para la sesión de deploy. Todo el código ya está listo (Fases
 ## Flujo de ramas (recordatorio)
 
 ```
-claude/festive-sagan-yXyjY  → desarrollo (NO se despliega)
-produccion                  → Railway despliega SOLO esta rama
+desarrollo  → rama de desarrollo (NO se despliega)
+produccion  → Railway despliega SOLO esta rama
 ```
 
 El paso 0 de la sesión será promover el estado aprobado a `produccion`
@@ -20,7 +20,7 @@ El paso 0 de la sesión será promover el estado aprobado a `produccion`
 
 ```bash
 git checkout produccion
-git merge claude/festive-sagan-yXyjY
+git merge desarrollo
 npm test                      # 349 verdes también acá
 git push -u origin produccion
 ```
@@ -115,8 +115,8 @@ primer ingreso el sistema les exige elegir la propia.
 ## Operatoria posterior
 
 - **Subir cambios a producción**: pedirle a Claude el merge
-  `festive-sagan → produccion` + push. Railway redespliega solo.
-- **Experimentar sin riesgo**: todo lo que pase en `festive-sagan` no llega
+  `desarrollo → produccion` + push. Railway redespliega solo.
+- **Experimentar sin riesgo**: todo lo que pase en `desarrollo` no llega
   a la nube hasta ese merge.
 - **Rescate de contraseña del ADMIN**: si te quedás afuera, en Railway →
   Variables seteá de nuevo `ADMIN_PASSWORD`… solo sirve si la base no tiene
