@@ -23,6 +23,7 @@ import { crearFunnelCanalRepo } from '../sqlite/funnelCanalRepos';
 import { crearUsuariosRepo, crearSesionesRepo } from '../sqlite/authRepos';
 import {
   crearAlumnosRepo,
+  crearContactosRepo,
   crearDiagnosticosRepo,
   crearDocumentosRepo,
   crearHistorialRepo,
@@ -40,6 +41,7 @@ import { crearFunnelCanalRepoPg } from '../postgres/funnelCanalRepos';
 import { crearUsuariosRepoPg, crearSesionesRepoPg } from '../postgres/authRepos';
 import {
   crearAlumnosRepoPg,
+  crearContactosRepoPg,
   crearDiagnosticosRepoPg,
   crearDocumentosRepoPg,
   crearHistorialRepoPg,
@@ -91,6 +93,7 @@ export async function crearInfraestructura(): Promise<Infraestructura> {
         seguimiento: crearSeguimientoRepoPg(pool),
         checkins: crearCheckinsRepoPg(pool),
         documentos: crearDocumentosRepoPg(pool),
+        contactos: crearContactosRepoPg(pool),
       },
     };
   }
@@ -126,6 +129,7 @@ export function infraestructuraDesdeDb(
       seguimiento: crearSeguimientoRepo(db),
       checkins: crearCheckinsRepo(db),
       documentos: crearDocumentosRepo(db),
+      contactos: crearContactosRepo(db),
     },
   };
 }

@@ -20,6 +20,7 @@ import {
   DIAS_VIGENCIA_TOKEN,
   estadoToken,
   type Alumno,
+  type Contacto,
   type Diagnostico,
   type MotivoTokenInvalido,
   type TokenDiagnostico,
@@ -44,16 +45,19 @@ import {
 } from '../../domain/alumnos/plan';
 import { advertenciasDe, bloquePlanSchema, extraerBloque, type BloquePlan } from './planSchemas';
 import {
+  alertaInactividad,
   avanceKrs,
   calcularSalud,
   chipFase,
   diasDelPlan,
   puntajeRiesgo,
+  type AlertaInactividad,
   type ChipFase,
   type EstadoAlumno,
   type Salud,
   type SaludCalculada,
 } from '../../domain/alumnos/panel';
+import { parsearTelefono } from '../../domain/alumnos/telefono';
 import {
   fechaCierreEstimada,
   diasEntre,
@@ -68,6 +72,7 @@ import {
   aRespuestas,
   alumnoInputSchema,
   alumnoPatchSchema,
+  contactoInputSchema,
   diagnosticoInputSchema,
   diagnosticoPatchSchema,
   estadoAlumnoInputSchema,
@@ -124,6 +129,8 @@ export async function crearAlumno(
     activo: true,
     estado: 'ACTIVO',
     estadoActualizadoEn: null,
+    telefonoPais: input.telefonoPais ?? null,
+    telefonoNumero: input.telefonoNumero ?? null,
     idCierreVinculado: input.idCierreVinculado ?? null,
     eliminadoEn: null,
     eliminadoPor: null,
@@ -185,6 +192,8 @@ export async function editarAlumno(
     ...(patch.programa !== undefined && { programa: patch.programa }),
     ...(patch.canalOrigen !== undefined && { canalOrigen: patch.canalOrigen ?? null }),
     ...(patch.moneda !== undefined && { moneda: patch.moneda }),
+    ...(patch.telefonoPais !== undefined && { telefonoPais: patch.telefonoPais ?? null }),
+    ...(patch.telefonoNumero !== undefined && { telefonoNumero: patch.telefonoNumero ?? null }),
     ...(patch.idCierreVinculado !== undefined && { idCierreVinculado: patch.idCierreVinculado ?? null }),
   };
   await repos.alumnos.guardar(actualizado);
@@ -861,6 +870,11 @@ export interface FiltrosPanel {
   q?: string;
   estado?: EstadoAlumno;
   salud?: Salud | 'NEUTRO';
+  /**
+   * Solo los TRABADOS: alerta de inactividad activa o semáforo ROJO — el
+   * filtro de "a quién tengo que escribirle hoy" (ticket 7C).
+   */
+  soloTrabados?: boolean;
   /** Cosmético (ADMIN filtra por cartera); con ámbito acotado el server lo pisa. */
   consultorId?: string;
 }
@@ -874,9 +888,19 @@ export interface FilaPanel {
   salud: SaludCalculada;
   /** Último tilde del ALUMNO vía su link (la señal de ritmo). */
   ultimaActividad: string | null;
+  /** Más de 8 días sin señales (ticket 7C). Un contacto reciente la apaga. */
+  alerta: AlertaInactividad;
+  /** Último contacto registrado del consultor. */
+  ultimoContacto: string | null;
+  /** Primer KR sin cumplir (el del vencimiento más cercano), para el mensaje de WhatsApp. */
+  krPendiente: string | null;
   /** Menor = más arriba. El ORDER BY del panel. */
   riesgo: number;
 }
+
+/** ¿Necesita atención YA? Alerta de inactividad o semáforo rojo. */
+const esTrabado = (f: Pick<FilaPanel, 'alerta' | 'salud'>): boolean =>
+  f.alerta.activa || f.salud.salud === 'ROJO';
 
 /**
  * El panel de control de la cartera: cada alumno con su fase, semáforo y
@@ -900,7 +924,8 @@ export async function panelAlumnos(
   const filas: FilaPanel[] = [];
   for (const alumno of alumnos) {
     const vigente = (await repos.planes.listarPorAlumno(alumno.id))[0] ?? null;
-    const krs = vigente ? avanceKrs(vigente.okrs.flatMap((o) => o.krs)) : { totales: 0, cumplidos: 0 };
+    const todosLosKrs = vigente ? vigente.okrs.flatMap((o) => o.krs) : [];
+    const krs = avanceKrs(todosLosKrs);
     const salud = calcularSalud(
       {
         estado: alumno.estado,
@@ -913,6 +938,23 @@ export async function panelAlumnos(
     const ultimaActividad = vigente
       ? ultimaActividadAlumno(await repos.checkins.listarPorPlan(vigente.plan.id))
       : null;
+    const ultimoContacto = (await repos.contactos.ultimoDeAlumno(alumno.id))?.contactadoEn ?? null;
+    const alerta = alertaInactividad(
+      {
+        estado: alumno.estado,
+        fechaInicio: vigente?.plan.fechaInicio ?? null,
+        ultimaActividad,
+        ultimoContacto,
+      },
+      ahora,
+    );
+    // El KR pendiente que pregunta el mensaje de WhatsApp: el del vencimiento
+    // más cercano; sin fechas, el primero en orden de plan.
+    const pendientes = todosLosKrs.filter((k) => k.cumplidoEn === null);
+    const krPendiente =
+      pendientes.filter((k) => k.vencimiento !== null).sort((a, b) => a.vencimiento!.localeCompare(b.vencimiento!))[0] ??
+      pendientes[0] ??
+      null;
     filas.push({
       alumno,
       consultorNombre: nombrePorId.get(alumno.consultorId) ?? null,
@@ -928,13 +970,17 @@ export async function panelAlumnos(
       krs,
       salud,
       ultimaActividad,
-      riesgo: puntajeRiesgo(alumno.estado, salud.salud),
+      alerta,
+      ultimoContacto,
+      krPendiente: krPendiente?.texto ?? null,
+      riesgo: puntajeRiesgo(alumno.estado, salud.salud, alerta.activa),
     });
   }
 
-  const filtradas = filtros.salud
+  let filtradas = filtros.salud
     ? filas.filter((f) => (filtros.salud === 'NEUTRO' ? f.salud.salud === null : f.salud.salud === filtros.salud))
     : filas;
+  if (filtros.soloTrabados) filtradas = filtradas.filter(esTrabado);
 
   // Riesgo primero; a igual riesgo, la brecha más negativa (el más atrasado)
   // arriba; después alfabético para que el orden sea estable.
@@ -944,6 +990,81 @@ export async function panelAlumnos(
       (a.salud.brecha ?? 0) - (b.salud.brecha ?? 0) ||
       a.alumno.nombre.localeCompare(b.alumno.nombre),
   );
+}
+
+// ───── Seguimiento activo (ticket 7C): contactos y teléfonos ─────
+
+/**
+ * Registra que el consultor contactó al alumno. Se llama ANTES de abrir el
+ * link de WhatsApp — si el registro falla, el link no se abre: un contacto
+ * sin registrar dejaría la alerta gritando por alguien ya atendido.
+ */
+export async function registrarContacto(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  consultorId: string,
+  alumnoId: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<Contacto> {
+  const alumno = await obtenerAlumno(repos, alcance, alumnoId);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+  const input = contactoInputSchema.parse(entrada ?? {});
+  const contacto: Contacto = {
+    id: randomUUID(),
+    alumnoId,
+    consultorId,
+    canal: input.canal,
+    contactadoEn: ahora,
+    nota: input.nota ?? null,
+  };
+  await repos.contactos.crear(contacto);
+  return contacto;
+}
+
+/** Historial de contactos del alumno (la ficha lo muestra colapsado). */
+export async function listarContactos(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  alumnoId: string,
+): Promise<Contacto[]> {
+  const alumno = await obtenerAlumno(repos, alcance, alumnoId);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+  return repos.contactos.listarPorAlumno(alumnoId);
+}
+
+export interface ResultadoMigracionTelefonos {
+  migrados: number;
+  yaMigrados: number;
+  /** Los que NO se parsearon con confianza: quedan para revisión manual. */
+  sinMigrar: { id: string; nombre: string; whatsapp: string }[];
+}
+
+/**
+ * Migración de UNA pasada (ticket 7C §7): parte el `whatsapp` libre de las
+ * fichas existentes en telefono_pais / telefono_numero. Idempotente: la ficha
+ * que ya tiene teléfono normalizado no se toca. Lo que no se parsea con
+ * confianza NO se adivina — queda listado para cargarlo a mano (adivinar mal
+ * es escribirle a un desconocido).
+ */
+export async function migrarTelefonos(repos: ReposAlumnos): Promise<ResultadoMigracionTelefonos> {
+  const todos = [...(await repos.alumnos.listar()), ...(await repos.alumnos.listarEliminados())];
+  const resultado: ResultadoMigracionTelefonos = { migrados: 0, yaMigrados: 0, sinMigrar: [] };
+  for (const a of todos) {
+    if (a.telefonoPais !== null && a.telefonoNumero !== null) {
+      resultado.yaMigrados++;
+      continue;
+    }
+    if (!a.whatsapp) continue; // sin dato no hay nada que migrar (ni que revisar)
+    const parseado = parsearTelefono(a.whatsapp);
+    if (!parseado) {
+      resultado.sinMigrar.push({ id: a.id, nombre: a.nombre, whatsapp: a.whatsapp });
+      continue;
+    }
+    await repos.alumnos.guardar({ ...a, telefonoPais: parseado.pais, telefonoNumero: parseado.numero });
+    resultado.migrados++;
+  }
+  return resultado;
 }
 
 // ───── El documento del plan (ticket 7B) ─────

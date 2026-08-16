@@ -51,4 +51,5 @@ export const TABLAS_NO_COPIADAS = [
   'seguimiento_tokens',
   'plan_fecha_historial',
   'plan_documentos',
+  'contactos',
 ] as const;

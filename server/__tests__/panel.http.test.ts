@@ -229,6 +229,14 @@ describe('HTTP · el panel (orden por riesgo)', () => {
     const rojoId = await crearAlumno(ctx.cookies.otroConsultor, 'Rojo');
     await cargarPlan(ctx.cookies.otroConsultor, rojoId, 'Rojo', 45);
 
+    // A los dos se los contactó recién: la alerta de inactividad (45 días sin
+    // tildes, ticket 7C) queda apagada y este test mide SOLO el orden por salud.
+    for (const id of [verdeId, rojoId]) {
+      await fetch(`${ctx.base}/api/alumnos/${id}/contactos`, {
+        method: 'POST', headers: { ...json, cookie: ctx.cookies.otroConsultor }, body: JSON.stringify({}),
+      });
+    }
+
     const res = await fetch(`${ctx.base}/api/alumnos/panel`, { headers: { cookie: ctx.cookies.otroConsultor } });
     expect(res.status).toBe(200);
     const filas = (await res.json()) as {
@@ -252,6 +260,88 @@ describe('HTTP · el panel (orden por riesgo)', () => {
 
     // LECTOR no tiene panel de alumnos.
     expect((await fetch(`${ctx.base}/api/alumnos/panel`, { headers: { cookie: ctx.cookies.lector } })).status).toBe(403);
+  });
+});
+
+describe('HTTP · seguimiento activo (ticket 7C)', () => {
+  it('criterio de aceptación: 9+ días sin señales → alerta en el panel; el contacto la apaga', async () => {
+    const id = await crearAlumno(ctx.cookies.consultor, 'Silencioso');
+    await cargarPlan(ctx.cookies.consultor, id, 'Silencioso', 15); // arrancó hace 15 días, nunca tildó nada
+    const conCookie = { cookie: ctx.cookies.consultor };
+
+    const filaDe = async () => {
+      const filas = (await (await fetch(`${ctx.base}/api/alumnos/panel`, { headers: conCookie })).json()) as {
+        alumno: { id: string };
+        alerta: { activa: boolean; diasSinSenal: number | null };
+        riesgo: number;
+        ultimoContacto: string | null;
+        krPendiente: string | null;
+      }[];
+      return filas.find((f) => f.alumno.id === id)!;
+    };
+
+    const antes = await filaDe();
+    expect(antes.alerta.activa).toBe(true);
+    expect(antes.alerta.diasSinSenal).toBeGreaterThanOrEqual(15);
+    expect(antes.riesgo).toBe(0); // la alerta manda: arriba de todo
+    expect(antes.krPendiente).toBe('Tablero'); // el mensaje de WhatsApp pregunta por esto
+
+    // El filtro "solo trabados" lo incluye.
+    const trabados = (await (await fetch(`${ctx.base}/api/alumnos/panel?trabados=1`, { headers: conCookie })).json()) as
+      { alumno: { id: string } }[];
+    expect(trabados.some((f) => f.alumno.id === id)).toBe(true);
+
+    // Registrar el contacto (lo que hace el botón ANTES de abrir WhatsApp)…
+    const reg = await fetch(`${ctx.base}/api/alumnos/${id}/contactos`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.consultor }, body: JSON.stringify({ nota: 'Le escribí por el tablero' }),
+    });
+    expect(reg.status).toBe(200);
+
+    // …apaga la alerta, y el contacto queda en el historial.
+    const despues = await filaDe();
+    expect(despues.alerta.activa).toBe(false);
+    expect(despues.ultimoContacto).toBeTruthy();
+    const historial = (await (await fetch(`${ctx.base}/api/alumnos/${id}/contactos`, { headers: conCookie })).json()) as
+      { canal: string; nota: string | null }[];
+    expect(historial).toHaveLength(1);
+    expect(historial[0]!.nota).toBe('Le escribí por el tablero');
+  });
+
+  it('criterio de aceptación: un PAUSADO nunca dispara alerta', async () => {
+    const id = await crearAlumno(ctx.cookies.consultor, 'Pausado Quieto');
+    await cargarPlan(ctx.cookies.consultor, id, 'Pausado Quieto', 20);
+    await fetch(`${ctx.base}/api/alumnos/${id}/estado`, {
+      method: 'PUT', headers: { ...json, cookie: ctx.cookies.consultor }, body: JSON.stringify({ estado: 'PAUSADO' }),
+    });
+    const filas = (await (await fetch(`${ctx.base}/api/alumnos/panel`, { headers: { cookie: ctx.cookies.consultor } })).json()) as
+      { alumno: { id: string }; alerta: { activa: boolean } }[];
+    expect(filas.find((f) => f.alumno.id === id)!.alerta.activa).toBe(false);
+  });
+
+  it('teléfono normalizado por la ficha: entra limpio o no entra; ajeno y sin permiso, afuera', async () => {
+    const id = await crearAlumno(ctx.cookies.consultor, 'Con Teléfono');
+    const conConsultor = { ...json, cookie: ctx.cookies.consultor };
+
+    const ok = await fetch(`${ctx.base}/api/alumnos/${id}`, {
+      method: 'PUT', headers: conConsultor, body: JSON.stringify({ telefonoPais: '54', telefonoNumero: '3515551234' }),
+    });
+    expect(ok.status).toBe(200);
+    const a = (await ok.json()) as { telefonoPais: string | null; telefonoNumero: string | null };
+    expect(a.telefonoPais).toBe('54');
+    expect(a.telefonoNumero).toBe('3515551234');
+
+    // Un número con basura no entra (el link de wa.me exige solo dígitos).
+    expect((await fetch(`${ctx.base}/api/alumnos/${id}`, {
+      method: 'PUT', headers: conConsultor, body: JSON.stringify({ telefonoNumero: '351-555' }),
+    })).status).toBe(400);
+
+    // Contactos: el alumno ajeno no existe; LECTOR no registra.
+    expect((await fetch(`${ctx.base}/api/alumnos/${id}/contactos`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.otroConsultor }, body: JSON.stringify({}),
+    })).status).toBe(404);
+    expect((await fetch(`${ctx.base}/api/alumnos/${id}/contactos`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.lector }, body: JSON.stringify({}),
+    })).status).toBe(403);
   });
 });
 

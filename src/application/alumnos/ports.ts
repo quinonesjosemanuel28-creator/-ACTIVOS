@@ -9,7 +9,7 @@
  * siendo un WHERE en la consulta. Es la diferencia entre un permiso de verdad y
  * un botón escondido.
  */
-import type { Alumno, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
+import type { Alumno, Contacto, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
 import type { CambioFechaPlan, Checkin, Kr, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type { EstadoAlumno } from '../../domain/alumnos/panel';
 
@@ -138,6 +138,18 @@ export interface DocumentosRepo {
   obtener(id: string): Promise<{ doc: PlanDocumento; contenido: Uint8Array } | null>;
 }
 
+/**
+ * Registro de contacto (ticket 7C). APPEND-ONLY como los checkins: la
+ * historia de seguimiento no se edita ni se borra.
+ */
+export interface ContactosRepo {
+  crear(c: Contacto): Promise<void>;
+  /** El contacto más reciente del alumno (el que apaga la alerta). */
+  ultimoDeAlumno(alumnoId: string): Promise<Contacto | null>;
+  /** Historial completo, del más nuevo al más viejo. */
+  listarPorAlumno(alumnoId: string): Promise<Contacto[]>;
+}
+
 export interface ReposAlumnos {
   alumnos: AlumnosRepo;
   diagnosticos: DiagnosticosRepo;
@@ -147,4 +159,5 @@ export interface ReposAlumnos {
   seguimiento: SeguimientoTokensRepo;
   checkins: CheckinsRepo;
   documentos: DocumentosRepo;
+  contactos: ContactosRepo;
 }

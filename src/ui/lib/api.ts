@@ -10,10 +10,10 @@ import type { Egreso } from '@domain/types';
 import type { ResumenEgresos } from '@domain/egresos/metrics';
 import type { ComisionesDelMes } from '@domain/comisiones/calculo';
 import type { Accion, Rol, UsuarioPublico } from '@domain/auth/permisos';
-import type { Alumno, Diagnostico, TokenDiagnostico } from '@domain/alumnos/tipos';
+import type { Alumno, Contacto, Diagnostico, TokenDiagnostico } from '@domain/alumnos/tipos';
 import type { CambioFechaPlan, Fase, Kr, PlanCompleto, PlanDocumento, TokenSeguimiento } from '@domain/alumnos/plan';
 import { MIME_DOCX, MIME_PDF } from '@domain/alumnos/plan';
-import type { ChipFase, EstadoAlumno, Salud, SaludCalculada } from '@domain/alumnos/panel';
+import type { AlertaInactividad, ChipFase, EstadoAlumno, Salud, SaludCalculada } from '@domain/alumnos/panel';
 
 // ───────────────────── Auth / sesión ─────────────────────
 
@@ -305,7 +305,14 @@ export const api = {
   alumnos: (q?: string) => req<Alumno[]>(`/alumnos${qs({ q })}`),
   // Panel de control (ticket 7): la cartera con fase, salud y orden por riesgo.
   panelAlumnos: (f: FiltrosPanelUI = {}) =>
-    req<FilaPanelUI[]>(`/alumnos/panel${qs({ q: f.q, estado: f.estado, salud: f.salud, consultor: f.consultor })}`),
+    req<FilaPanelUI[]>(`/alumnos/panel${qs({
+      q: f.q, estado: f.estado, salud: f.salud, consultor: f.consultor,
+      trabados: f.trabados ? '1' : undefined,
+    })}`),
+  // Seguimiento activo (ticket 7C): el contacto se registra ANTES de abrir el link.
+  registrarContacto: (alumnoId: string, nota?: string) =>
+    req<Contacto>(`/alumnos/${alumnoId}/contactos`, { method: 'POST', body: JSON.stringify({ nota }) }),
+  contactos: (alumnoId: string) => req<Contacto[]>(`/alumnos/${alumnoId}/contactos`),
   cambiarEstadoAlumno: (id: string, estado: EstadoAlumno) =>
     req<Alumno>(`/alumnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado }) }),
   eliminarAlumno: (id: string) => req(`/alumnos/${id}`, { method: 'DELETE' }),
@@ -385,6 +392,8 @@ export interface FiltrosPanelUI {
   q?: string;
   estado?: EstadoAlumno;
   salud?: Salud | 'NEUTRO';
+  /** Solo trabados: alerta de inactividad o semáforo rojo. */
+  trabados?: boolean;
   consultor?: string;
 }
 
@@ -396,6 +405,9 @@ export interface FilaPanelUI {
   krs: { totales: number; cumplidos: number };
   salud: SaludCalculada;
   ultimaActividad: string | null;
+  alerta: AlertaInactividad;
+  ultimoContacto: string | null;
+  krPendiente: string | null;
   riesgo: number;
 }
 

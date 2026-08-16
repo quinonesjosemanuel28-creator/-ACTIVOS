@@ -111,16 +111,60 @@ export function avanceKrs(krs: readonly Pick<Kr, 'cumplidoEn'>[]): { totales: nu
   return { totales: krs.length, cumplidos: krs.filter((k) => k.cumplidoEn !== null).length };
 }
 
+// ───────────────────────── Alerta de inactividad (ticket 7C) ─────────────────────────
+
+/** Días sin señal del alumno antes de que el panel grite. */
+export const DIAS_ALERTA_INACTIVIDAD = 8;
+
+export interface EntradaAlerta {
+  estado: EstadoAlumno;
+  /** null = sin plan: no hay seguimiento que vigilar. */
+  fechaInicio: string | null;
+  /** Último check-in del ALUMNO vía su link. null = nunca tildó nada. */
+  ultimaActividad: string | null;
+  /** Último contacto REGISTRADO del consultor (tabla contactos). */
+  ultimoContacto: string | null;
+}
+
+export interface AlertaInactividad {
+  activa: boolean;
+  /** Días desde la última señal del alumno (para el "hace N días" del panel). */
+  diasSinSenal: number | null;
+}
+
+/**
+ * La alerta: estado ACTIVO y más de 8 días sin check-in (si nunca hubo, se
+ * cuenta desde fecha_inicio). Se APAGA si hay un contacto registrado
+ * posterior a la última actividad y de hace menos de 8 días — es lo que evita
+ * que el panel te siga gritando por alguien a quien ya le escribiste ayer.
+ */
+export function alertaInactividad(e: EntradaAlerta, hoyIso: string): AlertaInactividad {
+  if (e.estado !== 'ACTIVO' || e.fechaInicio === null) return { activa: false, diasSinSenal: null };
+
+  const hoy = Date.parse(hoyIso);
+  const senal = e.ultimaActividad ?? `${e.fechaInicio}T00:00:00.000Z`;
+  const diasSinSenal = Math.floor((hoy - Date.parse(senal)) / 86_400_000);
+  if (diasSinSenal <= DIAS_ALERTA_INACTIVIDAD) return { activa: false, diasSinSenal };
+
+  if (e.ultimoContacto !== null && e.ultimoContacto > senal) {
+    const diasDesdeContacto = Math.floor((hoy - Date.parse(e.ultimoContacto)) / 86_400_000);
+    if (diasDesdeContacto < DIAS_ALERTA_INACTIVIDAD) return { activa: false, diasSinSenal };
+  }
+  return { activa: true, diasSinSenal };
+}
+
 // ───────────────────────── Orden por riesgo ─────────────────────────
 
 /**
- * Puntaje para el ORDER BY del panel: menor = más arriba. Rojos primero,
- * después naranjas, neutros de alumno activo, verdes, y al fondo los estados
- * que no corren (pausado / finalizado / abandonado). Es lo que separa un panel
- * de control de un listado alfabético.
+ * Puntaje para el ORDER BY del panel: menor = más arriba. Los que tienen
+ * alerta de inactividad PRIMERO (dejaron de dar señales: son a los que hay
+ * que escribir hoy), después rojos, naranjas, neutros de alumno activo,
+ * verdes, y al fondo los estados que no corren (pausado / finalizado /
+ * abandonado). Es lo que separa un panel de control de un listado alfabético.
  */
-export function puntajeRiesgo(estado: EstadoAlumno, salud: Salud | null): number {
+export function puntajeRiesgo(estado: EstadoAlumno, salud: Salud | null, alerta = false): number {
   if (estado === 'ACTIVO') {
+    if (alerta) return 0;
     if (salud === 'ROJO') return 1;
     if (salud === 'NARANJA') return 2;
     if (salud === null) return 3;

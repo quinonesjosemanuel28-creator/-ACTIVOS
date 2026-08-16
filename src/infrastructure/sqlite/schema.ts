@@ -153,6 +153,10 @@ CREATE TABLE IF NOT EXISTS alumnos (
   -- Ciclo de vida (ticket 7). CHECK porque es estructural, como diagnosticos.origen.
   estado               TEXT NOT NULL DEFAULT 'ACTIVO' CHECK(estado IN ('ACTIVO','PAUSADO','FINALIZADO','ABANDONADO')),
   estado_actualizado_en TEXT,
+  -- Teléfono normalizado (ticket 7C): país sin '+', número solo dígitos.
+  -- whatsapp (arriba) queda como texto libre del alumno; ESTOS arman wa.me.
+  telefono_pais        TEXT,
+  telefono_numero      TEXT,
   id_cierre_vinculado  TEXT,
   -- Borrado LÓGICO (ticket 7): no null = papelera. TODA consulta del módulo
   -- filtra eliminado_en IS NULL; el borrado físico existe solo desde la
@@ -390,6 +394,21 @@ CREATE TABLE IF NOT EXISTS plan_documentos (
 
 CREATE INDEX IF NOT EXISTS idx_plan_documentos ON plan_documentos(plan_id);
 
+-- Registro de contacto (ticket 7C): el consultor tocó al alumno (WhatsApp).
+-- Se inserta ANTES de abrir el link, y es lo que APAGA la alerta de
+-- inactividad. Append-only como los checkins: la historia de seguimiento no
+-- se edita. canal sin CHECK: opción de negocio (hoy WhatsApp), valida Zod.
+CREATE TABLE IF NOT EXISTS contactos (
+  id             TEXT PRIMARY KEY,
+  alumno_id      TEXT NOT NULL REFERENCES alumnos(id) ON DELETE CASCADE,
+  consultor_id   TEXT NOT NULL REFERENCES usuarios(id),
+  canal          TEXT NOT NULL,
+  contactado_en  TEXT NOT NULL,
+  nota           TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_contactos_alumno ON contactos(alumno_id);
+
 
 CREATE INDEX IF NOT EXISTS idx_alumnos_consultor   ON alumnos(consultor_id);
 CREATE INDEX IF NOT EXISTS idx_diagnosticos_alumno ON diagnosticos(alumno_id);
@@ -434,6 +453,9 @@ export function migrar(db: Database.Database): void {
   agregarColumnaSiFalta(db, 'alumnos', 'eliminado_por', 'TEXT REFERENCES usuarios(id)');
   agregarColumnaSiFalta(db, 'krs', 'vencimiento', 'TEXT');
   agregarColumnaSiFalta(db, 'krs', 'cumplido_en', 'TEXT');
+  // Módulo de alumnos · seguimiento activo (ticket 7C): teléfono en dos campos.
+  agregarColumnaSiFalta(db, 'alumnos', 'telefono_pais', 'TEXT');
+  agregarColumnaSiFalta(db, 'alumnos', 'telefono_numero', 'TEXT');
   // Comisiones: flags de setting a nivel de pago + registro de liquidaciones.
   agregarColumnaSiFalta(db, 'pagos', 'aplica_setting', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'pagos', 'setter', 'TEXT');

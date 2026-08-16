@@ -15,6 +15,7 @@ import { METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/clarida
 import {
   CAMPOS_RESPUESTA,
   type Alumno,
+  type Contacto,
   type Diagnostico,
   type OrigenDiagnostico,
   type RespuestasDiagnostico,
@@ -25,6 +26,7 @@ import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, Pla
 import type {
   AlumnosRepo,
   CheckinsRepo,
+  ContactosRepo,
   DiagnosticosRepo,
   DocumentosRepo,
   HistorialRepo,
@@ -73,6 +75,8 @@ interface AlumnoRow {
   activo: number;
   estado: string;
   estado_actualizado_en: string | null;
+  telefono_pais: string | null;
+  telefono_numero: string | null;
   id_cierre_vinculado: string | null;
   eliminado_en: string | null;
   eliminado_por: string | null;
@@ -93,6 +97,8 @@ const toAlumno = (r: AlumnoRow): Alumno => ({
   activo: r.activo === 1,
   estado: r.estado as Alumno['estado'],
   estadoActualizadoEn: r.estado_actualizado_en,
+  telefonoPais: r.telefono_pais,
+  telefonoNumero: r.telefono_numero,
   idCierreVinculado: r.id_cierre_vinculado,
   eliminadoEn: r.eliminado_en,
   eliminadoPor: r.eliminado_por,
@@ -136,19 +142,20 @@ export function crearAlumnosRepo(db: Database.Database): AlumnosRepo {
       db.prepare(
         `INSERT INTO alumnos
           (id, consultor_id, nombre, edad, zona, whatsapp, marca_comercial, programa,
-           canal_origen, moneda, activo, estado, estado_actualizado_en, id_cierre_vinculado,
-           eliminado_en, eliminado_por, creado_en)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           canal_origen, moneda, activo, estado, estado_actualizado_en, telefono_pais,
+           telefono_numero, id_cierre_vinculado, eliminado_en, eliminado_por, creado_en)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
            consultor_id=excluded.consultor_id, nombre=excluded.nombre, edad=excluded.edad,
            zona=excluded.zona, whatsapp=excluded.whatsapp, marca_comercial=excluded.marca_comercial,
            programa=excluded.programa, canal_origen=excluded.canal_origen, moneda=excluded.moneda,
            activo=excluded.activo, estado=excluded.estado, estado_actualizado_en=excluded.estado_actualizado_en,
+           telefono_pais=excluded.telefono_pais, telefono_numero=excluded.telefono_numero,
            id_cierre_vinculado=excluded.id_cierre_vinculado`,
       ).run(
         a.id, a.consultorId, a.nombre, a.edad, a.zona, a.whatsapp, a.marcaComercial, a.programa,
-        a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.estado, a.estadoActualizadoEn, a.idCierreVinculado,
-        a.eliminadoEn, a.eliminadoPor, a.creadoEn,
+        a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.estado, a.estadoActualizadoEn, a.telefonoPais,
+        a.telefonoNumero, a.idCierreVinculado, a.eliminadoEn, a.eliminadoPor, a.creadoEn,
       );
     },
     async eliminar(id, eliminadoEn, eliminadoPor) {
@@ -508,6 +515,41 @@ export function crearSeguimientoRepo(db: Database.Database): SeguimientoTokensRe
       return db
         .prepare('UPDATE seguimiento_tokens SET revocado_en = ? WHERE plan_id = ? AND revocado_en IS NULL')
         .run(ahoraIso, planId).changes;
+    },
+  };
+}
+
+// ───────────────────────── Contactos ─────────────────────────
+
+interface ContactoRow {
+  id: string; alumno_id: string; consultor_id: string; canal: string;
+  contactado_en: string; nota: string | null;
+}
+
+const toContacto = (r: ContactoRow): Contacto => ({
+  id: r.id, alumnoId: r.alumno_id, consultorId: r.consultor_id, canal: r.canal,
+  contactadoEn: r.contactado_en, nota: r.nota,
+});
+
+export function crearContactosRepo(db: Database.Database): ContactosRepo {
+  return {
+    async crear(c) {
+      // Solo INSERT: el historial de seguimiento no se edita, como los checkins.
+      db.prepare('INSERT INTO contactos (id, alumno_id, consultor_id, canal, contactado_en, nota) VALUES (?,?,?,?,?,?)').run(
+        c.id, c.alumnoId, c.consultorId, c.canal, c.contactadoEn, c.nota,
+      );
+    },
+    async ultimoDeAlumno(alumnoId) {
+      const row = db
+        .prepare('SELECT * FROM contactos WHERE alumno_id = ? ORDER BY contactado_en DESC LIMIT 1')
+        .get(alumnoId) as ContactoRow | undefined;
+      return row ? toContacto(row) : null;
+    },
+    async listarPorAlumno(alumnoId) {
+      const rows = db
+        .prepare('SELECT * FROM contactos WHERE alumno_id = ? ORDER BY contactado_en DESC')
+        .all(alumnoId) as ContactoRow[];
+      return rows.map(toContacto);
     },
   };
 }

@@ -150,6 +150,13 @@ export const alumnoInputSchema = z.object({
   canalOrigen: z.enum(CANALES_ORIGEN).nullable().optional(),
   /** ISO 4217. Sin CHECK en la base: la lista de países va a crecer. */
   moneda: z.string().trim().length(3, 'Usá el código ISO de 3 letras (ARS, COP, CLP…)').toUpperCase().default('ARS'),
+  /**
+   * Teléfono normalizado (ticket 7C): país sin '+' y número solo dígitos. El
+   * campo `whatsapp` libre sigue existiendo (lo escribe el alumno); estos dos
+   * son los que arman el link de wa.me y por eso entran ya limpios.
+   */
+  telefonoPais: z.string().trim().regex(/^\d{1,3}$/, 'Código de país: solo dígitos, sin el +').nullable().optional(),
+  telefonoNumero: z.string().trim().regex(/^\d{6,12}$/, 'Número: solo dígitos, con código de área y sin el 15').nullable().optional(),
   idCierreVinculado: z.string().trim().nullable().optional(),
 });
 export type AlumnoInput = z.infer<typeof alumnoInputSchema>;
@@ -188,6 +195,15 @@ export const krPatchSchema = z
     vencimiento: fechaYmd.nullable().optional(),
   })
   .refine((v) => v.cumplido !== undefined || v.vencimiento !== undefined, 'Nada para actualizar.');
+
+/**
+ * Registro de contacto (ticket 7C). El canal es opción de negocio: hoy solo
+ * WhatsApp, la lista crece acá cuando haga falta (llamada, mail…).
+ */
+export const contactoInputSchema = z.object({
+  canal: z.enum(['WHATSAPP']).default('WHATSAPP'),
+  nota: z.string().trim().transform((s) => (s === '' ? null : s)).nullable().optional(),
+});
 
 /**
  * Bloque 0 por el link público — semántica completar-si-falta. Claves en

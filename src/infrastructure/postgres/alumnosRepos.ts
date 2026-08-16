@@ -11,6 +11,7 @@ import { METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/clarida
 import {
   CAMPOS_RESPUESTA,
   type Alumno,
+  type Contacto,
   type Diagnostico,
   type OrigenDiagnostico,
   type RespuestasDiagnostico,
@@ -21,6 +22,7 @@ import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, Pla
 import type {
   AlumnosRepo,
   CheckinsRepo,
+  ContactosRepo,
   DiagnosticosRepo,
   DocumentosRepo,
   HistorialRepo,
@@ -60,6 +62,8 @@ interface AlumnoRow {
   activo: number;
   estado: string;
   estado_actualizado_en: string | null;
+  telefono_pais: string | null;
+  telefono_numero: string | null;
   id_cierre_vinculado: string | null;
   eliminado_en: string | null;
   eliminado_por: string | null;
@@ -80,6 +84,8 @@ const toAlumno = (r: AlumnoRow): Alumno => ({
   activo: r.activo === 1,
   estado: r.estado as Alumno['estado'],
   estadoActualizadoEn: r.estado_actualizado_en,
+  telefonoPais: r.telefono_pais,
+  telefonoNumero: r.telefono_numero,
   idCierreVinculado: r.id_cierre_vinculado,
   eliminadoEn: r.eliminado_en,
   eliminadoPor: r.eliminado_por,
@@ -123,19 +129,20 @@ export function crearAlumnosRepoPg(pool: Pool): AlumnosRepo {
       await pool.query(
         `INSERT INTO alumnos
           (id, consultor_id, nombre, edad, zona, whatsapp, marca_comercial, programa,
-           canal_origen, moneda, activo, estado, estado_actualizado_en, id_cierre_vinculado,
-           eliminado_en, eliminado_por, creado_en)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+           canal_origen, moneda, activo, estado, estado_actualizado_en, telefono_pais,
+           telefono_numero, id_cierre_vinculado, eliminado_en, eliminado_por, creado_en)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
          ON CONFLICT (id) DO UPDATE SET
            consultor_id=EXCLUDED.consultor_id, nombre=EXCLUDED.nombre, edad=EXCLUDED.edad,
            zona=EXCLUDED.zona, whatsapp=EXCLUDED.whatsapp, marca_comercial=EXCLUDED.marca_comercial,
            programa=EXCLUDED.programa, canal_origen=EXCLUDED.canal_origen, moneda=EXCLUDED.moneda,
            activo=EXCLUDED.activo, estado=EXCLUDED.estado, estado_actualizado_en=EXCLUDED.estado_actualizado_en,
+           telefono_pais=EXCLUDED.telefono_pais, telefono_numero=EXCLUDED.telefono_numero,
            id_cierre_vinculado=EXCLUDED.id_cierre_vinculado`,
         [
           a.id, a.consultorId, a.nombre, a.edad, a.zona, a.whatsapp, a.marcaComercial, a.programa,
-          a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.estado, a.estadoActualizadoEn, a.idCierreVinculado,
-          a.eliminadoEn, a.eliminadoPor, a.creadoEn,
+          a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.estado, a.estadoActualizadoEn, a.telefonoPais,
+          a.telefonoNumero, a.idCierreVinculado, a.eliminadoEn, a.eliminadoPor, a.creadoEn,
         ],
       );
     },
@@ -512,6 +519,38 @@ export function crearSeguimientoRepoPg(pool: Pool): SeguimientoTokensRepo {
         ahoraIso, planId,
       ]);
       return r.rowCount ?? 0;
+    },
+  };
+}
+
+// ───────────────────────── Contactos ─────────────────────────
+
+interface ContactoRow {
+  id: string; alumno_id: string; consultor_id: string; canal: string;
+  contactado_en: string; nota: string | null;
+}
+
+const toContacto = (r: ContactoRow): Contacto => ({
+  id: r.id, alumnoId: r.alumno_id, consultorId: r.consultor_id, canal: r.canal,
+  contactadoEn: r.contactado_en, nota: r.nota,
+});
+
+export function crearContactosRepoPg(pool: Pool): ContactosRepo {
+  return {
+    async crear(c) {
+      // Solo INSERT: el historial de seguimiento no se edita, como los checkins.
+      await pool.query('INSERT INTO contactos (id, alumno_id, consultor_id, canal, contactado_en, nota) VALUES ($1,$2,$3,$4,$5,$6)', [
+        c.id, c.alumnoId, c.consultorId, c.canal, c.contactadoEn, c.nota,
+      ]);
+    },
+    async ultimoDeAlumno(alumnoId) {
+      const r = await pool.query('SELECT * FROM contactos WHERE alumno_id = $1 ORDER BY contactado_en DESC LIMIT 1', [alumnoId]);
+      const row = r.rows[0] as ContactoRow | undefined;
+      return row ? toContacto(row) : null;
+    },
+    async listarPorAlumno(alumnoId) {
+      const r = await pool.query('SELECT * FROM contactos WHERE alumno_id = $1 ORDER BY contactado_en DESC', [alumnoId]);
+      return (r.rows as ContactoRow[]).map(toContacto);
     },
   };
 }

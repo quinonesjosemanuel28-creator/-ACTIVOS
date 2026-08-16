@@ -27,6 +27,8 @@ const ALUMNO: Alumno = {
   activo: true,
   estado: 'ACTIVO',
   estadoActualizadoEn: null,
+  telefonoPais: null,
+  telefonoNumero: null,
   idCierreVinculado: null,
   eliminadoEn: null,
   eliminadoPor: null,

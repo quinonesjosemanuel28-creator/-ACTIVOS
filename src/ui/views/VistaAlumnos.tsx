@@ -9,11 +9,12 @@
  * formulario público (Campo + BLOQUES): una sola definición de las preguntas.
  */
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, CalendarDays, Check, ClipboardPaste, Copy, Download, FileDown, GraduationCap, Link2, Pencil, Plus, RotateCcw, Target, Trash2, UserRound, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CalendarDays, Check, ClipboardPaste, Copy, Download, FileDown, GraduationCap, Link2, MessageCircle, Pencil, Plus, RotateCcw, Target, Trash2, UserRound, X } from 'lucide-react';
 import type { Alumno, Diagnostico } from '@domain/alumnos/tipos';
 import type { Kr, PlanCompleto } from '@domain/alumnos/plan';
-import { avanceKrs, calcularSalud, diasDelPlan, ESTADOS_ALUMNO, type EstadoAlumno, type SaludCalculada } from '@domain/alumnos/panel';
+import { avanceKrs, calcularSalud, diasDelPlan, ESTADOS_ALUMNO, type AlertaInactividad, type EstadoAlumno, type SaludCalculada } from '@domain/alumnos/panel';
 import { fechaCierreEstimada } from '@domain/alumnos/plan';
+import { linkWhatsapp, mensajeSeguimiento } from '@domain/alumnos/telefono';
 import { BLOQUES, PREGUNTA_POR_CAMPO } from '@domain/alumnos/formulario';
 import { calcularClaridad, nivelClaridad, type NivelClaridad } from '@domain/alumnos/claridad';
 import {
@@ -22,6 +23,7 @@ import {
   useCambiarEstadoAlumno,
   useCambiarFechaInicio,
   useCargarPlan,
+  useContactos,
   useCrearAlumno,
   useDiagnosticos,
   useDocumentosPlan,
@@ -37,6 +39,7 @@ import {
   usePapelera,
   usePlanes,
   usePreviaPlan,
+  useRegistrarContacto,
   useRestaurarAlumno,
   useRevocarLinkSeguimiento,
   useSubirDocumento,
@@ -152,13 +155,53 @@ function diasDesde(iso: string): number {
   return Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
 }
 
-function UltimaActividad({ iso }: { iso: string | null }) {
+/** Última señal del alumno. Con la alerta activa, la celda grita. */
+function UltimaActividad({ iso, alerta }: { iso: string | null; alerta?: AlertaInactividad }) {
+  if (alerta?.activa) {
+    return (
+      <span className="flex items-center gap-1 text-xs font-600 text-signal-red">
+        <AlertTriangle size={12} /> sin señales hace {alerta.diasSinSenal} días
+      </span>
+    );
+  }
   if (!iso) return <span className="text-xs text-navy-400">—</span>;
   const d = diasDesde(iso);
   return (
-    <span className={`text-xs ${d > 8 ? 'font-600 text-signal-red' : 'text-navy-500 dark:text-navy-300'}`}>
+    <span className="text-xs text-navy-500 dark:text-navy-300">
       {d === 0 ? 'hoy' : `hace ${d} día${d === 1 ? '' : 's'}`}
     </span>
+  );
+}
+
+/**
+ * El botón de WhatsApp (ticket 7C). Primero se REGISTRA el contacto (eso
+ * apaga la alerta), recién después se abre el link — si el registro falla, el
+ * link no se abre y el panel sigue gritando, que es lo correcto.
+ */
+function WhatsAppBtn({ alumno, krPendiente }: { alumno: Alumno; krPendiente: string | null }) {
+  const registrar = useRegistrarContacto();
+  if (!alumno.telefonoPais || !alumno.telefonoNumero) {
+    return (
+      <span className="text-xs text-navy-400" title={alumno.whatsapp ? `Sin normalizar: "${alumno.whatsapp}" — cargalo en la ficha` : 'Sin teléfono'}>
+        {alumno.whatsapp ? 'revisar tel.' : '—'}
+      </span>
+    );
+  }
+  const url = linkWhatsapp(alumno.telefonoPais, alumno.telefonoNumero, mensajeSeguimiento(alumno.nombre, krPendiente));
+  const contactar = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // no abrir la ficha al hacer clic en la fila
+    await registrar.mutateAsync({ alumnoId: alumno.id });
+    window.open(url, '_blank', 'noopener');
+  };
+  return (
+    <button
+      onClick={(e) => void contactar(e)}
+      disabled={registrar.isPending}
+      title={`Abrir WhatsApp (+${alumno.telefonoPais} ${alumno.telefonoNumero}). Queda registrado el contacto.`}
+      className="inline-flex items-center gap-1 rounded-lg border border-signal-green/40 px-2 py-1 text-xs font-600 text-signal-green transition hover:bg-green-50 dark:hover:bg-green-900/20"
+    >
+      <MessageCircle size={13} /> WhatsApp
+    </button>
   );
 }
 
@@ -168,6 +211,7 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
   const [q, setQ] = useState('');
   const [estado, setEstado] = useState('');
   const [salud, setSalud] = useState('');
+  const [soloTrabados, setSoloTrabados] = useState(false);
   const [consultor, setConsultor] = useState('');
   const [creando, setCreando] = useState(false);
   const [verPapelera, setVerPapelera] = useState(false);
@@ -176,6 +220,7 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
     q: q || undefined,
     estado: (estado || undefined) as EstadoAlumno | undefined,
     salud: (salud || undefined) as 'VERDE' | 'NARANJA' | 'ROJO' | 'NEUTRO' | undefined,
+    trabados: soloTrabados || undefined,
     consultor: consultor || undefined,
   });
 
@@ -186,7 +231,8 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
     return [...m.entries()];
   }, [filas]);
 
-  const rojos = filas?.filter((f) => f.salud.salud === 'ROJO').length ?? 0;
+  // "Trabado" = necesita atención YA: alerta de inactividad o semáforo rojo.
+  const trabados = filas?.filter((f) => f.alerta.activa || f.salud.salud === 'ROJO').length ?? 0;
   const naranjas = filas?.filter((f) => f.salud.salud === 'NARANJA').length ?? 0;
 
   if (verPapelera) return <Papelera onVolver={() => setVerPapelera(false)} />;
@@ -232,10 +278,14 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
             {consultores.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
           </Select>
         )}
-        {(rojos > 0 || naranjas > 0) && (
+        <label className="flex cursor-pointer items-center gap-1.5 text-sm text-navy-600 dark:text-navy-200">
+          <input type="checkbox" className="accent-gold-500" checked={soloTrabados} onChange={(e) => setSoloTrabados(e.target.checked)} />
+          Solo trabados
+        </label>
+        {(trabados > 0 || naranjas > 0) && (
           <span className="ml-auto text-xs font-600">
-            {rojos > 0 && <span className="text-signal-red">{rojos} trabado{rojos === 1 ? '' : 's'}</span>}
-            {rojos > 0 && naranjas > 0 && <span className="text-navy-400"> · </span>}
+            {trabados > 0 && <span className="text-signal-red">{trabados} trabado{trabados === 1 ? '' : 's'}</span>}
+            {trabados > 0 && naranjas > 0 && <span className="text-navy-400"> · </span>}
             {naranjas > 0 && <span className="text-gold-500">{naranjas} atrasado{naranjas === 1 ? '' : 's'}</span>}
           </span>
         )}
@@ -261,6 +311,7 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
                 <th className="px-3 py-3 font-600">Salud</th>
                 <th className="px-3 py-3 font-600">KRs</th>
                 <th className="px-3 py-3 font-600">Última actividad</th>
+                <th className="px-3 py-3 font-600">Teléfono</th>
                 <th className="px-3 py-3 font-600">Consultor</th>
               </tr>
             </thead>
@@ -294,7 +345,8 @@ function FilaPanel({ fila: f, onAbrir }: { fila: FilaPanelUI; onAbrir: (id: stri
       <td className="px-3 py-3 text-xs text-navy-500 dark:text-navy-300">
         {f.krs.totales > 0 ? `${f.krs.cumplidos}/${f.krs.totales}` : '—'}
       </td>
-      <td className="px-3 py-3"><UltimaActividad iso={f.ultimaActividad} /></td>
+      <td className="px-3 py-3"><UltimaActividad iso={f.ultimaActividad} alerta={f.alerta} /></td>
+      <td className="px-3 py-3"><WhatsAppBtn alumno={f.alumno} krPendiente={f.krPendiente} /></td>
       <td className="px-3 py-3 text-xs text-navy-500 dark:text-navy-300">{f.consultorNombre ?? '—'}</td>
     </tr>
   );
@@ -457,6 +509,14 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
   const abierto = diagnosticos?.find((d) => d.id === diagnosticoAbierto) ?? null;
   const vigente = planes?.[0] ?? null;
 
+  // El KR que pregunta el mensaje de WhatsApp: el pendiente de vencimiento
+  // más cercano (misma regla que el panel, resuelta acá con el plan cargado).
+  const krs = vigente?.okrs.flatMap((o) => o.krs) ?? [];
+  const pendientes = krs.filter((k) => k.cumplidoEn === null);
+  const krPendiente =
+    (pendientes.filter((k) => k.vencimiento !== null).sort((a, b) => a.vencimiento!.localeCompare(b.vencimiento!))[0] ??
+      pendientes[0])?.texto ?? null;
+
   const alPapelera = async () => {
     if (!window.confirm(`¿Mandar la ficha de ${alumno.nombre} a la papelera? Desaparece del panel; un ADMIN puede restaurarla.`)) return;
     await eliminar.mutateAsync(alumno.id);
@@ -474,6 +534,7 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
         descripcion={`${alumno.programa} · montos en ${alumno.moneda}`}
         accion={
           <div className="flex items-center gap-2">
+            <WhatsAppBtn alumno={alumno} krPendiente={krPendiente} />
             <Select
               value={alumno.estado}
               onChange={(e) => void cambiarEstado.mutateAsync({ id: alumno.id, estado: e.target.value as EstadoAlumno })}
@@ -532,7 +593,30 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
       {abierto && <DetalleDiagnostico key={abierto.id} diagnostico={abierto} moneda={abierto.moneda} />}
 
       <PlanAlumno alumnoId={alumno.id} />
+
+      <HistorialContactos alumnoId={alumno.id} />
     </div>
+  );
+}
+
+/** Contactos registrados (ticket 7C), colapsados: historia, no ruido. */
+function HistorialContactos({ alumnoId }: { alumnoId: string }) {
+  const { data: contactos } = useContactos(alumnoId);
+  if (!contactos?.length) return null;
+  return (
+    <Card className="p-4">
+      <details className="text-sm text-navy-600 dark:text-navy-200">
+        <summary className="cursor-pointer font-600">Contactos registrados ({contactos.length})</summary>
+        <ul className="mt-2 space-y-1 text-xs">
+          {contactos.map((c) => (
+            <li key={c.id}>
+              {c.contactadoEn.slice(0, 10)} · {c.canal.toLowerCase()}
+              {c.nota && <span className="text-navy-400"> — {c.nota}</span>}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </Card>
   );
 }
 
@@ -1006,6 +1090,8 @@ function DatosFicha({ alumno }: { alumno: Alumno }) {
     whatsapp: alumno.whatsapp ?? '',
     marcaComercial: alumno.marcaComercial ?? '',
     edad: alumno.edad ? String(alumno.edad) : '',
+    telefonoPais: alumno.telefonoPais ?? '',
+    telefonoNumero: alumno.telefonoNumero ?? '',
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -1020,6 +1106,8 @@ function DatosFicha({ alumno }: { alumno: Alumno }) {
           whatsapp: form.whatsapp || null,
           marcaComercial: form.marcaComercial || null,
           edad: form.edad ? Number(form.edad) : null,
+          telefonoPais: form.telefonoPais.trim() || null,
+          telefonoNumero: form.telefonoNumero.trim() || null,
         },
       });
       setEditando(false);
@@ -1050,14 +1138,15 @@ function DatosFicha({ alumno }: { alumno: Alumno }) {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {dato('Edad', alumno.edad)}
           {dato('Zona', alumno.zona)}
-          {dato('WhatsApp', alumno.whatsapp)}
+          {dato('WhatsApp (texto libre)', alumno.whatsapp)}
+          {dato('Teléfono normalizado', alumno.telefonoPais && alumno.telefonoNumero ? `+${alumno.telefonoPais} ${alumno.telefonoNumero}` : null)}
           {dato('Marca', alumno.marcaComercial)}
           {dato('Canal', alumno.canalOrigen)}
           {dato('Moneda', alumno.moneda)}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {([['nombre', 'Nombre'], ['edad', 'Edad'], ['zona', 'Zona'], ['whatsapp', 'WhatsApp'], ['marcaComercial', 'Marca']] as const).map(([k, etiqueta]) => (
+          {([['nombre', 'Nombre'], ['edad', 'Edad'], ['zona', 'Zona'], ['whatsapp', 'WhatsApp (texto libre)'], ['marcaComercial', 'Marca'], ['telefonoPais', 'Cód. país (sin +, ej. 54)'], ['telefonoNumero', 'Número (solo dígitos, con área)']] as const).map(([k, etiqueta]) => (
             <div key={k}>
               <label className="mb-1 block text-xs font-600 text-navy-500 dark:text-navy-300">{etiqueta}</label>
               <Input value={form[k]} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} />

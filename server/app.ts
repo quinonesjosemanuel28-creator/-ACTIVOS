@@ -408,6 +408,7 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
       q: typeof req.query.q === 'string' ? req.query.q : undefined,
       estado: typeof req.query.estado === 'string' ? (req.query.estado as ual.FiltrosPanel['estado']) : undefined,
       salud: typeof req.query.salud === 'string' ? (req.query.salud as ual.FiltrosPanel['salud']) : undefined,
+      soloTrabados: req.query.trabados === '1',
       consultorId: typeof req.query.consultor === 'string' ? req.query.consultor : undefined,
     }),
   ));
@@ -448,6 +449,14 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   ));
   app.get('/api/alumnos/:id/diagnosticos', requiere('ver_alumnos'), h((req, res) =>
     ual.listarDiagnosticos(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
+  // Registro de contacto (ticket 7C): se inserta ANTES de abrir el WhatsApp y
+  // es lo que apaga la alerta de inactividad. Append-only, como los checkins.
+  app.post('/api/alumnos/:id/contactos', requiere('editar_alumnos'), h((req, res) =>
+    ual.registrarContacto(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
+  ));
+  app.get('/api/alumnos/:id/contactos', requiere('ver_alumnos'), h((req, res) =>
+    ual.listarContactos(reposAlumnos, alcanceDe(res), param(req, 'id')),
   ));
   // Corrección durante la llamada: ajusta la fila y la marca como editada por
   // el consultor (no crea envío nuevo). Fuera de ámbito responde 404.

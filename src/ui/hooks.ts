@@ -424,6 +424,21 @@ export function useEliminarAlumno() {
   const inval = useInvalidarAlumnos();
   return useMutation({ mutationFn: (id: string) => api.eliminarAlumno(id), onSuccess: inval });
 }
+/** Seguimiento activo (ticket 7C): registrar el contacto ANTES de abrir WhatsApp. */
+export function useRegistrarContacto() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { alumnoId: string; nota?: string }) => api.registrarContacto(v.alumnoId, v.nota),
+    onSuccess: inval,
+  });
+}
+export function useContactos(alumnoId: string | null) {
+  return useQuery({
+    queryKey: ['alumnos', 'contactos', alumnoId],
+    queryFn: () => api.contactos(alumnoId!),
+    enabled: !!alumnoId,
+  });
+}
 /** Documentos del plan (ticket 7B): versiones, la vigente primero. */
 export function useDocumentosPlan(planId: string | null) {
   return useQuery({

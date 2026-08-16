@@ -38,6 +38,13 @@ export interface Alumno {
   /** Ciclo de vida en la consultoría (ticket 7). Gobierna semáforo y alertas. */
   estado: EstadoAlumno;
   estadoActualizadoEn: string | null;
+  /**
+   * Teléfono normalizado (ticket 7C): código de país sin '+' y número solo
+   * dígitos. El `whatsapp` libre de arriba queda como estaba (lo escribió el
+   * alumno); ESTOS dos campos son los que arman el link de wa.me.
+   */
+  telefonoPais: string | null;
+  telefonoNumero: string | null;
   /** Vínculo suelto con el contable. Sin FK a propósito: no es navegable. */
   idCierreVinculado: string | null;
   /**
@@ -81,6 +88,23 @@ export interface Diagnostico {
   metricasRespondidas: number;
   respuestas: RespuestasDiagnostico;
   creadoEn: string;
+}
+
+// ───────────────────────── Registro de contacto (ticket 7C) ─────────────────────────
+
+/**
+ * Un contacto del consultor con el alumno, registrado ANTES de abrir el link
+ * de WhatsApp. Es lo que apaga la alerta de inactividad: "ya le escribí ayer,
+ * no me lo sigas gritando". El canal es opción de negocio (hoy solo
+ * WhatsApp), se valida en Zod — sin CHECK, como programa o moneda.
+ */
+export interface Contacto {
+  id: string;
+  alumnoId: string;
+  consultorId: string;
+  canal: string;
+  contactadoEn: string;
+  nota: string | null;
 }
 
 // ───────────────────────── Token del formulario público ─────────────────────────

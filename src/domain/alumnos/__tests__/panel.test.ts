@@ -8,12 +8,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  alertaInactividad,
   calcularSalud,
   chipFase,
   diasDelPlan,
   avanceKrs,
   puntajeRiesgo,
   DIAS_SIN_JUZGAR,
+  type EntradaAlerta,
   type EntradaSalud,
 } from '../panel';
 import { diasEntre, fechaCierreEstimada, sumarDias } from '../plan';
@@ -108,8 +110,9 @@ describe('Panel · fase y fechas', () => {
 });
 
 describe('Panel · orden por riesgo', () => {
-  it('trabados arriba, después naranjas, neutros, verdes, y al fondo los estados quietos', () => {
+  it('la alerta arriba de todo, después rojos, naranjas, neutros, verdes, y al fondo los quietos', () => {
     const orden = [
+      puntajeRiesgo('ACTIVO', 'VERDE', true), // sin señales: gana incluso estando verde
       puntajeRiesgo('ACTIVO', 'ROJO'),
       puntajeRiesgo('ACTIVO', 'NARANJA'),
       puntajeRiesgo('ACTIVO', null),
@@ -120,5 +123,52 @@ describe('Panel · orden por riesgo', () => {
     ];
     expect([...orden].sort((a, b) => a - b)).toEqual(orden);
     expect(new Set(orden).size).toBe(orden.length); // sin empates entre categorías
+  });
+
+  it('la alerta no rescata a un PAUSADO del fondo: los estados quietos no gritan', () => {
+    expect(puntajeRiesgo('PAUSADO', null, true)).toBe(5);
+  });
+});
+
+describe('Panel · alerta de inactividad (ticket 7C)', () => {
+  const base = (over: Partial<EntradaAlerta> = {}): EntradaAlerta => ({
+    estado: 'ACTIVO',
+    fechaInicio: inicioHace(30),
+    ultimaActividad: null,
+    ultimoContacto: null,
+    ...over,
+  });
+  const haceDias = (d: number) => new Date(Date.parse(HOY) - d * 86_400_000).toISOString();
+
+  it('criterio de aceptación: 9 días sin check-in → alerta; con contacto de ayer → no', () => {
+    const sinSenales = alertaInactividad(base({ ultimaActividad: haceDias(9) }), HOY);
+    expect(sinSenales).toEqual({ activa: true, diasSinSenal: 9 });
+
+    const contactado = alertaInactividad(base({ ultimaActividad: haceDias(9), ultimoContacto: haceDias(1) }), HOY);
+    expect(contactado.activa).toBe(false);
+  });
+
+  it('criterio de aceptación: un PAUSADO nunca dispara alerta', () => {
+    for (const estado of ['PAUSADO', 'FINALIZADO', 'ABANDONADO'] as const) {
+      expect(alertaInactividad(base({ estado, ultimaActividad: haceDias(30) }), HOY).activa).toBe(false);
+    }
+  });
+
+  it('el borde es MÁS de 8 días: a los 8 exactos todavía no grita', () => {
+    expect(alertaInactividad(base({ ultimaActividad: haceDias(8) }), HOY).activa).toBe(false);
+    expect(alertaInactividad(base({ ultimaActividad: haceDias(9) }), HOY).activa).toBe(true);
+  });
+
+  it('sin check-ins la señal es fecha_inicio; sin plan no hay nada que vigilar', () => {
+    expect(alertaInactividad(base({ fechaInicio: inicioHace(9) }), HOY).activa).toBe(true);
+    expect(alertaInactividad(base({ fechaInicio: inicioHace(3) }), HOY).activa).toBe(false);
+    expect(alertaInactividad(base({ fechaInicio: null }), HOY)).toEqual({ activa: false, diasSinSenal: null });
+  });
+
+  it('el contacto apaga solo por 8 días, y solo si es POSTERIOR a la última señal', () => {
+    // Contacto de hace 9 días: ya venció, la alerta vuelve a gritar.
+    expect(alertaInactividad(base({ ultimaActividad: haceDias(20), ultimoContacto: haceDias(9) }), HOY).activa).toBe(true);
+    // Contacto ANTERIOR a la última actividad: no cuenta (el alumno se movió después).
+    expect(alertaInactividad(base({ ultimaActividad: haceDias(9), ultimoContacto: haceDias(15) }), HOY).activa).toBe(true);
   });
 });
