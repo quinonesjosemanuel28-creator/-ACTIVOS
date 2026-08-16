@@ -9,27 +9,38 @@
  * formulario público (Campo + BLOQUES): una sola definición de las preguntas.
  */
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, ClipboardPaste, Copy, Download, FileDown, GraduationCap, Link2, Pencil, Plus, Target, UserRound, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, ClipboardPaste, Copy, Download, FileDown, GraduationCap, Link2, Pencil, Plus, RotateCcw, Target, Trash2, UserRound, X } from 'lucide-react';
 import type { Alumno, Diagnostico } from '@domain/alumnos/tipos';
+import type { Kr, PlanCompleto } from '@domain/alumnos/plan';
+import { avanceKrs, calcularSalud, diasDelPlan, ESTADOS_ALUMNO, type EstadoAlumno, type SaludCalculada } from '@domain/alumnos/panel';
+import { fechaCierreEstimada } from '@domain/alumnos/plan';
 import { BLOQUES, PREGUNTA_POR_CAMPO } from '@domain/alumnos/formulario';
 import { calcularClaridad, nivelClaridad, type NivelClaridad } from '@domain/alumnos/claridad';
 import {
   useAlumno,
-  useAlumnos,
   useAvancePlan,
+  useCambiarEstadoAlumno,
+  useCambiarFechaInicio,
   useCargarPlan,
   useCrearAlumno,
   useDiagnosticos,
   useEditarAlumno,
   useEditarDiagnostico,
+  useEditarKr,
+  useEliminarAlumno,
+  useEliminarDefinitivo,
   useEmitirLink,
   useEmitirLinkSeguimiento,
   useExportarDiagnostico,
+  usePanelAlumnos,
+  usePapelera,
   usePlanes,
   usePreviaPlan,
+  useRestaurarAlumno,
   useRevocarLinkSeguimiento,
 } from '../hooks';
-import type { PreviaPlanUI } from '../lib/api';
+import { usePuede } from '../store';
+import type { FilaPanelUI, PreviaPlanUI } from '../lib/api';
 import { Textarea } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import { Badge, Button, Card, Input, Select, Spinner } from '../components/ui/primitives';
@@ -111,52 +122,262 @@ export function VistaAlumnos() {
   return <ListaAlumnos onAbrir={setAbierto} />;
 }
 
-// ───────────────────── Cartera + alta ─────────────────────
+// ───────────────────── Presentación de estado y salud ─────────────────────
+
+const ESTADO_LABEL: Record<EstadoAlumno, string> = {
+  ACTIVO: 'Activo', PAUSADO: 'Pausado', FINALIZADO: 'Finalizado', ABANDONADO: 'Abandonado',
+};
+
+function EstadoBadge({ estado }: { estado: EstadoAlumno }) {
+  return (
+    <Badge tone={estado === 'ACTIVO' ? 'gold' : 'neutral'} className={estado === 'ACTIVO' ? '' : 'opacity-70'}>
+      {ESTADO_LABEL[estado]}
+    </Badge>
+  );
+}
+
+const NEUTRO_LABEL = { sin_plan: 'sin plan', sin_krs: 'sin KRs', primeros_dias: 'arrancando', estado: '—' } as const;
+
+/** El semáforo. Neutro dice su motivo — un gris mudo no explica nada. */
+function SaludBadge({ salud }: { salud: SaludCalculada }) {
+  if (salud.salud === 'ROJO') return <Badge tone="red">Trabado</Badge>;
+  if (salud.salud === 'NARANJA') return <Badge tone="amber">Atrasado</Badge>;
+  if (salud.salud === 'VERDE') return <Badge tone="green">Al día</Badge>;
+  return <Badge tone="neutral" className="opacity-70">{NEUTRO_LABEL[salud.motivo ?? 'estado']}</Badge>;
+}
+
+function diasDesde(iso: string): number {
+  return Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+}
+
+function UltimaActividad({ iso }: { iso: string | null }) {
+  if (!iso) return <span className="text-xs text-navy-400">—</span>;
+  const d = diasDesde(iso);
+  return (
+    <span className={`text-xs ${d > 8 ? 'font-600 text-signal-red' : 'text-navy-500 dark:text-navy-300'}`}>
+      {d === 0 ? 'hoy' : `hace ${d} día${d === 1 ? '' : 's'}`}
+    </span>
+  );
+}
+
+// ───────────────────── Cartera: el panel de control ─────────────────────
 
 function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
   const [q, setQ] = useState('');
+  const [estado, setEstado] = useState('');
+  const [salud, setSalud] = useState('');
+  const [consultor, setConsultor] = useState('');
   const [creando, setCreando] = useState(false);
-  const { data: alumnos, isLoading } = useAlumnos(q || undefined);
+  const [verPapelera, setVerPapelera] = useState(false);
+  const puedeEliminar = usePuede('eliminar_alumnos');
+  const { data: filas, isLoading } = usePanelAlumnos({
+    q: q || undefined,
+    estado: (estado || undefined) as EstadoAlumno | undefined,
+    salud: (salud || undefined) as 'VERDE' | 'NARANJA' | 'ROJO' | 'NEUTRO' | undefined,
+    consultor: consultor || undefined,
+  });
+
+  // Opciones del filtro por cartera (ADMIN ve todas; para un consultor es la suya).
+  const consultores = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of filas ?? []) if (f.consultorNombre) m.set(f.alumno.consultorId, f.consultorNombre);
+    return [...m.entries()];
+  }, [filas]);
+
+  const rojos = filas?.filter((f) => f.salud.salud === 'ROJO').length ?? 0;
+  const naranjas = filas?.filter((f) => f.salud.salud === 'NARANJA').length ?? 0;
+
+  if (verPapelera) return <Papelera onVolver={() => setVerPapelera(false)} />;
 
   return (
     <div className="space-y-5">
       <SectionHeader
         titulo="Alumnos"
-        descripcion="Tu cartera de consultoría 1 a 1. El diagnóstico de cada alumno llega por su link."
+        descripcion="El panel de la cartera: los trabados gritan arriba; los que van bien no hacen ruido."
         accion={
-          <Button onClick={() => setCreando((v) => !v)}>
-            {creando ? <X size={16} /> : <Plus size={16} />}
-            <span className="ml-1.5">{creando ? 'Cancelar' : 'Nuevo alumno'}</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            {puedeEliminar && (
+              <Button variant="ghost" onClick={() => setVerPapelera(true)}>
+                <Trash2 size={14} /><span className="ml-1.5">Papelera</span>
+              </Button>
+            )}
+            <Button onClick={() => setCreando((v) => !v)}>
+              {creando ? <X size={16} /> : <Plus size={16} />}
+              <span className="ml-1.5">{creando ? 'Cancelar' : 'Nuevo alumno'}</span>
+            </Button>
+          </div>
         }
       />
 
       {creando && <FormAlta onCreado={(id) => { setCreando(false); onAbrir(id); }} />}
 
-      <Input placeholder="Buscar por nombre o marca…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-sm" />
+      <div className="flex flex-wrap items-center gap-2">
+        <Input placeholder="Buscar por nombre o marca…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
+        <Select value={estado} onChange={(e) => setEstado(e.target.value)}>
+          <option value="">Todos los estados</option>
+          {ESTADOS_ALUMNO.map((s) => <option key={s} value={s}>{ESTADO_LABEL[s]}</option>)}
+        </Select>
+        <Select value={salud} onChange={(e) => setSalud(e.target.value)}>
+          <option value="">Toda la salud</option>
+          <option value="ROJO">Trabados (rojo)</option>
+          <option value="NARANJA">Atrasados (naranja)</option>
+          <option value="VERDE">Al día (verde)</option>
+          <option value="NEUTRO">Sin semáforo</option>
+        </Select>
+        {consultores.length > 1 && (
+          <Select value={consultor} onChange={(e) => setConsultor(e.target.value)}>
+            <option value="">Todas las carteras</option>
+            {consultores.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+          </Select>
+        )}
+        {(rojos > 0 || naranjas > 0) && (
+          <span className="ml-auto text-xs font-600">
+            {rojos > 0 && <span className="text-signal-red">{rojos} trabado{rojos === 1 ? '' : 's'}</span>}
+            {rojos > 0 && naranjas > 0 && <span className="text-navy-400"> · </span>}
+            {naranjas > 0 && <span className="text-gold-500">{naranjas} atrasado{naranjas === 1 ? '' : 's'}</span>}
+          </span>
+        )}
+      </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Spinner className="h-8 w-8" /></div>
-      ) : !alumnos?.length ? (
+      ) : !filas?.length ? (
         <Card className="p-8 text-center">
           <GraduationCap className="mx-auto mb-2 text-navy-300" size={32} />
           <p className="text-sm text-navy-500 dark:text-navy-300">
-            {q ? 'Ningún alumno coincide con la búsqueda.' : 'Todavía no hay alumnos en tu cartera. Creá el primero y mandale su link de diagnóstico.'}
+            {q || estado || salud ? 'Ningún alumno coincide con los filtros.' : 'Todavía no hay alumnos en tu cartera. Creá el primero y mandale su link de diagnóstico.'}
           </p>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {alumnos.map((a) => (
-            <button key={a.id} onClick={() => onAbrir(a.id)} className="text-left">
-              <Card className="h-full p-4 transition hover:border-gold-400">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-display font-700 text-navy-900 dark:text-navy-50">{a.nombre}</p>
-                  {!a.activo && <Badge className="bg-navy-100 text-navy-500">inactivo</Badge>}
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-400 dark:border-navy-700">
+                <th className="px-4 py-3 font-600">Alumno</th>
+                <th className="px-3 py-3 font-600">Estado</th>
+                <th className="px-3 py-3 font-600">Fase</th>
+                <th className="px-3 py-3 font-600">Salud</th>
+                <th className="px-3 py-3 font-600">KRs</th>
+                <th className="px-3 py-3 font-600">Última actividad</th>
+                <th className="px-3 py-3 font-600">Consultor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((f) => <FilaPanel key={f.alumno.id} fila={f} onAbrir={onAbrir} />)}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function FilaPanel({ fila: f, onAbrir }: { fila: FilaPanelUI; onAbrir: (id: string) => void }) {
+  return (
+    <tr
+      onClick={() => onAbrir(f.alumno.id)}
+      className="cursor-pointer border-b border-navy-50 transition last:border-0 hover:bg-navy-50/60 dark:border-navy-800 dark:hover:bg-navy-800/40"
+    >
+      <td className="px-4 py-3">
+        <p className="font-600 text-navy-900 dark:text-navy-50">{f.alumno.nombre}</p>
+        <p className="text-xs text-navy-400">{f.alumno.programa}</p>
+      </td>
+      <td className="px-3 py-3"><EstadoBadge estado={f.alumno.estado} /></td>
+      <td className="px-3 py-3">
+        {f.plan
+          ? <Badge tone="neutral">{f.plan.chip} · día {f.plan.dias + 1}</Badge>
+          : <span className="text-xs text-navy-400">sin plan</span>}
+      </td>
+      <td className="px-3 py-3"><SaludBadge salud={f.salud} /></td>
+      <td className="px-3 py-3 text-xs text-navy-500 dark:text-navy-300">
+        {f.krs.totales > 0 ? `${f.krs.cumplidos}/${f.krs.totales}` : '—'}
+      </td>
+      <td className="px-3 py-3"><UltimaActividad iso={f.ultimaActividad} /></td>
+      <td className="px-3 py-3 text-xs text-navy-500 dark:text-navy-300">{f.consultorNombre ?? '—'}</td>
+    </tr>
+  );
+}
+
+// ───────────────────── Papelera (solo ADMIN) ─────────────────────
+
+function Papelera({ onVolver }: { onVolver: () => void }) {
+  const { data: filas, isLoading } = usePapelera(true);
+  const restaurar = useRestaurarAlumno();
+  const purgar = useEliminarDefinitivo();
+  const [purgando, setPurgando] = useState<string | null>(null);
+  const [confirmacion, setConfirmacion] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const confirmarPurga = async (id: string) => {
+    setError(null);
+    try {
+      await purgar.mutateAsync({ id, confirmacion });
+      setPurgando(null);
+      setConfirmacion('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo borrar.');
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <button onClick={onVolver} className="flex items-center gap-1.5 text-sm font-600 text-navy-500 hover:text-navy-800 dark:text-navy-300">
+        <ArrowLeft size={16} /> Alumnos
+      </button>
+      <SectionHeader
+        titulo="Papelera"
+        descripcion="Fichas eliminadas. Restaurar las devuelve intactas; el borrado definitivo arrastra diagnósticos, planes y seguimiento — y no tiene vuelta."
+      />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Spinner className="h-8 w-8" /></div>
+      ) : !filas?.length ? (
+        <Card className="p-8 text-center">
+          <Trash2 className="mx-auto mb-2 text-navy-300" size={32} />
+          <p className="text-sm text-navy-500 dark:text-navy-300">La papelera está vacía.</p>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filas.map(({ alumno, eliminadoPorNombre }) => (
+            <Card key={alumno.id} className="p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-600 text-navy-900 dark:text-navy-50">{alumno.nombre}</p>
+                  <p className="text-xs text-navy-400">
+                    {alumno.programa} · eliminado el {alumno.eliminadoEn?.slice(0, 10)}
+                    {eliminadoPorNombre && <> por {eliminadoPorNombre}</>}
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-navy-500 dark:text-navy-300">{a.programa}</p>
-                <p className="mt-0.5 text-xs text-navy-400">{[a.zona, a.moneda].filter(Boolean).join(' · ')}</p>
-              </Card>
-            </button>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => void restaurar.mutateAsync(alumno.id)} disabled={restaurar.isPending}>
+                    <RotateCcw size={14} /><span className="ml-1">Restaurar</span>
+                  </Button>
+                  <Button
+                    variant="ghost" size="sm" className="text-signal-red"
+                    onClick={() => { setPurgando(purgando === alumno.id ? null : alumno.id); setConfirmacion(''); setError(null); }}
+                  >
+                    <Trash2 size={14} /><span className="ml-1">Eliminar definitivamente</span>
+                  </Button>
+                </div>
+              </div>
+              {purgando === alumno.id && (
+                <div className="mt-3 space-y-2 rounded-xl border border-signal-red/40 bg-red-50 p-3 dark:bg-red-900/20">
+                  <p className="text-xs text-navy-700 dark:text-navy-200">
+                    Se borra TODO lo del alumno: diagnósticos, planes, checklist e historial. Para confirmar, escribí su nombre exacto: <strong>{alumno.nombre}</strong>
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input value={confirmacion} onChange={(e) => setConfirmacion(e.target.value)} placeholder={alumno.nombre} className="max-w-xs" />
+                    <Button
+                      size="sm" className="bg-signal-red text-white hover:bg-red-700"
+                      disabled={confirmacion.trim() !== alumno.nombre || purgar.isPending}
+                      onClick={() => void confirmarPurga(alumno.id)}
+                    >
+                      Borrar sin vuelta
+                    </Button>
+                  </div>
+                  {error && <p className="text-xs font-600 text-signal-red">{error}</p>}
+                </div>
+              )}
+            </Card>
           ))}
         </div>
       )}
@@ -221,6 +442,10 @@ function FormAlta({ onCreado }: { onCreado: (id: string) => void }) {
 function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
   const { data: alumno, isLoading } = useAlumno(id);
   const { data: diagnosticos } = useDiagnosticos(id);
+  const { data: planes } = usePlanes(id);
+  const cambiarEstado = useCambiarEstadoAlumno();
+  const eliminar = useEliminarAlumno();
+  const puedeEliminar = usePuede('eliminar_alumnos');
   const [diagnosticoAbierto, setDiagnosticoAbierto] = useState<string | null>(null);
 
   if (isLoading || !alumno) {
@@ -228,6 +453,13 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
   }
 
   const abierto = diagnosticos?.find((d) => d.id === diagnosticoAbierto) ?? null;
+  const vigente = planes?.[0] ?? null;
+
+  const alPapelera = async () => {
+    if (!window.confirm(`¿Mandar la ficha de ${alumno.nombre} a la papelera? Desaparece del panel; un ADMIN puede restaurarla.`)) return;
+    await eliminar.mutateAsync(alumno.id);
+    onVolver();
+  };
 
   return (
     <div className="space-y-5">
@@ -235,7 +467,29 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
         <ArrowLeft size={16} /> Alumnos
       </button>
 
-      <SectionHeader titulo={alumno.nombre} descripcion={`${alumno.programa} · montos en ${alumno.moneda}`} />
+      <SectionHeader
+        titulo={alumno.nombre}
+        descripcion={`${alumno.programa} · montos en ${alumno.moneda}`}
+        accion={
+          <div className="flex items-center gap-2">
+            <Select
+              value={alumno.estado}
+              onChange={(e) => void cambiarEstado.mutateAsync({ id: alumno.id, estado: e.target.value as EstadoAlumno })}
+              disabled={cambiarEstado.isPending}
+              title="Estado del alumno: gobierna el semáforo y las alertas"
+            >
+              {ESTADOS_ALUMNO.map((s) => <option key={s} value={s}>{ESTADO_LABEL[s]}</option>)}
+            </Select>
+            {puedeEliminar && (
+              <Button variant="ghost" className="text-signal-red" onClick={() => void alPapelera()} disabled={eliminar.isPending} title="Mandar a la papelera (borrado lógico)">
+                <Trash2 size={14} />
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      {vigente && <BarraProgreso alumno={alumno} vigente={vigente} />}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <DatosFicha alumno={alumno} />
@@ -277,6 +531,95 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
 
       <PlanAlumno alumnoId={alumno.id} />
     </div>
+  );
+}
+
+// ───────────────────── Barra de progreso (ticket 7) ─────────────────────
+
+/**
+ * Fase, días, semáforo y fecha de inicio EDITABLE del plan vigente. El
+ * semáforo se calcula acá con las mismas funciones del dominio que usa el
+ * panel: una sola definición de "trabado".
+ */
+function BarraProgreso({ alumno, vigente }: { alumno: Alumno; vigente: PlanCompleto }) {
+  const { data: avance } = useAvancePlan(vigente.plan.id);
+  const cambiarFecha = useCambiarFechaInicio();
+  const [editando, setEditando] = useState(false);
+  const [fecha, setFecha] = useState(vigente.plan.fechaInicio);
+  const [motivo, setMotivo] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const hoy = new Date().toISOString();
+  const krs = vigente.okrs.flatMap((o) => o.krs);
+  const { totales, cumplidos } = avanceKrs(krs);
+  const salud = calcularSalud(
+    { estado: alumno.estado, fechaInicio: vigente.plan.fechaInicio, krsTotales: totales, krsCumplidos: cumplidos },
+    hoy,
+  );
+  const dias = diasDelPlan(vigente.plan.fechaInicio, hoy);
+  const conVencimiento = krs.filter((k) => k.vencimiento !== null).length;
+
+  const confirmar = async () => {
+    setError(null);
+    try {
+      await cambiarFecha.mutateAsync({ planId: vigente.plan.id, fechaNueva: fecha, motivo: motivo || undefined });
+      setEditando(false);
+      setMotivo('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cambiar la fecha.');
+    }
+  };
+
+  return (
+    <Card className="space-y-3 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Badge tone="neutral">{avance?.vencido ? 'Vencido' : `Fase ${avance?.faseActual ?? '…'}`}</Badge>
+        <span className="text-sm text-navy-600 dark:text-navy-200">
+          Día <strong>{dias + 1}</strong> de 90 · cierre estimado {fechaCierreEstimada(vigente.plan.fechaInicio)}
+        </span>
+        <SaludBadge salud={salud} />
+        {totales > 0 && <span className="text-xs text-navy-400">{cumplidos}/{totales} KRs cumplidos</span>}
+        <span className="ml-auto flex items-center gap-1.5 text-xs text-navy-500 dark:text-navy-300">
+          <CalendarDays size={14} /> Arrancó el {vigente.plan.fechaInicio}
+          <Button variant="ghost" size="sm" onClick={() => { setEditando((v) => !v); setFecha(vigente.plan.fechaInicio); setError(null); }}>
+            {editando ? <X size={12} /> : <Pencil size={12} />}
+          </Button>
+        </span>
+      </div>
+
+      {editando && (
+        <div className="space-y-2 rounded-xl border border-navy-100 p-3 dark:border-navy-700">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="max-w-[11rem]" />
+            <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo (opcional)" className="max-w-xs" />
+            <Button size="sm" onClick={() => void confirmar()} disabled={cambiarFecha.isPending || fecha === vigente.plan.fechaInicio}>
+              {cambiarFecha.isPending ? <Spinner className="h-4 w-4" /> : <Check size={14} />}
+              <span className="ml-1">Mover la fecha</span>
+            </Button>
+          </div>
+          <p className="text-xs text-navy-500 dark:text-navy-300">
+            {conVencimiento > 0
+              ? <>Se van a desplazar los vencimientos de <strong>{conVencimiento} KR{conVencimiento === 1 ? '' : 's'}</strong> por la misma cantidad de días. Queda registrado en el historial.</>
+              : 'Ningún KR tiene vencimiento cargado todavía; solo se mueve la fecha (queda registrado).'}
+          </p>
+          {error && <p className="text-xs font-600 text-signal-red">{error}</p>}
+        </div>
+      )}
+
+      {avance && avance.cambiosFecha.length > 0 && (
+        <details className="text-xs text-navy-500 dark:text-navy-300">
+          <summary className="cursor-pointer font-600">Historial de cambios de fecha ({avance.cambiosFecha.length})</summary>
+          <ul className="mt-1.5 space-y-1">
+            {avance.cambiosFecha.map((c) => (
+              <li key={c.id}>
+                {c.cambiadoEn.slice(0, 10)}: {c.fechaAnterior} → {c.fechaNueva}
+                {c.motivo && <span className="text-navy-400"> — {c.motivo}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </Card>
   );
 }
 
@@ -408,12 +751,8 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
             {vigente.okrs.map((o) => (
               <div key={o.id} className="rounded-xl border border-navy-100 p-3 dark:border-navy-700">
                 <p className="text-sm font-600 text-navy-900 dark:text-navy-50">{o.orden}. {o.objetivo}</p>
-                <ul className="mt-1.5 space-y-1">
-                  {o.krs.map((k) => (
-                    <li key={k.id} className="text-xs text-navy-600 dark:text-navy-300">
-                      • {k.texto}{k.meta && <span className="text-navy-400"> — {k.meta}</span>}
-                    </li>
-                  ))}
+                <ul className="mt-1.5 space-y-1.5">
+                  {o.krs.map((k) => <KrItem key={k.id} kr={k} />)}
                 </ul>
               </div>
             ))}
@@ -422,6 +761,41 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * Un KR del tablero: check de cumplimiento (lo marca el CONSULTOR — alimenta
+ * el semáforo de salud) y vencimiento editable. Los vencimientos se desplazan
+ * en bloque cuando se mueve la fecha de inicio del plan.
+ */
+function KrItem({ kr }: { kr: Kr }) {
+  const editar = useEditarKr();
+  const cumplido = kr.cumplidoEn !== null;
+  const vencido = !cumplido && kr.vencimiento !== null && kr.vencimiento < new Date().toISOString().slice(0, 10);
+  return (
+    <li className="flex items-start gap-2 text-xs">
+      <input
+        type="checkbox"
+        className="mt-0.5 h-3.5 w-3.5 accent-gold-500"
+        checked={cumplido}
+        disabled={editar.isPending}
+        onChange={(e) => void editar.mutateAsync({ krId: kr.id, patch: { cumplido: e.target.checked } })}
+        title={cumplido ? `Cumplido el ${kr.cumplidoEn!.slice(0, 10)}` : 'Marcar como cumplido'}
+      />
+      <span className={`flex-1 ${cumplido ? 'text-navy-400 line-through' : 'text-navy-600 dark:text-navy-300'}`}>
+        {kr.texto}{kr.meta && <span className="text-navy-400"> — {kr.meta}</span>}
+        {cumplido && <span className="ml-1 text-signal-green">✓ {kr.cumplidoEn!.slice(0, 10)}</span>}
+      </span>
+      <input
+        type="date"
+        className={`rounded border px-1 py-0.5 text-[11px] dark:bg-navy-800 ${vencido ? 'border-signal-red text-signal-red' : 'border-navy-200 text-navy-500 dark:border-navy-600 dark:text-navy-300'}`}
+        value={kr.vencimiento ?? ''}
+        disabled={editar.isPending}
+        onChange={(e) => void editar.mutateAsync({ krId: kr.id, patch: { vencimiento: e.target.value || null } })}
+        title="Vencimiento del KR (se desplaza si se mueve la fecha de inicio)"
+      />
+    </li>
   );
 }
 

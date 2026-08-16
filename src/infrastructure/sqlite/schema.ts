@@ -150,7 +150,15 @@ CREATE TABLE IF NOT EXISTS alumnos (
   canal_origen         TEXT,
   moneda               TEXT NOT NULL DEFAULT 'ARS',
   activo               INTEGER NOT NULL DEFAULT 1,
+  -- Ciclo de vida (ticket 7). CHECK porque es estructural, como diagnosticos.origen.
+  estado               TEXT NOT NULL DEFAULT 'ACTIVO' CHECK(estado IN ('ACTIVO','PAUSADO','FINALIZADO','ABANDONADO')),
+  estado_actualizado_en TEXT,
   id_cierre_vinculado  TEXT,
+  -- Borrado LÓGICO (ticket 7): no null = papelera. TODA consulta del módulo
+  -- filtra eliminado_en IS NULL; el borrado físico existe solo desde la
+  -- papelera (ADMIN) y cascadea por las FKs.
+  eliminado_en         TEXT,
+  eliminado_por        TEXT REFERENCES usuarios(id),
   creado_en            TEXT NOT NULL
 );
 
@@ -297,6 +305,11 @@ CREATE TABLE IF NOT EXISTS krs (
   orden     INTEGER NOT NULL,
   texto     TEXT NOT NULL,
   meta      TEXT,
+  -- Ticket 7: el cronograma del tablero. vencimiento lo fija el consultor (el
+  -- contrato de la skill no trae fechas) y se desplaza junto con fecha_inicio;
+  -- cumplido_en alimenta el semáforo de salud (avance = cumplidos/totales).
+  vencimiento TEXT,
+  cumplido_en TEXT,
   creado_en TEXT NOT NULL
 );
 
@@ -344,6 +357,21 @@ CREATE TABLE IF NOT EXISTS seguimiento_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_seguimiento_plan ON seguimiento_tokens(plan_id);
 
+-- Auditoría de cambios de fecha_inicio (ticket 7): la fecha es el origen del
+-- cálculo de fase y salud — moverla sin rastro dejaría un semáforo imposible
+-- de explicar. Cada cambio desplaza además los vencimientos de los KRs.
+CREATE TABLE IF NOT EXISTS plan_fecha_historial (
+  id              TEXT PRIMARY KEY,
+  plan_id         TEXT NOT NULL REFERENCES planes(id) ON DELETE CASCADE,
+  fecha_anterior  TEXT NOT NULL,
+  fecha_nueva     TEXT NOT NULL,
+  cambiado_por    TEXT NOT NULL REFERENCES usuarios(id),
+  cambiado_en     TEXT NOT NULL,
+  motivo          TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_fecha_historial ON plan_fecha_historial(plan_id);
+
 
 CREATE INDEX IF NOT EXISTS idx_alumnos_consultor   ON alumnos(consultor_id);
 CREATE INDEX IF NOT EXISTS idx_diagnosticos_alumno ON diagnosticos(alumno_id);
@@ -380,6 +408,14 @@ export function migrar(db: Database.Database): void {
   agregarColumnaSiFalta(db, 'diagnosticos', 'meta_clientes_90d', 'INTEGER');
   agregarColumnaSiFalta(db, 'diagnosticos', 'meta_capital_90d', 'REAL');
   agregarColumnaSiFalta(db, 'diagnosticos', 'meta_ganancia_90d', 'REAL');
+  // Módulo de alumnos · panel de control (ticket 7): estado del alumno,
+  // borrado lógico y cronograma/cumplimiento de KRs.
+  agregarColumnaSiFalta(db, 'alumnos', 'estado', "TEXT NOT NULL DEFAULT 'ACTIVO' CHECK(estado IN ('ACTIVO','PAUSADO','FINALIZADO','ABANDONADO'))");
+  agregarColumnaSiFalta(db, 'alumnos', 'estado_actualizado_en', 'TEXT');
+  agregarColumnaSiFalta(db, 'alumnos', 'eliminado_en', 'TEXT');
+  agregarColumnaSiFalta(db, 'alumnos', 'eliminado_por', 'TEXT REFERENCES usuarios(id)');
+  agregarColumnaSiFalta(db, 'krs', 'vencimiento', 'TEXT');
+  agregarColumnaSiFalta(db, 'krs', 'cumplido_en', 'TEXT');
   // Comisiones: flags de setting a nivel de pago + registro de liquidaciones.
   agregarColumnaSiFalta(db, 'pagos', 'aplica_setting', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'pagos', 'setter', 'TEXT');

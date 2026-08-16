@@ -25,7 +25,11 @@ const ALUMNO: Alumno = {
   canalOrigen: 'Instagram',
   moneda: 'ARS',
   activo: true,
+  estado: 'ACTIVO',
+  estadoActualizadoEn: null,
   idCierreVinculado: null,
+  eliminadoEn: null,
+  eliminadoPor: null,
   creadoEn: '2026-08-01T00:00:00.000Z',
 };
 

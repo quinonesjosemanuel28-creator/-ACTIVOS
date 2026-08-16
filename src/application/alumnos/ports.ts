@@ -10,7 +10,8 @@
  * un botón escondido.
  */
 import type { Alumno, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
-import type { Checkin, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { CambioFechaPlan, Checkin, Kr, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { EstadoAlumno } from '../../domain/alumnos/panel';
 
 export interface FiltrosAlumnos {
   /**
@@ -19,14 +20,29 @@ export interface FiltrosAlumnos {
    */
   consultorId?: string;
   activo?: boolean;
+  estado?: EstadoAlumno;
   /** Búsqueda libre por nombre o marca comercial. */
   q?: string;
 }
 
+/**
+ * REGLA del ticket 7: obtener/listar NUNCA devuelven eliminados. El borrado
+ * lógico se filtra en la CONSULTA (eliminado_en IS NULL), no en la interfaz —
+ * así ningún listado, conteo ni exportación se olvida del filtro. La papelera
+ * tiene sus propios métodos, que solo ven eliminados.
+ */
 export interface AlumnosRepo {
   obtener(id: string): Promise<Alumno | null>;
   listar(filtros?: FiltrosAlumnos): Promise<Alumno[]>;
   guardar(alumno: Alumno): Promise<void>; // upsert
+  /** Borrado LÓGICO: manda la ficha a la papelera. */
+  eliminar(id: string, eliminadoEn: string, eliminadoPor: string): Promise<void>;
+  // ── Papelera (solo ADMIN llega acá por ruta) ──
+  listarEliminados(): Promise<Alumno[]>;
+  obtenerEliminado(id: string): Promise<Alumno | null>;
+  restaurar(id: string): Promise<void>;
+  /** Borrado FÍSICO, con cascada por FK. Solo actúa sobre filas ya en papelera. */
+  eliminarDefinitivo(id: string): Promise<void>;
 }
 
 export interface DiagnosticosRepo {
@@ -79,6 +95,18 @@ export interface PlanesRepo {
   /** Planes del alumno con todo adentro, del más nuevo al más viejo por fecha_inicio. */
   listarPorAlumno(alumnoId: string): Promise<PlanCompleto[]>;
   obtener(planId: string): Promise<PlanCompleto | null>;
+  /**
+   * Cambio de fecha de inicio (ticket 7), TRANSACCIONAL: mueve la fecha,
+   * desplaza los vencimientos cargados de los KRs por el delta entre fechas y
+   * deja el rastro en plan_fecha_historial — o todo o nada. Devuelve cuántos
+   * KRs se desplazaron.
+   */
+  cambiarFechaInicio(cambio: CambioFechaPlan): Promise<number>;
+  listarCambiosFecha(planId: string): Promise<CambioFechaPlan[]>;
+  /** KR con su contexto (plan y alumno), para bajar el ámbito hasta la fila. */
+  buscarKr(krId: string): Promise<{ kr: Kr; planId: string; alumnoId: string } | null>;
+  /** Cumplimiento y/o vencimiento de un KR. `undefined` = no tocar ese campo. */
+  actualizarKr(krId: string, campos: { cumplidoEn?: string | null; vencimiento?: string | null }): Promise<void>;
 }
 
 export interface SeguimientoTokensRepo {

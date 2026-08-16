@@ -20,7 +20,8 @@ import {
   type RespuestasDiagnostico,
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
-import type { Accion, Checkin, Kr, Okr, Plan, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
+import { diasEntre } from '../../domain/alumnos/plan';
+import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
   CheckinsRepo,
@@ -69,7 +70,11 @@ interface AlumnoRow {
   canal_origen: string | null;
   moneda: string;
   activo: number;
+  estado: string;
+  estado_actualizado_en: string | null;
   id_cierre_vinculado: string | null;
+  eliminado_en: string | null;
+  eliminado_por: string | null;
   creado_en: string;
 }
 
@@ -85,18 +90,24 @@ const toAlumno = (r: AlumnoRow): Alumno => ({
   canalOrigen: r.canal_origen,
   moneda: r.moneda,
   activo: r.activo === 1,
+  estado: r.estado as Alumno['estado'],
+  estadoActualizadoEn: r.estado_actualizado_en,
   idCierreVinculado: r.id_cierre_vinculado,
+  eliminadoEn: r.eliminado_en,
+  eliminadoPor: r.eliminado_por,
   creadoEn: r.creado_en,
 });
 
 export function crearAlumnosRepo(db: Database.Database): AlumnosRepo {
   return {
     async obtener(id) {
-      const row = db.prepare('SELECT * FROM alumnos WHERE id = ?').get(id) as AlumnoRow | undefined;
+      // eliminado_en IS NULL en la CONSULTA: una ficha en papelera no existe
+      // para el módulo (ni ficha, ni token público, ni exportación).
+      const row = db.prepare('SELECT * FROM alumnos WHERE id = ? AND eliminado_en IS NULL').get(id) as AlumnoRow | undefined;
       return row ? toAlumno(row) : null;
     },
     async listar(filtros = {}) {
-      const where: string[] = [];
+      const where: string[] = ['eliminado_en IS NULL'];
       const params: unknown[] = [];
       // El ámbito por fila aterriza acá: con un consultor acotado, la consulta
       // NUNCA sale de su cartera.
@@ -108,29 +119,56 @@ export function crearAlumnosRepo(db: Database.Database): AlumnosRepo {
         where.push('activo = ?');
         params.push(filtros.activo ? 1 : 0);
       }
+      if (filtros.estado) {
+        where.push('estado = ?');
+        params.push(filtros.estado);
+      }
       if (filtros.q) {
         where.push('(LOWER(nombre) LIKE ? OR LOWER(COALESCE(marca_comercial, id)) LIKE ?)');
         const like = `%${filtros.q.toLowerCase()}%`;
         params.push(like, like);
       }
-      const sql = `SELECT * FROM alumnos ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY nombre`;
+      const sql = `SELECT * FROM alumnos WHERE ${where.join(' AND ')} ORDER BY nombre`;
       return (db.prepare(sql).all(...params) as AlumnoRow[]).map(toAlumno);
     },
     async guardar(a) {
       db.prepare(
         `INSERT INTO alumnos
           (id, consultor_id, nombre, edad, zona, whatsapp, marca_comercial, programa,
-           canal_origen, moneda, activo, id_cierre_vinculado, creado_en)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+           canal_origen, moneda, activo, estado, estado_actualizado_en, id_cierre_vinculado,
+           eliminado_en, eliminado_por, creado_en)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
            consultor_id=excluded.consultor_id, nombre=excluded.nombre, edad=excluded.edad,
            zona=excluded.zona, whatsapp=excluded.whatsapp, marca_comercial=excluded.marca_comercial,
            programa=excluded.programa, canal_origen=excluded.canal_origen, moneda=excluded.moneda,
-           activo=excluded.activo, id_cierre_vinculado=excluded.id_cierre_vinculado`,
+           activo=excluded.activo, estado=excluded.estado, estado_actualizado_en=excluded.estado_actualizado_en,
+           id_cierre_vinculado=excluded.id_cierre_vinculado`,
       ).run(
         a.id, a.consultorId, a.nombre, a.edad, a.zona, a.whatsapp, a.marcaComercial, a.programa,
-        a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.idCierreVinculado, a.creadoEn,
+        a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.estado, a.estadoActualizadoEn, a.idCierreVinculado,
+        a.eliminadoEn, a.eliminadoPor, a.creadoEn,
       );
+    },
+    async eliminar(id, eliminadoEn, eliminadoPor) {
+      db.prepare('UPDATE alumnos SET eliminado_en = ?, eliminado_por = ? WHERE id = ? AND eliminado_en IS NULL').run(
+        eliminadoEn, eliminadoPor, id,
+      );
+    },
+    async listarEliminados() {
+      const rows = db.prepare('SELECT * FROM alumnos WHERE eliminado_en IS NOT NULL ORDER BY eliminado_en DESC').all() as AlumnoRow[];
+      return rows.map(toAlumno);
+    },
+    async obtenerEliminado(id) {
+      const row = db.prepare('SELECT * FROM alumnos WHERE id = ? AND eliminado_en IS NOT NULL').get(id) as AlumnoRow | undefined;
+      return row ? toAlumno(row) : null;
+    },
+    async restaurar(id) {
+      db.prepare('UPDATE alumnos SET eliminado_en = NULL, eliminado_por = NULL WHERE id = ?').run(id);
+    },
+    async eliminarDefinitivo(id) {
+      // El WHERE exige papelera: nunca se borra físico algo que sigue vivo.
+      db.prepare('DELETE FROM alumnos WHERE id = ? AND eliminado_en IS NOT NULL').run(id);
     },
   };
 }
@@ -315,8 +353,19 @@ export function crearHistorialRepo(db: Database.Database): HistorialRepo {
 
 interface PlanRow { id: string; alumno_id: string; fecha_inicio: string; etapa: string | null; objetivo_90d: string | null; version: number; creado_en: string }
 interface OkrRow { id: string; plan_id: string; orden: number; objetivo: string; creado_en: string }
-interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; creado_en: string }
+interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; vencimiento: string | null; cumplido_en: string | null; creado_en: string }
 interface AccionRow { id: string; plan_id: string; okr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
+interface CambioFechaRow { id: string; plan_id: string; fecha_anterior: string; fecha_nueva: string; cambiado_por: string; cambiado_en: string; motivo: string | null }
+
+const toKr = (k: KrRow): Kr => ({
+  id: k.id, okrId: k.okr_id, orden: k.orden, texto: k.texto, meta: k.meta,
+  vencimiento: k.vencimiento, cumplidoEn: k.cumplido_en, creadoEn: k.creado_en,
+});
+
+const toCambioFecha = (r: CambioFechaRow): CambioFechaPlan => ({
+  id: r.id, planId: r.plan_id, fechaAnterior: r.fecha_anterior, fechaNueva: r.fecha_nueva,
+  cambiadoPor: r.cambiado_por, cambiadoEn: r.cambiado_en, motivo: r.motivo,
+});
 
 const toPlan = (r: PlanRow): Plan => ({
   id: r.id, alumnoId: r.alumno_id, fechaInicio: r.fecha_inicio,
@@ -328,9 +377,7 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
     const okrs = (db.prepare('SELECT * FROM okrs WHERE plan_id = ? ORDER BY orden').all(p.id) as OkrRow[]).map(
       (o): Okr & { krs: Kr[] } => ({
         id: o.id, planId: o.plan_id, orden: o.orden, objetivo: o.objetivo, creadoEn: o.creado_en,
-        krs: (db.prepare('SELECT * FROM krs WHERE okr_id = ? ORDER BY orden').all(o.id) as KrRow[]).map((k) => ({
-          id: k.id, okrId: k.okr_id, orden: k.orden, texto: k.texto, meta: k.meta, creadoEn: k.creado_en,
-        })),
+        krs: (db.prepare('SELECT * FROM krs WHERE okr_id = ? ORDER BY orden').all(o.id) as KrRow[]).map(toKr),
       }),
     );
     const acciones = (db.prepare('SELECT * FROM acciones WHERE plan_id = ? ORDER BY fase, orden').all(p.id) as AccionRow[]).map(
@@ -353,8 +400,8 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
         o.id, o.planId, o.orden, o.objetivo, o.creadoEn,
       );
       for (const k of o.krs) {
-        db.prepare('INSERT INTO krs (id, okr_id, orden, texto, meta, creado_en) VALUES (?,?,?,?,?,?)').run(
-          k.id, k.okrId, k.orden, k.texto, k.meta, k.creadoEn,
+        db.prepare('INSERT INTO krs (id, okr_id, orden, texto, meta, vencimiento, cumplido_en, creado_en) VALUES (?,?,?,?,?,?,?,?)').run(
+          k.id, k.okrId, k.orden, k.texto, k.meta, k.vencimiento, k.cumplidoEn, k.creadoEn,
         );
       }
     }
@@ -363,6 +410,23 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
         a.id, a.planId, a.okrId, a.fase, a.orden, a.texto, a.creadoEn,
       );
     }
+  });
+
+  // El cambio de fecha mueve fecha_inicio + vencimientos + historial en UNA
+  // transacción: una fecha movida sin sus vencimientos dejaría un cronograma
+  // desfasado imposible de detectar a ojo.
+  const cambiarFechaTx = db.transaction((c: CambioFechaPlan, deltaDias: number): number => {
+    db.prepare('UPDATE planes SET fecha_inicio = ? WHERE id = ?').run(c.fechaNueva, c.planId);
+    const r = db.prepare(
+      `UPDATE krs SET vencimiento = date(vencimiento, ? || ' days')
+       WHERE vencimiento IS NOT NULL
+         AND okr_id IN (SELECT id FROM okrs WHERE plan_id = ?)`,
+    ).run(String(deltaDias), c.planId);
+    db.prepare(
+      `INSERT INTO plan_fecha_historial (id, plan_id, fecha_anterior, fecha_nueva, cambiado_por, cambiado_en, motivo)
+       VALUES (?,?,?,?,?,?,?)`,
+    ).run(c.id, c.planId, c.fechaAnterior, c.fechaNueva, c.cambiadoPor, c.cambiadoEn, c.motivo);
+    return r.changes;
   });
 
   return {
@@ -378,6 +442,32 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
     async obtener(planId) {
       const row = db.prepare('SELECT * FROM planes WHERE id = ?').get(planId) as PlanRow | undefined;
       return row ? armarCompleto(row) : null;
+    },
+    async cambiarFechaInicio(cambio) {
+      const delta = diasEntre(cambio.fechaAnterior, cambio.fechaNueva);
+      return cambiarFechaTx(cambio, delta);
+    },
+    async listarCambiosFecha(planId) {
+      const rows = db
+        .prepare('SELECT * FROM plan_fecha_historial WHERE plan_id = ? ORDER BY cambiado_en DESC')
+        .all(planId) as CambioFechaRow[];
+      return rows.map(toCambioFecha);
+    },
+    async buscarKr(krId) {
+      const row = db.prepare(
+        `SELECT k.*, o.plan_id, p.alumno_id FROM krs k
+         JOIN okrs o ON o.id = k.okr_id JOIN planes p ON p.id = o.plan_id
+         WHERE k.id = ?`,
+      ).get(krId) as (KrRow & { plan_id: string; alumno_id: string }) | undefined;
+      return row ? { kr: toKr(row), planId: row.plan_id, alumnoId: row.alumno_id } : null;
+    },
+    async actualizarKr(krId, campos) {
+      const set: string[] = [];
+      const params: unknown[] = [];
+      if (campos.cumplidoEn !== undefined) { set.push('cumplido_en = ?'); params.push(campos.cumplidoEn); }
+      if (campos.vencimiento !== undefined) { set.push('vencimiento = ?'); params.push(campos.vencimiento); }
+      if (set.length === 0) return;
+      db.prepare(`UPDATE krs SET ${set.join(', ')} WHERE id = ?`).run(...params, krId);
     },
   };
 }

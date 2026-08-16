@@ -44,14 +44,30 @@ import {
 } from '../../domain/alumnos/plan';
 import { advertenciasDe, bloquePlanSchema, extraerBloque, type BloquePlan } from './planSchemas';
 import {
+  avanceKrs,
+  calcularSalud,
+  chipFase,
+  diasDelPlan,
+  puntajeRiesgo,
+  type ChipFase,
+  type EstadoAlumno,
+  type Salud,
+  type SaludCalculada,
+} from '../../domain/alumnos/panel';
+import { fechaCierreEstimada, diasEntre, type CambioFechaPlan, type Kr as KrPlan } from '../../domain/alumnos/plan';
+import {
   aRespuestas,
   alumnoInputSchema,
   alumnoPatchSchema,
   diagnosticoInputSchema,
   diagnosticoPatchSchema,
+  estadoAlumnoInputSchema,
+  fechaInicioInputSchema,
   fichaPublicaSchema,
+  krPatchSchema,
   type FichaPublica,
 } from './schemas';
+import type { UsuariosRepo } from '../auth/ports';
 import type { FiltrosAlumnos, ReposAlumnos } from './ports';
 
 export class ErrorAlumnos extends Error {
@@ -97,7 +113,11 @@ export async function crearAlumno(
     canalOrigen: input.canalOrigen ?? null,
     moneda: input.moneda,
     activo: true,
+    estado: 'ACTIVO',
+    estadoActualizadoEn: null,
     idCierreVinculado: input.idCierreVinculado ?? null,
+    eliminadoEn: null,
+    eliminadoPor: null,
     creadoEn: ahora,
   };
   await repos.alumnos.guardar(alumno);
@@ -497,6 +517,10 @@ export async function cargarPlan(
         orden: i + 1,
         texto: k.texto,
         meta: k.meta ?? null,
+        // El contrato de la skill no trae fechas ni cumplimiento: los fija el
+        // consultor en el panel (ticket 7).
+        vencimiento: null,
+        cumplidoEn: null,
         creadoEn: ahora,
       })),
     };
@@ -607,6 +631,9 @@ async function planDeToken(repos: ReposAlumnos, token: string, ahora: string): P
   if (!estado.valido) throw new ErrorAlumnos('TOKEN_INVALIDO', 'El link no es válido.', estado.motivo);
   const pc = await repos.planes.obtener(fila!.planId);
   if (!pc) throw new ErrorAlumnos('TOKEN_INVALIDO', 'El link no es válido.', 'inexistente');
+  // Alumno en papelera = el link muere con él (obtener filtra eliminados).
+  const alumno = await repos.alumnos.obtener(pc.plan.alumnoId);
+  if (!alumno) throw new ErrorAlumnos('TOKEN_INVALIDO', 'El link no es válido.', 'inexistente');
   return pc;
 }
 
@@ -678,6 +705,8 @@ export interface AvancePlan {
   fases: { fase: Fase; total: number; hechas: number; acciones: AvanceAccion[] }[];
   /** El link vivo, para copiarlo desde el panel (null = no emitido o revocado). */
   link: { token: string; expiraEn: string } | null;
+  /** Cambios de fecha de inicio, del más nuevo al más viejo (ticket 7). */
+  cambiosFecha: CambioFechaPlan[];
 }
 
 /** El tablero de seguimiento del consultor. Lo tildado es lo que el alumno DECLARA. */
@@ -718,6 +747,7 @@ export async function avancePlan(
     ultimaActividad: ultimaActividadAlumno(checkins),
     fases,
     link: vigente ? { token: vigente.token, expiraEn: vigente.expiraEn } : null,
+    cambiosFecha: await repos.planes.listarCambiosFecha(planId),
   };
 }
 
@@ -730,4 +760,235 @@ export async function listarDiagnosticos(
   const alumno = await obtenerAlumno(repos, alcance, alumnoId);
   if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
   return repos.diagnosticos.listarPorAlumno(alumnoId);
+}
+
+// ───────────────────────── Panel de control (ticket 7) ─────────────────────────
+
+/**
+ * Cambio de estado del alumno (ACTIVO/PAUSADO/FINALIZADO/ABANDONADO). El
+ * ámbito ya garantiza quién puede: el consultor ASIGNADO (su cartera) o ADMIN
+ * (todas). Registra estadoActualizadoEn.
+ */
+export async function cambiarEstadoAlumno(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  id: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<Alumno> {
+  const alumno = await obtenerAlumno(repos, alcance, id);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+  const { estado } = estadoAlumnoInputSchema.parse(entrada);
+  if (estado === alumno.estado) return alumno;
+  const actualizado: Alumno = { ...alumno, estado, estadoActualizadoEn: ahora };
+  await repos.alumnos.guardar(actualizado);
+  return actualizado;
+}
+
+/**
+ * Cambio de fecha de inicio del plan. Desplaza TODOS los vencimientos
+ * cargados de los KRs por el mismo delta (el cronograma entero se corre) y
+ * deja el rastro en plan_fecha_historial. La confirmación con "cuántos KRs se
+ * van a mover" la arma la UI con el plan que ya tiene; acá se ejecuta.
+ */
+export async function cambiarFechaInicioPlan(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  usuarioId: string,
+  planId: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<{ fechaAnterior: string; fechaNueva: string; deltaDias: number; krsDesplazados: number }> {
+  const pc = await planAlcanzado(repos, alcance, planId);
+  const { fechaNueva, motivo } = fechaInicioInputSchema.parse(entrada);
+  const fechaAnterior = pc.plan.fechaInicio;
+  if (fechaNueva === fechaAnterior) {
+    throw new ErrorAlumnos('VALIDACION', 'El plan ya arranca ese día: no hay nada que cambiar.');
+  }
+  const krsDesplazados = await repos.planes.cambiarFechaInicio({
+    id: randomUUID(),
+    planId,
+    fechaAnterior,
+    fechaNueva,
+    cambiadoPor: usuarioId,
+    cambiadoEn: ahora,
+    motivo: motivo ?? null,
+  });
+  return { fechaAnterior, fechaNueva, deltaDias: diasEntre(fechaAnterior, fechaNueva), krsDesplazados };
+}
+
+/**
+ * Seguimiento de un KR desde el tablero del consultor: tildar cumplimiento
+ * (con fecha) y/o fijar el vencimiento. El ámbito baja hasta la fila vía el
+ * plan del KR — el KR de un alumno ajeno no existe.
+ */
+export async function editarKr(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  krId: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<KrPlan> {
+  const contexto = await repos.planes.buscarKr(krId);
+  const alumno = contexto ? await repos.alumnos.obtener(contexto.alumnoId) : null;
+  if (!contexto || !alumno || !alcanzaFila(alcance, alumno.consultorId)) {
+    throw new ErrorAlumnos('NO_ENCONTRADO', 'KR inexistente.');
+  }
+  const patch = krPatchSchema.parse(entrada);
+  const campos: { cumplidoEn?: string | null; vencimiento?: string | null } = {};
+  if (patch.cumplido !== undefined) campos.cumplidoEn = patch.cumplido ? ahora : null;
+  if (patch.vencimiento !== undefined) campos.vencimiento = patch.vencimiento;
+  await repos.planes.actualizarKr(krId, campos);
+  return {
+    ...contexto.kr,
+    cumplidoEn: campos.cumplidoEn !== undefined ? campos.cumplidoEn : contexto.kr.cumplidoEn,
+    vencimiento: campos.vencimiento !== undefined ? campos.vencimiento : contexto.kr.vencimiento,
+  };
+}
+
+// ───── El panel: listado con fase, salud y orden por riesgo ─────
+
+export interface FiltrosPanel {
+  q?: string;
+  estado?: EstadoAlumno;
+  salud?: Salud | 'NEUTRO';
+  /** Cosmético (ADMIN filtra por cartera); con ámbito acotado el server lo pisa. */
+  consultorId?: string;
+}
+
+export interface FilaPanel {
+  alumno: Alumno;
+  consultorNombre: string | null;
+  /** Plan vigente (el de fecha_inicio más reciente), si hay. */
+  plan: { id: string; fechaInicio: string; fechaCierreEstimada: string; dias: number; chip: ChipFase } | null;
+  krs: { totales: number; cumplidos: number };
+  salud: SaludCalculada;
+  /** Último tilde del ALUMNO vía su link (la señal de ritmo). */
+  ultimaActividad: string | null;
+  /** Menor = más arriba. El ORDER BY del panel. */
+  riesgo: number;
+}
+
+/**
+ * El panel de control de la cartera: cada alumno con su fase, semáforo y
+ * riesgo, ORDENADO por riesgo descendente — los trabados gritan arriba, los
+ * que van bien no hacen ruido. El ámbito manda igual que en el listado plano.
+ */
+export async function panelAlumnos(
+  repos: ReposAlumnos,
+  usuarios: UsuariosRepo,
+  alcance: Alcance,
+  filtros: FiltrosPanel = {},
+  ahora = ahoraIso(),
+): Promise<FilaPanel[]> {
+  const alumnos = await repos.alumnos.listar({
+    q: filtros.q,
+    estado: filtros.estado,
+    consultorId: titularSegunAlcance(filtros.consultorId, alcance),
+  });
+  const nombrePorId = new Map((await usuarios.listar()).map((u) => [u.id, u.nombre]));
+
+  const filas: FilaPanel[] = [];
+  for (const alumno of alumnos) {
+    const vigente = (await repos.planes.listarPorAlumno(alumno.id))[0] ?? null;
+    const krs = vigente ? avanceKrs(vigente.okrs.flatMap((o) => o.krs)) : { totales: 0, cumplidos: 0 };
+    const salud = calcularSalud(
+      {
+        estado: alumno.estado,
+        fechaInicio: vigente?.plan.fechaInicio ?? null,
+        krsTotales: krs.totales,
+        krsCumplidos: krs.cumplidos,
+      },
+      ahora,
+    );
+    const ultimaActividad = vigente
+      ? ultimaActividadAlumno(await repos.checkins.listarPorPlan(vigente.plan.id))
+      : null;
+    filas.push({
+      alumno,
+      consultorNombre: nombrePorId.get(alumno.consultorId) ?? null,
+      plan: vigente
+        ? {
+            id: vigente.plan.id,
+            fechaInicio: vigente.plan.fechaInicio,
+            fechaCierreEstimada: fechaCierreEstimada(vigente.plan.fechaInicio),
+            dias: diasDelPlan(vigente.plan.fechaInicio, ahora),
+            chip: chipFase(vigente.plan.fechaInicio, ahora),
+          }
+        : null,
+      krs,
+      salud,
+      ultimaActividad,
+      riesgo: puntajeRiesgo(alumno.estado, salud.salud),
+    });
+  }
+
+  const filtradas = filtros.salud
+    ? filas.filter((f) => (filtros.salud === 'NEUTRO' ? f.salud.salud === null : f.salud.salud === filtros.salud))
+    : filas;
+
+  // Riesgo primero; a igual riesgo, la brecha más negativa (el más atrasado)
+  // arriba; después alfabético para que el orden sea estable.
+  return filtradas.sort(
+    (a, b) =>
+      a.riesgo - b.riesgo ||
+      (a.salud.brecha ?? 0) - (b.salud.brecha ?? 0) ||
+      a.alumno.nombre.localeCompare(b.alumno.nombre),
+  );
+}
+
+// ───── Papelera (borrado lógico; rutas solo ADMIN vía 'eliminar_alumnos') ─────
+
+/** Manda la ficha a la papelera. Desaparece de todo listado al instante. */
+export async function eliminarAlumno(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  usuarioId: string,
+  id: string,
+  ahora = ahoraIso(),
+): Promise<{ ok: true }> {
+  const alumno = await obtenerAlumno(repos, alcance, id);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+  await repos.alumnos.eliminar(id, ahora, usuarioId);
+  return { ok: true };
+}
+
+export interface FilaPapelera {
+  alumno: Alumno;
+  /** Quién lo eliminó, ya resuelto a nombre (la papelera muestra responsable). */
+  eliminadoPorNombre: string | null;
+}
+
+export async function listarPapelera(repos: ReposAlumnos, usuarios: UsuariosRepo): Promise<FilaPapelera[]> {
+  const nombrePorId = new Map((await usuarios.listar()).map((u) => [u.id, u.nombre]));
+  return (await repos.alumnos.listarEliminados()).map((alumno) => ({
+    alumno,
+    eliminadoPorNombre: alumno.eliminadoPor ? nombrePorId.get(alumno.eliminadoPor) ?? null : null,
+  }));
+}
+
+export async function restaurarAlumno(repos: ReposAlumnos, id: string): Promise<Alumno> {
+  const alumno = await repos.alumnos.obtenerEliminado(id);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'No está en la papelera.');
+  await repos.alumnos.restaurar(id);
+  return { ...alumno, eliminadoEn: null, eliminadoPor: null };
+}
+
+/**
+ * Borrado FÍSICO, solo desde la papelera y confirmando con el NOMBRE exacto
+ * del alumno — el mismo patrón de fricción que el reseteo de cierres. Cascadea
+ * diagnósticos, tokens, planes y checkins por FK.
+ */
+export async function eliminarAlumnoDefinitivo(
+  repos: ReposAlumnos,
+  id: string,
+  confirmacion: unknown,
+): Promise<{ ok: true }> {
+  const alumno = await repos.alumnos.obtenerEliminado(id);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'No está en la papelera.');
+  if (typeof confirmacion !== 'string' || confirmacion.trim() !== alumno.nombre) {
+    throw new ErrorAlumnos('VALIDACION', 'Para borrar definitivamente escribí el nombre exacto del alumno.');
+  }
+  await repos.alumnos.eliminarDefinitivo(id);
+  return { ok: true };
 }

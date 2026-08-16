@@ -11,7 +11,8 @@ import type { ResumenEgresos } from '@domain/egresos/metrics';
 import type { ComisionesDelMes } from '@domain/comisiones/calculo';
 import type { Accion, Rol, UsuarioPublico } from '@domain/auth/permisos';
 import type { Alumno, Diagnostico, TokenDiagnostico } from '@domain/alumnos/tipos';
-import type { Fase, PlanCompleto, TokenSeguimiento } from '@domain/alumnos/plan';
+import type { CambioFechaPlan, Fase, Kr, PlanCompleto, TokenSeguimiento } from '@domain/alumnos/plan';
+import type { ChipFase, EstadoAlumno, Salud, SaludCalculada } from '@domain/alumnos/panel';
 
 // ───────────────────── Auth / sesión ─────────────────────
 
@@ -301,6 +302,23 @@ export const api = {
 
   // Módulo de alumnos (el ámbito por fila lo aplica el server; acá no se filtra nada)
   alumnos: (q?: string) => req<Alumno[]>(`/alumnos${qs({ q })}`),
+  // Panel de control (ticket 7): la cartera con fase, salud y orden por riesgo.
+  panelAlumnos: (f: FiltrosPanelUI = {}) =>
+    req<FilaPanelUI[]>(`/alumnos/panel${qs({ q: f.q, estado: f.estado, salud: f.salud, consultor: f.consultor })}`),
+  cambiarEstadoAlumno: (id: string, estado: EstadoAlumno) =>
+    req<Alumno>(`/alumnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado }) }),
+  eliminarAlumno: (id: string) => req(`/alumnos/${id}`, { method: 'DELETE' }),
+  papelera: () => req<FilaPapeleraUI[]>('/alumnos/papelera'),
+  restaurarAlumno: (id: string) => req<Alumno>(`/alumnos/${id}/restaurar`, { method: 'POST' }),
+  eliminarAlumnoDefinitivo: (id: string, confirmacion: string) =>
+    req(`/alumnos/${id}/definitivo`, { method: 'DELETE', body: JSON.stringify({ confirmacion }) }),
+  cambiarFechaInicio: (planId: string, fechaNueva: string, motivo?: string) =>
+    req<{ fechaAnterior: string; fechaNueva: string; deltaDias: number; krsDesplazados: number }>(
+      `/planes/${planId}/fecha-inicio`,
+      { method: 'PUT', body: JSON.stringify({ fechaNueva, motivo }) },
+    ),
+  editarKr: (krId: string, patch: { cumplido?: boolean; vencimiento?: string | null }) =>
+    req<Kr>(`/krs/${krId}`, { method: 'PUT', body: JSON.stringify(patch) }),
   alumno: (id: string) => req<Alumno>(`/alumnos/${id}`),
   crearAlumno: (a: unknown) => req<Alumno>('/alumnos', { method: 'POST', body: JSON.stringify(a) }),
   editarAlumno: (id: string, a: unknown) => req<Alumno>(`/alumnos/${id}`, { method: 'PUT', body: JSON.stringify(a) }),
@@ -339,6 +357,32 @@ export interface AvancePlanUI {
     acciones: { id: string; texto: string; fase: Fase; hecha: boolean; okrOrden: number | null; ultimoCambio: string | null }[];
   }[];
   link: { token: string; expiraEn: string } | null;
+  cambiosFecha: CambioFechaPlan[];
+}
+
+// ───── Panel de control (ticket 7) ─────
+
+export interface FiltrosPanelUI {
+  q?: string;
+  estado?: EstadoAlumno;
+  salud?: Salud | 'NEUTRO';
+  consultor?: string;
+}
+
+/** Fila del panel (espeja FilaPanel del caso de uso). */
+export interface FilaPanelUI {
+  alumno: Alumno;
+  consultorNombre: string | null;
+  plan: { id: string; fechaInicio: string; fechaCierreEstimada: string; dias: number; chip: ChipFase } | null;
+  krs: { totales: number; cumplidos: number };
+  salud: SaludCalculada;
+  ultimaActividad: string | null;
+  riesgo: number;
+}
+
+export interface FilaPapeleraUI {
+  alumno: Alumno;
+  eliminadoPorNombre: string | null;
 }
 
 /** Lo que devuelve la previa: el bloque validado + lo que hay que mirar antes de confirmar. */

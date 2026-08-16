@@ -16,7 +16,8 @@ import {
   type RespuestasDiagnostico,
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
-import type { Accion, Checkin, Kr, Okr, Plan, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
+import { diasEntre } from '../../domain/alumnos/plan';
+import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
   CheckinsRepo,
@@ -56,7 +57,11 @@ interface AlumnoRow {
   canal_origen: string | null;
   moneda: string;
   activo: number;
+  estado: string;
+  estado_actualizado_en: string | null;
   id_cierre_vinculado: string | null;
+  eliminado_en: string | null;
+  eliminado_por: string | null;
   creado_en: string;
 }
 
@@ -72,19 +77,25 @@ const toAlumno = (r: AlumnoRow): Alumno => ({
   canalOrigen: r.canal_origen,
   moneda: r.moneda,
   activo: r.activo === 1,
+  estado: r.estado as Alumno['estado'],
+  estadoActualizadoEn: r.estado_actualizado_en,
   idCierreVinculado: r.id_cierre_vinculado,
+  eliminadoEn: r.eliminado_en,
+  eliminadoPor: r.eliminado_por,
   creadoEn: r.creado_en,
 });
 
 export function crearAlumnosRepoPg(pool: Pool): AlumnosRepo {
   return {
     async obtener(id) {
-      const r = await pool.query('SELECT * FROM alumnos WHERE id = $1', [id]);
+      // eliminado_en IS NULL en la CONSULTA: una ficha en papelera no existe
+      // para el módulo (ni ficha, ni token público, ni exportación).
+      const r = await pool.query('SELECT * FROM alumnos WHERE id = $1 AND eliminado_en IS NULL', [id]);
       const row = r.rows[0] as AlumnoRow | undefined;
       return row ? toAlumno(row) : null;
     },
     async listar(filtros = {}) {
-      const where: string[] = [];
+      const where: string[] = ['eliminado_en IS NULL'];
       const params: unknown[] = [];
       const n = () => `$${params.length}`;
       if (filtros.consultorId) {
@@ -95,11 +106,15 @@ export function crearAlumnosRepoPg(pool: Pool): AlumnosRepo {
         params.push(filtros.activo ? 1 : 0);
         where.push(`activo = ${n()}`);
       }
+      if (filtros.estado) {
+        params.push(filtros.estado);
+        where.push(`estado = ${n()}`);
+      }
       if (filtros.q) {
         params.push(`%${filtros.q.toLowerCase()}%`);
         where.push(`(LOWER(nombre) LIKE ${n()} OR LOWER(COALESCE(marca_comercial, id)) LIKE ${n()})`);
       }
-      const sql = `SELECT * FROM alumnos ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY nombre`;
+      const sql = `SELECT * FROM alumnos WHERE ${where.join(' AND ')} ORDER BY nombre`;
       const r = await pool.query(sql, params);
       return (r.rows as AlumnoRow[]).map(toAlumno);
     },
@@ -107,18 +122,42 @@ export function crearAlumnosRepoPg(pool: Pool): AlumnosRepo {
       await pool.query(
         `INSERT INTO alumnos
           (id, consultor_id, nombre, edad, zona, whatsapp, marca_comercial, programa,
-           canal_origen, moneda, activo, id_cierre_vinculado, creado_en)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           canal_origen, moneda, activo, estado, estado_actualizado_en, id_cierre_vinculado,
+           eliminado_en, eliminado_por, creado_en)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          ON CONFLICT (id) DO UPDATE SET
            consultor_id=EXCLUDED.consultor_id, nombre=EXCLUDED.nombre, edad=EXCLUDED.edad,
            zona=EXCLUDED.zona, whatsapp=EXCLUDED.whatsapp, marca_comercial=EXCLUDED.marca_comercial,
            programa=EXCLUDED.programa, canal_origen=EXCLUDED.canal_origen, moneda=EXCLUDED.moneda,
-           activo=EXCLUDED.activo, id_cierre_vinculado=EXCLUDED.id_cierre_vinculado`,
+           activo=EXCLUDED.activo, estado=EXCLUDED.estado, estado_actualizado_en=EXCLUDED.estado_actualizado_en,
+           id_cierre_vinculado=EXCLUDED.id_cierre_vinculado`,
         [
           a.id, a.consultorId, a.nombre, a.edad, a.zona, a.whatsapp, a.marcaComercial, a.programa,
-          a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.idCierreVinculado, a.creadoEn,
+          a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.estado, a.estadoActualizadoEn, a.idCierreVinculado,
+          a.eliminadoEn, a.eliminadoPor, a.creadoEn,
         ],
       );
+    },
+    async eliminar(id, eliminadoEn, eliminadoPor) {
+      await pool.query('UPDATE alumnos SET eliminado_en = $1, eliminado_por = $2 WHERE id = $3 AND eliminado_en IS NULL', [
+        eliminadoEn, eliminadoPor, id,
+      ]);
+    },
+    async listarEliminados() {
+      const r = await pool.query('SELECT * FROM alumnos WHERE eliminado_en IS NOT NULL ORDER BY eliminado_en DESC');
+      return (r.rows as AlumnoRow[]).map(toAlumno);
+    },
+    async obtenerEliminado(id) {
+      const r = await pool.query('SELECT * FROM alumnos WHERE id = $1 AND eliminado_en IS NOT NULL', [id]);
+      const row = r.rows[0] as AlumnoRow | undefined;
+      return row ? toAlumno(row) : null;
+    },
+    async restaurar(id) {
+      await pool.query('UPDATE alumnos SET eliminado_en = NULL, eliminado_por = NULL WHERE id = $1', [id]);
+    },
+    async eliminarDefinitivo(id) {
+      // El WHERE exige papelera: nunca se borra físico algo que sigue vivo.
+      await pool.query('DELETE FROM alumnos WHERE id = $1 AND eliminado_en IS NOT NULL', [id]);
     },
   };
 }
@@ -297,8 +336,19 @@ export function crearHistorialRepoPg(pool: Pool): HistorialRepo {
 
 interface PlanRow { id: string; alumno_id: string; fecha_inicio: string; etapa: string | null; objetivo_90d: string | null; version: number; creado_en: string }
 interface OkrRow { id: string; plan_id: string; orden: number; objetivo: string; creado_en: string }
-interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; creado_en: string }
+interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; vencimiento: string | null; cumplido_en: string | null; creado_en: string }
 interface AccionRow { id: string; plan_id: string; okr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
+interface CambioFechaRow { id: string; plan_id: string; fecha_anterior: string; fecha_nueva: string; cambiado_por: string; cambiado_en: string; motivo: string | null }
+
+const toKr = (k: KrRow): Kr => ({
+  id: k.id, okrId: k.okr_id, orden: k.orden, texto: k.texto, meta: k.meta,
+  vencimiento: k.vencimiento, cumplidoEn: k.cumplido_en, creadoEn: k.creado_en,
+});
+
+const toCambioFecha = (r: CambioFechaRow): CambioFechaPlan => ({
+  id: r.id, planId: r.plan_id, fechaAnterior: r.fecha_anterior, fechaNueva: r.fecha_nueva,
+  cambiadoPor: r.cambiado_por, cambiadoEn: r.cambiado_en, motivo: r.motivo,
+});
 
 const toPlan = (r: PlanRow): Plan => ({
   id: r.id, alumnoId: r.alumno_id, fechaInicio: r.fecha_inicio,
@@ -313,7 +363,7 @@ export function crearPlanesRepoPg(pool: Pool): PlanesRepo {
       const krRows = (await pool.query('SELECT * FROM krs WHERE okr_id = $1 ORDER BY orden', [o.id])).rows as KrRow[];
       okrs.push({
         id: o.id, planId: o.plan_id, orden: o.orden, objetivo: o.objetivo, creadoEn: o.creado_en,
-        krs: krRows.map((k) => ({ id: k.id, okrId: k.okr_id, orden: k.orden, texto: k.texto, meta: k.meta, creadoEn: k.creado_en })),
+        krs: krRows.map(toKr),
       });
     }
     const accionRows = (await pool.query('SELECT * FROM acciones WHERE plan_id = $1 ORDER BY fase, orden', [p.id])).rows as AccionRow[];
@@ -339,8 +389,8 @@ export function crearPlanesRepoPg(pool: Pool): PlanesRepo {
           await client.query('INSERT INTO okrs (id, plan_id, orden, objetivo, creado_en) VALUES ($1,$2,$3,$4,$5)',
             [o.id, o.planId, o.orden, o.objetivo, o.creadoEn]);
           for (const k of o.krs) {
-            await client.query('INSERT INTO krs (id, okr_id, orden, texto, meta, creado_en) VALUES ($1,$2,$3,$4,$5,$6)',
-              [k.id, k.okrId, k.orden, k.texto, k.meta, k.creadoEn]);
+            await client.query('INSERT INTO krs (id, okr_id, orden, texto, meta, vencimiento, cumplido_en, creado_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+              [k.id, k.okrId, k.orden, k.texto, k.meta, k.vencimiento, k.cumplidoEn, k.creadoEn]);
           }
         }
         for (const a of pc.acciones) {
@@ -367,6 +417,57 @@ export function crearPlanesRepoPg(pool: Pool): PlanesRepo {
       const r = await pool.query('SELECT * FROM planes WHERE id = $1', [planId]);
       const row = r.rows[0] as PlanRow | undefined;
       return row ? armarCompleto(row) : null;
+    },
+    async cambiarFechaInicio(cambio) {
+      // Fecha + vencimientos + historial en UNA transacción: una fecha movida
+      // sin sus vencimientos dejaría un cronograma desfasado.
+      const delta = diasEntre(cambio.fechaAnterior, cambio.fechaNueva);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('UPDATE planes SET fecha_inicio = $1 WHERE id = $2', [cambio.fechaNueva, cambio.planId]);
+        const r = await client.query(
+          `UPDATE krs SET vencimiento = to_char(vencimiento::date + $1::int, 'YYYY-MM-DD')
+           WHERE vencimiento IS NOT NULL
+             AND okr_id IN (SELECT id FROM okrs WHERE plan_id = $2)`,
+          [delta, cambio.planId],
+        );
+        await client.query(
+          `INSERT INTO plan_fecha_historial (id, plan_id, fecha_anterior, fecha_nueva, cambiado_por, cambiado_en, motivo)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [cambio.id, cambio.planId, cambio.fechaAnterior, cambio.fechaNueva, cambio.cambiadoPor, cambio.cambiadoEn, cambio.motivo],
+        );
+        await client.query('COMMIT');
+        return r.rowCount ?? 0;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
+    async listarCambiosFecha(planId) {
+      const r = await pool.query('SELECT * FROM plan_fecha_historial WHERE plan_id = $1 ORDER BY cambiado_en DESC', [planId]);
+      return (r.rows as CambioFechaRow[]).map(toCambioFecha);
+    },
+    async buscarKr(krId) {
+      const r = await pool.query(
+        `SELECT k.*, o.plan_id, p.alumno_id FROM krs k
+         JOIN okrs o ON o.id = k.okr_id JOIN planes p ON p.id = o.plan_id
+         WHERE k.id = $1`,
+        [krId],
+      );
+      const row = r.rows[0] as (KrRow & { plan_id: string; alumno_id: string }) | undefined;
+      return row ? { kr: toKr(row), planId: row.plan_id, alumnoId: row.alumno_id } : null;
+    },
+    async actualizarKr(krId, campos) {
+      const set: string[] = [];
+      const params: unknown[] = [];
+      if (campos.cumplidoEn !== undefined) { params.push(campos.cumplidoEn); set.push(`cumplido_en = $${params.length}`); }
+      if (campos.vencimiento !== undefined) { params.push(campos.vencimiento); set.push(`vencimiento = $${params.length}`); }
+      if (set.length === 0) return;
+      params.push(krId);
+      await pool.query(`UPDATE krs SET ${set.join(', ')} WHERE id = $${params.length}`, params);
     },
   };
 }

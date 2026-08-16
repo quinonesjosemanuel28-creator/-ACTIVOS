@@ -44,6 +44,9 @@ export function esRol(valor: unknown): valor is Rol {
  * 'ver_alumnos' NO habilita nada del contable):
  * - 'ver_alumnos': ficha, diagnósticos e índice de claridad de su cartera.
  * - 'editar_alumnos': alta/edición de alumnos y respuestas del diagnóstico.
+ * - 'eliminar_alumnos': borrado lógico, papelera y purga definitiva. Solo
+ *   ADMIN — el espejo de 'importar' en el contable: lo destructivo no baja
+ *   al día a día.
  *
  * El ÁMBITO (qué filas alcanza) es un eje aparte: ver `Ambito` más abajo.
  */
@@ -53,7 +56,8 @@ export type Accion =
   | 'importar'
   | 'gestionar_usuarios'
   | 'ver_alumnos'
-  | 'editar_alumnos';
+  | 'editar_alumnos'
+  | 'eliminar_alumnos';
 
 export const ACCIONES: readonly Accion[] = [
   'ver',
@@ -62,6 +66,7 @@ export const ACCIONES: readonly Accion[] = [
   'gestionar_usuarios',
   'ver_alumnos',
   'editar_alumnos',
+  'eliminar_alumnos',
 ] as const;
 
 /**
@@ -74,7 +79,9 @@ export const ACCIONES: readonly Accion[] = [
 const PERMISOS: Record<Rol, ReadonlySet<Accion>> = {
   LECTOR: new Set<Accion>(['ver']),
   EDITOR: new Set<Accion>(['ver', 'editar']),
-  ADMIN: new Set<Accion>(['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos']),
+  ADMIN: new Set<Accion>(['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos']),
+  // Sin 'eliminar_alumnos' a propósito: un consultor gestiona su cartera pero
+  // no la borra — ni lógica ni definitivamente.
   CONSULTOR: new Set<Accion>(['ver_alumnos', 'editar_alumnos']),
 };
 
@@ -241,4 +248,5 @@ export const TABLAS_SENSIBLES: readonly string[] = [
   'acciones',
   'checkins',
   'seguimiento_tokens',
+  'plan_fecha_historial',
 ] as const;

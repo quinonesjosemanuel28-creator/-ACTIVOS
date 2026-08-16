@@ -158,6 +158,37 @@ export type AlumnoInput = z.infer<typeof alumnoInputSchema>;
 export const alumnoPatchSchema = alumnoInputSchema.partial();
 export type AlumnoPatch = z.infer<typeof alumnoPatchSchema>;
 
+// ───────────────────────── Panel de control (ticket 7) ─────────────────────────
+
+const FECHA_YMD = /^\d{4}-\d{2}-\d{2}$/;
+
+const fechaYmd = z.string().regex(FECHA_YMD, 'La fecha va como YYYY-MM-DD').refine(
+  (f) => !Number.isNaN(Date.parse(`${f}T00:00:00Z`)),
+  'Fecha inválida',
+);
+
+/** Cambio de estado del alumno. El enum vive en el dominio (panel.ts). */
+export const estadoAlumnoInputSchema = z.object({
+  estado: z.enum(['ACTIVO', 'PAUSADO', 'FINALIZADO', 'ABANDONADO']),
+});
+
+/** Cambio de fecha de inicio del plan: fecha nueva + motivo opcional. */
+export const fechaInicioInputSchema = z.object({
+  fechaNueva: fechaYmd,
+  motivo: z.string().trim().transform((s) => (s === '' ? null : s)).nullable().optional(),
+});
+
+/**
+ * Edición de seguimiento de un KR: cumplimiento y/o vencimiento. Ausente = no
+ * tocar (mismo criterio que el patch del diagnóstico); null = limpiar.
+ */
+export const krPatchSchema = z
+  .object({
+    cumplido: z.boolean().optional(),
+    vencimiento: fechaYmd.nullable().optional(),
+  })
+  .refine((v) => v.cumplido !== undefined || v.vencimiento !== undefined, 'Nada para actualizar.');
+
 /**
  * Bloque 0 por el link público — semántica completar-si-falta. Claves en
  * snake_case porque son los nombres de campo de la especificación (los que

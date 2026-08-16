@@ -16,6 +16,8 @@
 
 // ───────────────────────── Alumno (bloque 0 del formulario) ─────────────────────────
 
+import type { EstadoAlumno } from './panel';
+
 export interface Alumno {
   id: string;
   /** Consultor asignado. De acá sale TODO filtro de ámbito por fila. */
@@ -33,8 +35,17 @@ export interface Alumno {
    */
   moneda: string;
   activo: boolean;
+  /** Ciclo de vida en la consultoría (ticket 7). Gobierna semáforo y alertas. */
+  estado: EstadoAlumno;
+  estadoActualizadoEn: string | null;
   /** Vínculo suelto con el contable. Sin FK a propósito: no es navegable. */
   idCierreVinculado: string | null;
+  /**
+   * Borrado LÓGICO (ticket 7). No null = está en la papelera: desaparece de
+   * todo listado, conteo y exportación; solo ADMIN la ve y puede restaurar.
+   */
+  eliminadoEn: string | null;
+  eliminadoPor: string | null;
   creadoEn: string;
 }
 

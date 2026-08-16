@@ -32,16 +32,22 @@ describe('Auth · matriz de permisos (mínimo privilegio)', () => {
   });
 
   it('ADMIN puede todo, incluido el módulo de alumnos', () => {
-    for (const accion of ['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos'] as const) {
+    for (const accion of ['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos'] as const) {
       expect(puede('ADMIN', accion)).toBe(true);
     }
+  });
+
+  it('eliminar_alumnos es SOLO de ADMIN: un consultor gestiona su cartera, no la borra', () => {
+    expect(puede('CONSULTOR', 'eliminar_alumnos')).toBe(false);
+    expect(puede('LECTOR', 'eliminar_alumnos')).toBe(false);
+    expect(puede('EDITOR', 'eliminar_alumnos')).toBe(false);
   });
 
   it('la escalera del contable es acumulativa: LECTOR ⊂ EDITOR ⊂ ADMIN', () => {
     expect(accionesDe('LECTOR')).toEqual(['ver']);
     expect(accionesDe('EDITOR')).toEqual(['ver', 'editar']);
     expect(accionesDe('ADMIN')).toEqual([
-      'ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos',
+      'ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos',
     ]);
   });
 

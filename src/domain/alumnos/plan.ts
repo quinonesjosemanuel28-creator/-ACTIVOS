@@ -34,6 +34,14 @@ export interface Kr {
   orden: number;
   texto: string;
   meta: string | null;
+  /**
+   * YYYY-MM-DD. El contrato de la skill no trae fechas: lo fija el consultor
+   * en el panel. Al mover fecha_inicio, TODOS los vencimientos cargados se
+   * desplazan por el mismo delta (el cronograma entero se corre, ticket 7).
+   */
+  vencimiento: string | null;
+  /** No null = cumplido (lo marca el CONSULTOR; alimenta el semáforo de salud). */
+  cumplidoEn: string | null;
   creadoEn: string;
 }
 
@@ -96,6 +104,43 @@ export function planVencido(fechaInicio: string, hoyIso: string): boolean {
   const inicio = Date.parse(`${fechaInicio}T00:00:00Z`);
   const hoy = Date.parse(`${hoyIso.slice(0, 10)}T00:00:00Z`);
   return Math.floor((hoy - inicio) / 86_400_000) >= 90;
+}
+
+/**
+ * Cierre estimado del trimestre: fecha_inicio + 90 días. DERIVADA, no se
+ * guarda — misma decisión que las fechas de fase: una columna calculada se
+ * desactualiza en cuanto la fecha de inicio se edita.
+ */
+export const DIAS_PLAN = 90;
+
+export function fechaCierreEstimada(fechaInicio: string): string {
+  return sumarDias(fechaInicio, DIAS_PLAN);
+}
+
+/** Suma días a una fecha YYYY-MM-DD (negativo resta). En UTC, sin sorpresas de huso. */
+export function sumarDias(fecha: string, dias: number): string {
+  const d = new Date(Date.parse(`${fecha}T00:00:00Z`) + dias * 86_400_000);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Días entre dos fechas YYYY-MM-DD (positivo si `hasta` es posterior). */
+export function diasEntre(desde: string, hasta: string): number {
+  return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * Un cambio de fecha de inicio, auditado. La fecha es el origen del cálculo de
+ * fase y salud: moverla sin rastro dejaría un semáforo imposible de explicar.
+ */
+export interface CambioFechaPlan {
+  id: string;
+  planId: string;
+  fechaAnterior: string;
+  fechaNueva: string;
+  /** Usuario que la cambió (consultor asignado o ADMIN). */
+  cambiadoPor: string;
+  cambiadoEn: string;
+  motivo: string | null;
 }
 
 // ───────────────────────── Link de seguimiento ─────────────────────────

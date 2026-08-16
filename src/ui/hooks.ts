@@ -312,6 +312,10 @@ export function useReiniciarCierres() {
 export function useAlumnos(q?: string) {
   return useQuery({ queryKey: ['alumnos', 'lista', q ?? ''], queryFn: () => api.alumnos(q) });
 }
+/** El panel de control (ticket 7): cartera con fase, salud y orden por riesgo. */
+export function usePanelAlumnos(filtros: import('./lib/api').FiltrosPanelUI) {
+  return useQuery({ queryKey: ['alumnos', 'panel', filtros], queryFn: () => api.panelAlumnos(filtros) });
+}
 export function useAlumno(id: string | null) {
   return useQuery({ queryKey: ['alumnos', 'ficha', id], queryFn: () => api.alumno(id!), enabled: !!id });
 }
@@ -387,5 +391,50 @@ export function useRevocarLinkSeguimiento() {
   return useMutation({
     mutationFn: (planId: string) => api.revocarLinkSeguimiento(planId),
     onSuccess: (_r, planId) => qc.invalidateQueries({ queryKey: ['alumnos', 'avance', planId] }),
+  });
+}
+
+// ───── Panel de control (ticket 7): estado, fecha, KRs y papelera ─────
+
+export function useCambiarEstadoAlumno() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { id: string; estado: import('@domain/alumnos/panel').EstadoAlumno }) =>
+      api.cambiarEstadoAlumno(v.id, v.estado),
+    onSuccess: inval,
+  });
+}
+export function useCambiarFechaInicio() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { planId: string; fechaNueva: string; motivo?: string }) =>
+      api.cambiarFechaInicio(v.planId, v.fechaNueva, v.motivo),
+    onSuccess: inval,
+  });
+}
+export function useEditarKr() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { krId: string; patch: { cumplido?: boolean; vencimiento?: string | null } }) =>
+      api.editarKr(v.krId, v.patch),
+    onSuccess: inval,
+  });
+}
+export function useEliminarAlumno() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({ mutationFn: (id: string) => api.eliminarAlumno(id), onSuccess: inval });
+}
+export function usePapelera(habilitada: boolean) {
+  return useQuery({ queryKey: ['alumnos', 'papelera'], queryFn: () => api.papelera(), enabled: habilitada });
+}
+export function useRestaurarAlumno() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({ mutationFn: (id: string) => api.restaurarAlumno(id), onSuccess: inval });
+}
+export function useEliminarDefinitivo() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { id: string; confirmacion: string }) => api.eliminarAlumnoDefinitivo(v.id, v.confirmacion),
+    onSuccess: inval,
   });
 }

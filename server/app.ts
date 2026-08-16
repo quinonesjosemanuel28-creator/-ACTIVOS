@@ -390,6 +390,23 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
       consultorId: typeof req.query.consultor === 'string' ? req.query.consultor : undefined,
     }),
   ));
+  // El panel de control (ticket 7): la cartera con fase, semáforo de salud y
+  // orden por riesgo. ANTES de /api/alumnos/:id para que "panel" no matchee
+  // como id. Filtros cosméticos; el ámbito manda igual que en el listado.
+  app.get('/api/alumnos/panel', requiere('ver_alumnos'), h((req, res) =>
+    ual.panelAlumnos(reposAlumnos, reposAuth.usuarios, alcanceDe(res), {
+      q: typeof req.query.q === 'string' ? req.query.q : undefined,
+      estado: typeof req.query.estado === 'string' ? (req.query.estado as ual.FiltrosPanel['estado']) : undefined,
+      salud: typeof req.query.salud === 'string' ? (req.query.salud as ual.FiltrosPanel['salud']) : undefined,
+      consultorId: typeof req.query.consultor === 'string' ? req.query.consultor : undefined,
+    }),
+  ));
+  // Papelera (ticket 7): borrado lógico, restaurar y purga definitiva. La
+  // acción 'eliminar_alumnos' la tiene SOLO ADMIN — un consultor gestiona su
+  // cartera pero no la borra. También antes de /:id por el matcheo.
+  app.get('/api/alumnos/papelera', requiere('eliminar_alumnos'), h(() =>
+    ual.listarPapelera(reposAlumnos, reposAuth.usuarios),
+  ));
   app.post('/api/alumnos', requiere('editar_alumnos'), h((req, res) =>
     ual.crearAlumno(reposAlumnos, usuarioDe(res).id, req.body),
   ));
@@ -400,6 +417,21 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   }));
   app.put('/api/alumnos/:id', requiere('editar_alumnos'), h((req, res) =>
     ual.editarAlumno(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body),
+  ));
+  // Estado del ciclo de vida (ticket 7): ACTIVO/PAUSADO/FINALIZADO/ABANDONADO.
+  // Gobierna semáforo y alertas; lo cambia el consultor asignado o ADMIN.
+  app.put('/api/alumnos/:id/estado', requiere('editar_alumnos'), h((req, res) =>
+    ual.cambiarEstadoAlumno(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body),
+  ));
+  app.delete('/api/alumnos/:id', requiere('eliminar_alumnos'), h((req, res) =>
+    ual.eliminarAlumno(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id')),
+  ));
+  app.post('/api/alumnos/:id/restaurar', requiere('eliminar_alumnos'), h((req) =>
+    ual.restaurarAlumno(reposAlumnos, param(req, 'id')),
+  ));
+  // Borrado FÍSICO: solo desde la papelera y confirmando con el nombre exacto.
+  app.delete('/api/alumnos/:id/definitivo', requiere('eliminar_alumnos'), h((req) =>
+    ual.eliminarAlumnoDefinitivo(reposAlumnos, param(req, 'id'), req.body?.confirmacion),
   ));
   app.post('/api/alumnos/:id/token', requiere('editar_alumnos'), h((req, res) =>
     ual.emitirToken(reposAlumnos, alcanceDe(res), param(req, 'id')),
@@ -441,6 +473,16 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   // El tablero de avance: estado por acción, % por fase y última actividad.
   app.get('/api/planes/:id/avance', requiere('ver_alumnos'), h((req, res) =>
     ual.avancePlan(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
+  // Fecha de inicio editable (ticket 7): mueve la fecha, desplaza los
+  // vencimientos de los KRs por el delta y deja rastro en el historial.
+  app.put('/api/planes/:id/fecha-inicio', requiere('editar_alumnos'), h((req, res) =>
+    ual.cambiarFechaInicioPlan(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
+  ));
+  // Seguimiento de un KR (ticket 7): cumplimiento (alimenta el semáforo) y
+  // vencimiento. El KR de un alumno ajeno responde 404, como toda fila ajena.
+  app.put('/api/krs/:id', requiere('editar_alumnos'), h((req, res) =>
+    ual.editarKr(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body),
   ));
 
   // ───────────────────── Frontend compilado (producción) ─────────────────────
