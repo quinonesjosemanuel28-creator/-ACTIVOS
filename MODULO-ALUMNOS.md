@@ -110,6 +110,7 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 | 5 | Exportación del diagnóstico para la skill | hecho |
 | 6 | Plan de 90 días: carga por bloque + seguimiento del alumno | hecho |
 | 7 | Panel de control: estado y salud (7A) · documento del plan (7B) · seguimiento activo (7C) | hecho |
+| 8 | El link del alumno: bloque "Esta semana" · copy sin castigo · último acceso · agrupado por KR | hecho |
 | — | Asistente IA sobre el módulo | **descartado** (decisión de José, agosto 2026) |
 
 Quedó anotado para después (fuera del ticket 7): snapshot de cierre a los 90
@@ -210,3 +211,18 @@ El criterio rector de todo el ticket: **el panel grita por los que se TRABARON, 
 - **"Trabado" en el filtro y el contador = alerta activa O semáforo rojo** (el documento usa "trabado" para las dos cosas; el filtro las une: es la lista de "a quién escribirle hoy"). En el ORDEN, la alerta va arriba incluso de los rojos.
 - **`db:migrar` se renombró a `db:sembrar-desde-sqlite`**: no migra esquema — siembra datos VACIANDO el destino. El nombre viejo invitaba a correrlo contra producción.
 - **Siguen abiertas**: calibrar los umbrales del semáforo con datos reales, la versión final de la plantilla del mensaje de WhatsApp (hoy va el borrador del ticket, en `domain/alumnos/telefono.ts`), y si la papelera purga sola a los 90 días (hoy: siempre manual).
+
+### Cerradas en el ticket 8 (agosto 2026) — el link del alumno
+
+Regla dura del ticket: **la vista del alumno orienta, no alarma.** Nunca muestra el semáforo, ni rojo, ni "trabado", ni porcentajes de atraso — el consultor necesita una alarma; el alumno necesita una salida. Si el link lo hace sentir en falta, deja de abrirlo y se pierde la señal que alimenta el panel.
+
+- **El bloque "Esta semana"**: exactamente 3 acciones arriba de todo, con casillas funcionales. Prioridad: deuda de fases vencidas (de la más vieja), después la fase actual, después la siguiente. La selección se fija al ABRIR (no se recalcula con cada tilde). Dominio puro en `vistaAlumno.ts`.
+- **Aterriza abierta la fase con la acción más urgente** (la deuda más vieja; al día, la actual). El badge "estás acá" sigue en la fase por calendario.
+- **"Día 37 de 90 · te quedan 53"** en la cabecera (la cuenta la hace el server) con barra de tiempo neutra. El desfase se dice en clave de recuperación, fondo dorado suave, solo si hay deuda.
+- **Pasado el día 90 las casillas SIGUEN marcables** — ⚠️ revierte el congelamiento del ticket 6, por decisión explícita del ticket 8 (§4.7): lo completado tarde también es información para la llamada de cierre. El límite real es la vigencia del token (120 días). La cabecera dice "Plan finalizado · día 90 de 90".
+- **Guardado ✓** visible ~1,5 s tras el OK del server; si falla, la casilla vuelve atrás. El tilde optimista nunca queda sin confirmación.
+- **`ultimo_acceso_link`** en alumnos, registrado SOLO al abrir el link (tildar no lo toca): junto al último check-in, el panel distingue "no abre" (se despegó → se le escribe por el proceso) de "abre y no marca" (trabado → se le escribe por el obstáculo). La alerta de inactividad NO cambia: sigue midiendo check-ins.
+- **Las acciones se agrupan bajo su KR** en la vista del alumno (subtítulo gris, no clickeable, contador propio); las sin KR van bajo "Otras acciones" y un plan viejo sin vínculos se ve plano. **El OKR no baja al alumno** (lenguaje de consultoría); sigue en el panel. El bloque "Esta semana" no se agrupa.
+- **El contrato ganó `fases[].acciones[].kr`** (posición del KR dentro del OKR referenciado), OPCIONAL y aditivo: sigue la versión 1 y los bloques ya emitidos valen tal cual. Los dos lados en `CONTRATO-PLAN.md`; **actualizar el texto de la skill** para que lo emita.
+- **⚠️ El semáforo NO se tocó.** El documento del ticket 8 decía "hoy el semáforo mide acciones cumplidas; se mantiene" — no era así: desde el ticket 7 mide **KRs cumplidos** (tilde del consultor). Como el criterio duro del mismo ticket era "su valor no cambia para ningún alumno existente", se dejó EXACTAMENTE como en producción, y los tests del ticket 7 que fijan sus valores son la verificación. Si algún día se quiere que mida acciones (la señal de ritmo del alumno, como argumenta el ticket 8), es una decisión nueva que hay que tomar explícitamente — no un supuesto.
+- El "contador de KRs cerrados sin color" que pedía el ticket ya existía desde el 7 (ficha y columna del panel), con una diferencia de definición: ahí "cumplido" es el tilde del consultor, no "todas sus acciones hechas". No se introdujo una segunda definición de cierre de KR para no tener dos verdades en pantalla.

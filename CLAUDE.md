@@ -111,6 +111,7 @@ Toda ruta declara su acción con `requiere(...)`, **incluidas las de lectura**. 
 |---|---|---|
 | 0–6 | Exploración · migraciones · rol y ámbito · formulario · panel · exportación · plan + seguimiento | hecho |
 | 7 | Panel de control: estado y salud (7A) · documento del plan (7B) · seguimiento activo (7C) | hecho |
+| 8 | El link del alumno: "Esta semana", copy sin castigo, último acceso, agrupado por KR | hecho (en `desarrollo`, sin promover) |
 | — | Asistente IA sobre el módulo | **descartado** |
 
 El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así de la skill). El contrato del bloque JSON que emite la skill vive en `CONTRATO-PLAN.md` (los dos lados).
@@ -118,6 +119,8 @@ El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así 
 Con el ticket 7 el módulo es un **panel operativo**: estado del alumno (ACTIVO/PAUSADO/FINALIZADO/ABANDONADO), semáforo de salud por brecha avance−tiempo, orden por riesgo, alerta de inactividad (>8 días sin check-in, la apaga un contacto registrado), WhatsApp con mensaje precargado (regla del 9 argentino), documento del plan versionado en la base (bytea/BLOB) y papelera con borrado lógico (`eliminar_alumnos`, solo ADMIN — el filtro `eliminado_en IS NULL` vive en la consulta).
 
 Las tablas del módulo están TODAS en `TABLAS_SENSIBLES` (excluidas del asistente IA) — **permanente**: el asistente sobre el módulo quedó descartado.
+
+Con el ticket 8, la vista del alumno (`/seguimiento/:token`) **orienta en vez de alarmar**: bloque "Esta semana" (3 acciones, deuda primero), día del plan explícito, acciones agrupadas bajo su KR, y nunca rojo ni "trabado" — esa regla es dura. Dos reversas a saber: pasado el día 90 las casillas siguen marcables (revierte el ticket 6), y el contrato de la skill ganó el campo opcional `kr` por acción (CONTRATO-PLAN.md, hay que actualizar la skill). El semáforo del consultor NO cambió: sigue midiendo KRs tildados por el consultor.
 
 ⚠️ `npm run db:sembrar-desde-sqlite` (ex `db:migrar`): NO migra esquema — **siembra datos vaciando el destino**. Contra producción pisa datos reales. El esquema migra solo al arrancar la app; el que valida sin escribir es `db:validar`.
 
