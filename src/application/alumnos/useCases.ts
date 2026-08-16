@@ -58,6 +58,7 @@ import {
   type SaludCalculada,
 } from '../../domain/alumnos/panel';
 import { parsearTelefono } from '../../domain/alumnos/telefono';
+import { diaDelPlan } from '../../domain/alumnos/vistaAlumno';
 import {
   fechaCierreEstimada,
   diasEntre,
@@ -638,8 +639,11 @@ export interface SeguimientoAbierto {
   alumno: string;
   fechaInicio: string;
   faseActual: Fase;
-  /** Día 90+: se lee, no se tilda. */
+  /** Día 90+ (el trimestre terminó por calendario). */
   vencido: boolean;
+  /** "Día 37 de 90 · te quedan 53" — la cuenta la hace el server, no el alumno. */
+  dia: number;
+  restantes: number;
   fases: { fase: Fase; acciones: AccionSeguimiento[] }[];
 }
 
@@ -668,11 +672,14 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
       .map((a) => ({ id: a.id, texto: a.texto, hecha: estado.get(a.id)?.marcado === true })),
   }));
 
+  const { dia, restantes } = diaDelPlan(pc.plan.fechaInicio, ahora);
   return {
     alumno: alumno?.nombre ?? '',
     fechaInicio: pc.plan.fechaInicio,
     faseActual: faseActual(pc.plan.fechaInicio, ahora),
     vencido: planVencido(pc.plan.fechaInicio, ahora),
+    dia,
+    restantes,
     fases,
   };
 }

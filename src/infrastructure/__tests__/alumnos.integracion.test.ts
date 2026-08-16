@@ -565,10 +565,12 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
 
     const abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
-    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'faseActual', 'fases', 'fechaInicio', 'vencido']);
+    // dia/restantes son derivados del plan (ticket 8): datos del propio alumno.
+    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'dia', 'faseActual', 'fases', 'fechaInicio', 'restantes', 'vencido']);
     expect(abierto.alumno).toBe('Gonzalo');
     expect(abierto.faseActual).toBe(1);
     expect(abierto.vencido).toBe(false);
+    expect(abierto.dia + abierto.restantes).toBe(90);
     expect(abierto.fases.map((f) => f.acciones.length)).toEqual([3, 3, 3]);
     expect(abierto.fases[0]!.acciones.every((a) => !a.hecha)).toBe(true);
   });

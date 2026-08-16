@@ -71,6 +71,9 @@ export interface SeguimientoAbiertoUI {
   fechaInicio: string;
   faseActual: 1 | 2 | 3;
   vencido: boolean;
+  /** "Día 37 de 90 · te quedan 53" — la cuenta viene hecha del server. */
+  dia: number;
+  restantes: number;
   fases: { fase: 1 | 2 | 3; acciones: AccionSeguimientoUI[] }[];
 }
 
