@@ -644,6 +644,8 @@ export interface SeguimientoAbierto {
   /** "Día 37 de 90 · te quedan 53" — la cuenta la hace el server, no el alumno. */
   dia: number;
   restantes: number;
+  /** El plan está en pausa (lo pausó el consultor): la vista lo dice sin drama. */
+  pausado: boolean;
   fases: { fase: Fase; acciones: AccionSeguimiento[] }[];
 }
 
@@ -664,6 +666,7 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
   const pc = await planDeToken(repos, token, ahora);
   const alumno = await repos.alumnos.obtener(pc.plan.alumnoId);
   const estado = estadoAcciones(await repos.checkins.listarPorPlan(pc.plan.id));
+  const pausado = alumno?.estado === 'PAUSADO';
 
   const fases: SeguimientoAbierto['fases'] = ([1, 2, 3] as const).map((fase) => ({
     fase,
@@ -680,6 +683,7 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
     vencido: planVencido(pc.plan.fechaInicio, ahora),
     dia,
     restantes,
+    pausado,
     fases,
   };
 }
@@ -698,9 +702,10 @@ export async function marcarAccion(
   if (typeof marcado !== 'boolean') throw new ErrorAlumnos('VALIDACION', 'marcado tiene que ser true o false.');
   const pc = await planDeToken(repos, token, ahora);
 
-  if (planVencido(pc.plan.fechaInicio, ahora)) {
-    throw new ErrorAlumnos('VALIDACION', 'El trimestre ya terminó: el checklist quedó congelado. Repasalo con tu consultor.');
-  }
+  // Pasado el día 90 las casillas SIGUEN marcables (ticket 8 §4.7, revierte
+  // el congelamiento del ticket 6): lo que se completa tarde también es
+  // información para la llamada de cierre. El límite real es la vigencia del
+  // token (120 días), que planDeToken ya validó.
   const accion = pc.acciones.find((a) => a.id === accionId);
   // La acción de OTRO plan no existe para este token (mismo trato que el ámbito).
   if (!accion) throw new ErrorAlumnos('NO_ENCONTRADO', 'Acción inexistente.');

@@ -54,7 +54,9 @@ export function VistaSeguimiento({ token }: { token: string }) {
   }, [token]);
 
   const tildar = async (accionId: string, hecha: boolean) => {
-    if (!datos || datos.vencido) return;
+    // Pasado el día 90 las casillas SIGUEN marcables (ticket 8): lo que se
+    // completa tarde también es información para la llamada de cierre.
+    if (!datos) return;
     setErrorTilde(null);
     // Optimista: se pinta ya, se confirma después. El "Guardado ✓" recién
     // aparece con el OK del server — esa es la confirmación de verdad.
@@ -112,8 +114,8 @@ export function VistaSeguimiento({ token }: { token: string }) {
           <h1 className="mt-1 font-display text-2xl font-700 text-navy-900 dark:text-navy-50">Hola, {datos.alumno} 👋</h1>
           <p className="mt-1 text-sm text-navy-600 dark:text-navy-300">
             {datos.vencido
-              ? 'El trimestre terminó. Este es tu resumen final — repasalo con tu consultor.'
-              : 'Marcá lo que ya hiciste: tu consultor lo ve al instante.'}
+              ? 'El trimestre terminó. Repasá con tu consultor cómo te fue — y lo que completes ahora también cuenta.'
+              : 'Acá seguís tu plan de 90 días. Marcá lo que vas cumpliendo y tu consultor te acompaña donde te trabes.'}
           </p>
           {/* Día del plan, sin que el alumno haga la cuenta. Barra fina y
               neutra: mide TIEMPO, nunca se pone roja. */}
@@ -126,10 +128,34 @@ export function VistaSeguimiento({ token }: { token: string }) {
           <p className="mt-2 text-xs text-navy-400">{hechas} de {total} acciones completadas</p>
         </header>
 
-        {datos.vencido && (
-          <Card className="border-gold-400 bg-gold-400/10 p-3">
-            <p className="text-sm text-navy-800 dark:text-navy-100">
-              El checklist quedó congelado el día 90. Lo que quedó sin tildar es material para la llamada de cierre.
+        {/* ── El plan sin acciones todavía: nada de casillas vacías ni bloques rotos ── */}
+        {total === 0 ? (
+          <Card className="p-6 text-center">
+            <p className="text-sm text-navy-600 dark:text-navy-300">Tu consultor está preparando tu plan. Volvé a entrar en unos días.</p>
+          </Card>
+        ) : (
+        <>
+
+        {datos.pausado && (
+          <Card className="p-3">
+            <p className="text-sm text-navy-700 dark:text-navy-200">
+              Tu plan está en pausa. Hablá con tu consultor para retomarlo.
+            </p>
+          </Card>
+        )}
+
+        {/* ── El desfase, dicho sin castigar: fondo suave, nunca rojo, sin
+               porcentajes. Solo aparece si hay deuda de fases vencidas. ── */}
+        {!datos.vencido && deuda.length > 0 && (
+          <Card className="border-gold-400/40 bg-gold-400/5 p-3">
+            <p className="text-sm text-navy-700 dark:text-navy-200">
+              El calendario va por la Fase {datos.faseActual}, pero te{' '}
+              {deuda.reduce((n, d) => n + d.pendientes, 0) === 1
+                ? `quedó 1 acción de la Fase ${deuda[0]!.fase}. Se recupera`
+                : `quedaron ${deuda.reduce((n, d) => n + d.pendientes, 0)} acciones de ${
+                    deuda.length === 1 ? `la Fase ${deuda[0]!.fase}` : `las Fases ${deuda.map((d) => d.fase).join(' y ')}`
+                  }. Se recuperan`}
+              : arrancá por las de acá abajo.
             </p>
           </Card>
         )}
@@ -139,22 +165,13 @@ export function VistaSeguimiento({ token }: { token: string }) {
           <Card className="border-gold-400/60 p-4">
             <p className="font-display text-base font-700 text-navy-900 dark:text-navy-50">Esta semana</p>
             <p className="mt-0.5 text-sm text-navy-600 dark:text-navy-300">
-              {deuda.length > 0 ? (
-                <>
-                  {(() => {
-                    const totalDeuda = deuda.reduce((n, d) => n + d.pendientes, 0);
-                    const fases = deuda.length === 1 ? `la Fase ${deuda[0]!.fase}` : `las Fases ${deuda.map((d) => d.fase).join(' y ')}`;
-                    const arranque = estaSemana.length === 1 ? 'Empezá por esta:' : estaSemana.length === 2 ? 'Empezá por estas dos:' : 'Empezá por estas tres:';
-                    return `Venís con ${totalDeuda} ${totalDeuda === 1 ? 'acción' : 'acciones'} de ${fases} pendiente${totalDeuda === 1 ? '' : 's'}. ${arranque}`;
-                  })()}
-                </>
-              ) : (
-                <>Vas al día. Lo que sigue en la Fase {datos.faseActual}:</>
-              )}
+              {deuda.length > 0
+                ? estaSemana.length === 1 ? 'Empezá por esta:' : estaSemana.length === 2 ? 'Empezá por estas dos:' : 'Empezá por estas tres:'
+                : <>Vas al día. Lo que sigue en la Fase {datos.faseActual}:</>}
             </p>
             <div className="mt-2 space-y-1">
               {estaSemana.map((a) => (
-                <CasillaAccion key={a.id} accion={a} deshabilitada={datos.vencido} onTildar={tildar} />
+                <CasillaAccion key={a.id} accion={a} onTildar={tildar} />
               ))}
             </div>
           </Card>
@@ -182,7 +199,7 @@ export function VistaSeguimiento({ token }: { token: string }) {
               {abierta && (
                 <div className="space-y-1 border-t border-navy-100 px-4 py-3 dark:border-navy-700">
                   {f.acciones.map((a) => (
-                    <CasillaAccion key={a.id} accion={a} deshabilitada={datos.vencido} onTildar={tildar} />
+                    <CasillaAccion key={a.id} accion={a} onTildar={tildar} />
                   ))}
                 </div>
               )}
@@ -192,11 +209,17 @@ export function VistaSeguimiento({ token }: { token: string }) {
 
         {errorTilde && <p className="text-center text-sm font-600 text-navy-700 dark:text-navy-200">{errorTilde}</p>}
 
-        {hechas === total && total > 0 && !datos.vencido && (
+        {/* ── Bloque de cierre: todas cumplidas (sin bloque "Esta semana") ── */}
+        {hechas === total && (
           <div className="pt-2 text-center">
             <CheckCircle2 className="mx-auto mb-1 text-gold-400" size={28} />
-            <p className="text-sm font-600 text-navy-800 dark:text-navy-100">¡Plan completo! Contáselo a tu consultor.</p>
+            <p className="text-sm font-600 text-navy-800 dark:text-navy-100">
+              Completaste las {total} acciones del plan. Contáselo a tu consultor.
+            </p>
           </div>
+        )}
+
+        </>
         )}
 
         <p className="pt-2 text-center text-xs text-navy-400">Guardá este link: es tuyo y dura todo el trimestre.</p>
@@ -215,26 +238,22 @@ export function VistaSeguimiento({ token }: { token: string }) {
 /**
  * Una casilla del checklist, compartida por "Esta semana" y las fases: marcar
  * en un lado actualiza el otro (el estado vive en `datos`). Área táctil de
- * 44px como mínimo — esto se usa desde WhatsApp, en el teléfono.
+ * 44px como mínimo, texto incluido — esto se usa desde WhatsApp, en el
+ * teléfono. Siempre marcable: ni el día 90 ni la pausa la congelan.
  */
 function CasillaAccion({
   accion: a,
-  deshabilitada,
   onTildar,
 }: {
   accion: { id: string; texto: string; hecha: boolean };
-  deshabilitada: boolean;
   onTildar: (id: string, hecha: boolean) => Promise<void>;
 }) {
   return (
-    <label
-      className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg p-2 transition hover:bg-navy-50 dark:hover:bg-navy-800 ${deshabilitada ? 'cursor-default opacity-70' : ''}`}
-    >
+    <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg p-2 transition hover:bg-navy-50 dark:hover:bg-navy-800">
       <input
         type="checkbox"
         className="h-5 w-5 shrink-0 rounded border-navy-300 accent-gold-400"
         checked={a.hecha}
-        disabled={deshabilitada}
         onChange={(e) => void onTildar(a.id, e.target.checked)}
       />
       <span className={`text-sm ${a.hecha ? 'text-navy-400 line-through' : 'text-navy-800 dark:text-navy-100'}`}>

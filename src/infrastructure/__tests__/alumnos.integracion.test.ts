@@ -565,11 +565,12 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
 
     const abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
-    // dia/restantes son derivados del plan (ticket 8): datos del propio alumno.
-    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'dia', 'faseActual', 'fases', 'fechaInicio', 'restantes', 'vencido']);
+    // dia/restantes/pausado son derivados del plan y del propio alumno (ticket 8).
+    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'dia', 'faseActual', 'fases', 'fechaInicio', 'pausado', 'restantes', 'vencido']);
     expect(abierto.alumno).toBe('Gonzalo');
     expect(abierto.faseActual).toBe(1);
     expect(abierto.vencido).toBe(false);
+    expect(abierto.pausado).toBe(false);
     expect(abierto.dia + abierto.restantes).toBe(90);
     expect(abierto.fases.map((f) => f.acciones.length)).toEqual([3, 3, 3]);
     expect(abierto.fases[0]!.acciones.every((a) => !a.hecha)).toBe(true);
@@ -593,17 +594,30 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     expect(checkins).toHaveLength(2);
   });
 
-  it('pasado el día 90 el link se LEE pero no acepta tildes', async () => {
+  it('pasado el día 90 el link se lee Y sigue aceptando tildes (ticket 8 revierte el congelamiento)', async () => {
     const { repos, alcanceConsu, plan } = await conPlan(); // inicio 2026-08-18
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
     const DIA_91 = '2026-11-17T10:00:00.000Z';
 
     const abierto = await ua.abrirSeguimiento(repos, token.token, DIA_91);
     expect(abierto.vencido).toBe(true);
+    expect(abierto.dia).toBe(90); // la cabecera dice "día 90 de 90", no 91
 
-    await expect(
-      ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, true, DIA_91),
-    ).rejects.toThrow(/trimestre ya terminó/i);
+    // Lo que se completa tarde también es información para la llamada de
+    // cierre. El límite real es la vigencia del token (120 días).
+    const r = await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, true, DIA_91);
+    expect(r.hecha).toBe(true);
+  });
+
+  it('el plan PAUSADO se declara en el payload, sin drama y sin congelar tildes', async () => {
+    const { repos, alcanceConsu, alumno, plan } = await conPlan();
+    const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    await ua.cambiarEstadoAlumno(repos, alcanceConsu, alumno.id, { estado: 'PAUSADO' });
+
+    const abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
+    expect(abierto.pausado).toBe(true);
+    const r = await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, true, '2026-08-20T12:05:00.000Z');
+    expect(r.hecha).toBe(true);
   });
 
   it('una acción de OTRO plan no se puede tildar con este token', async () => {

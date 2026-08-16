@@ -74,6 +74,8 @@ export interface SeguimientoAbiertoUI {
   /** "Día 37 de 90 · te quedan 53" — la cuenta viene hecha del server. */
   dia: number;
   restantes: number;
+  /** El consultor pausó el plan: la vista lo dice sin drama. */
+  pausado: boolean;
   fases: { fase: 1 | 2 | 3; acciones: AccionSeguimientoUI[] }[];
 }
 
