@@ -80,6 +80,36 @@ export function faseAAbrir<T extends AccionSeleccionable>(fases: FaseParaVista<T
 }
 
 /**
+ * Agrupa las acciones de una fase bajo su KR (ticket 8 §5): la tarea con su
+ * para qué. Los grupos siguen el orden de `krs` (que viene en orden de plan);
+ * las acciones sin KR van al FINAL bajo un grupo sin nombre ("Otras
+ * acciones" lo pone la vista). Un plan viejo sin vínculos produce un único
+ * grupo sin nombre — la vista no se rompe si el dato falta.
+ *
+ * El OKR no aparece a propósito: es lenguaje de consultoría y un nivel de
+ * anidación que en un celular no entra. El consultor lo ve en su panel.
+ */
+export interface GrupoKr<T> {
+  kr: { id: string; texto: string } | null;
+  acciones: T[];
+}
+
+export function agruparPorKr<T extends { krId: string | null }>(
+  acciones: T[],
+  krs: { id: string; texto: string }[],
+): GrupoKr<T>[] {
+  const grupos: GrupoKr<T>[] = [];
+  for (const kr of krs) {
+    const propias = acciones.filter((a) => a.krId === kr.id);
+    if (propias.length > 0) grupos.push({ kr, acciones: propias });
+  }
+  const conGrupo = new Set(grupos.flatMap((g) => g.acciones));
+  const sueltas = acciones.filter((a) => !conGrupo.has(a));
+  if (sueltas.length > 0) grupos.push({ kr: null, acciones: sueltas });
+  return grupos;
+}
+
+/**
  * El día del plan, listo para decir "Día 37 de 90 · te quedan 53" sin que el
  * alumno haga la cuenta. El día se acota a [1, 90]: pasado el trimestre la
  * cabecera dice "día 90 de 90" con `finalizado` en true.

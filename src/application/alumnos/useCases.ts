@@ -522,6 +522,9 @@ export async function cargarPlan(
   };
 
   const okrPorOrden = new Map<number, string>();
+  // Clave "ordenOkr:posiciónKr" → id del KR, para resolver la referencia
+  // opcional `kr` del contrato (ticket 8).
+  const krPorPosicion = new Map<string, string>();
   const okrs: (Okr & { krs: Kr[] })[] = bloque.okrs.map((o) => {
     const okrId = randomUUID();
     okrPorOrden.set(o.orden, okrId);
@@ -531,18 +534,22 @@ export async function cargarPlan(
       orden: o.orden,
       objetivo: o.objetivo,
       creadoEn: ahora,
-      krs: o.krs.map((k, i) => ({
-        id: randomUUID(),
-        okrId,
-        orden: i + 1,
-        texto: k.texto,
-        meta: k.meta ?? null,
-        // El contrato de la skill no trae fechas ni cumplimiento: los fija el
-        // consultor en el panel (ticket 7).
-        vencimiento: null,
-        cumplidoEn: null,
-        creadoEn: ahora,
-      })),
+      krs: o.krs.map((k, i) => {
+        const krId = randomUUID();
+        krPorPosicion.set(`${o.orden}:${i + 1}`, krId);
+        return {
+          id: krId,
+          okrId,
+          orden: i + 1,
+          texto: k.texto,
+          meta: k.meta ?? null,
+          // El contrato de la skill no trae fechas ni cumplimiento: los fija el
+          // consultor en el panel (ticket 7).
+          vencimiento: null,
+          cumplidoEn: null,
+          creadoEn: ahora,
+        };
+      }),
     };
   });
 
@@ -551,6 +558,7 @@ export async function cargarPlan(
       id: randomUUID(),
       planId: plan.id,
       okrId: a.okr !== undefined ? okrPorOrden.get(a.okr)! : null,
+      krId: a.okr !== undefined && a.kr !== undefined ? krPorPosicion.get(`${a.okr}:${a.kr}`) ?? null : null,
       fase: f.fase,
       orden: i + 1,
       texto: a.texto,
@@ -633,6 +641,8 @@ export interface AccionSeguimiento {
   id: string;
   texto: string;
   hecha: boolean;
+  /** KR al que aporta (ticket 8), para agrupar. Null = "Otras acciones". */
+  krId: string | null;
 }
 
 /** Lo MÍNIMO que el link muestra: acciones por fase. Ni diagnóstico, ni índice, ni OKRs. */
@@ -648,6 +658,12 @@ export interface SeguimientoAbierto {
   /** El plan está en pausa (lo pausó el consultor): la vista lo dice sin drama. */
   pausado: boolean;
   fases: { fase: Fase; acciones: AccionSeguimiento[] }[];
+  /**
+   * Los KRs del plan en orden (ticket 8): el subtítulo que le da PARA QUÉ a
+   * cada acción. Solo id y texto — el OKR es lenguaje de consultoría y no
+   * baja al link del alumno.
+   */
+  krs: { id: string; texto: string }[];
 }
 
 async function planDeToken(repos: ReposAlumnos, token: string, ahora: string): Promise<PlanCompleto> {
@@ -678,7 +694,7 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
     fase,
     acciones: pc.acciones
       .filter((a) => a.fase === fase)
-      .map((a) => ({ id: a.id, texto: a.texto, hecha: estado.get(a.id)?.marcado === true })),
+      .map((a) => ({ id: a.id, texto: a.texto, hecha: estado.get(a.id)?.marcado === true, krId: a.krId })),
   }));
 
   const { dia, restantes } = diaDelPlan(pc.plan.fechaInicio, ahora);
@@ -691,6 +707,7 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
     restantes,
     pausado,
     fases,
+    krs: pc.okrs.flatMap((o) => o.krs.map((k) => ({ id: k.id, texto: k.texto }))),
   };
 }
 
@@ -767,6 +784,7 @@ export async function avancePlan(
           texto: a.texto,
           fase,
           hecha: ultimo?.marcado === true,
+          krId: a.krId,
           okrOrden: a.okrId ? okrOrdenPorId.get(a.okrId) ?? null : null,
           ultimoCambio: ultimo?.creadoEn ?? null,
         };

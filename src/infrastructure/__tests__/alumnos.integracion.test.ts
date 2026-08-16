@@ -524,9 +524,11 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     version: 1,
     alumno: 'Gonzalo',
     fecha_inicio: '2026-08-18',
-    okrs: [{ orden: 1, objetivo: 'Ordenar', krs: [{ texto: 'Tablero' }] }],
+    okrs: [{ orden: 1, objetivo: 'Ordenar', krs: [{ texto: 'Tablero' }, { texto: 'Caja separada' }] }],
     fases: [
-      { fase: 1, acciones: [{ texto: 'Armar tablero', okr: 1 }, { texto: 'Separar cuentas' }, { texto: 'Cargar créditos' }] },
+      // "kr" (ticket 8): la posición del KR dentro del OKR. Opcional — la
+      // tercera acción queda suelta a propósito ("Otras acciones").
+      { fase: 1, acciones: [{ texto: 'Armar tablero', okr: 1, kr: 1 }, { texto: 'Separar cuentas', okr: 1, kr: 2 }, { texto: 'Cargar créditos' }] },
       { fase: 2, acciones: [{ texto: 'Protocolo' }, { texto: 'Llamar morosos' }, { texto: 'Cierre semanal' }] },
       { fase: 3, acciones: [{ texto: 'Referidos' }, { texto: 'Tope' }, { texto: 'Revisar mora' }] },
     ],
@@ -565,8 +567,8 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
 
     const abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
-    // dia/restantes/pausado son derivados del plan y del propio alumno (ticket 8).
-    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'dia', 'faseActual', 'fases', 'fechaInicio', 'pausado', 'restantes', 'vencido']);
+    // dia/restantes/pausado/krs son derivados del plan y del propio alumno (ticket 8).
+    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'dia', 'faseActual', 'fases', 'fechaInicio', 'krs', 'pausado', 'restantes', 'vencido']);
     expect(abierto.alumno).toBe('Gonzalo');
     expect(abierto.faseActual).toBe(1);
     expect(abierto.vencido).toBe(false);
@@ -574,6 +576,15 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     expect(abierto.dia + abierto.restantes).toBe(90);
     expect(abierto.fases.map((f) => f.acciones.length)).toEqual([3, 3, 3]);
     expect(abierto.fases[0]!.acciones.every((a) => !a.hecha)).toBe(true);
+
+    // El agrupamiento por KR (ticket 8): la carga resolvió "okr: 1, kr: 2" al
+    // id real, y los KRs viajan en orden de plan — SOLO id y texto, sin OKR.
+    expect(abierto.krs.map((k) => k.texto)).toEqual(['Tablero', 'Caja separada']);
+    const [a1, a2, a3] = abierto.fases[0]!.acciones;
+    expect(a1!.krId).toBe(abierto.krs[0]!.id);
+    expect(a2!.krId).toBe(abierto.krs[1]!.id);
+    expect(a3!.krId).toBeNull(); // sin "kr" en el bloque → "Otras acciones"
+    expect(Object.keys(abierto.krs[0]!).sort()).toEqual(['id', 'texto']);
   });
 
   it('el tilde crea un checkin y el estado se refleja; destildar es OTRA fila', async () => {

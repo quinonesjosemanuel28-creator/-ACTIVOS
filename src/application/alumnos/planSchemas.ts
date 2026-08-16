@@ -32,6 +32,12 @@ const okrSchema = z.object({
 const accionSchema = z.object({
   texto: z.string().trim().min(1, 'Una acción sin texto'),
   okr: z.number().int().min(1).optional(),
+  /**
+   * Posición (1..n) del KR dentro del OKR referenciado (ticket 8): agrupa el
+   * checklist del alumno bajo su KR. Opcional y ADITIVO: los bloques viejos
+   * siguen valiendo; sin él, la acción va a "Otras acciones".
+   */
+  kr: z.number().int().min(1).optional(),
 });
 
 const faseSchema = z.object({
@@ -61,8 +67,10 @@ export const bloquePlanSchema = z
     if (fases.join(',') !== '1,2,3') {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['fases'], message: 'Las fases tienen que ser 1, 2 y 3' });
     }
-    // Toda acción que referencia un OKR apunta a uno que existe (CONTRATO).
+    // Toda acción que referencia un OKR apunta a uno que existe (CONTRATO), y
+    // toda referencia a un KR (ticket 8) exige el OKR y una posición que exista.
     const existentes = new Set(ordenes);
+    const porOrden = new Map(b.okrs.map((o) => [o.orden, o]));
     b.fases.forEach((f, i) =>
       f.acciones.forEach((a, j) => {
         if (a.okr !== undefined && !existentes.has(a.okr)) {
@@ -71,6 +79,24 @@ export const bloquePlanSchema = z
             path: ['fases', i, 'acciones', j],
             message: `La acción "${a.texto.slice(0, 40)}…" apunta al OKR ${a.okr}, que no está en el bloque`,
           });
+        }
+        if (a.kr !== undefined) {
+          if (a.okr === undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['fases', i, 'acciones', j],
+              message: `La acción "${a.texto.slice(0, 40)}…" referencia un KR sin decir de qué OKR ("kr" exige "okr")`,
+            });
+          } else {
+            const okr = porOrden.get(a.okr);
+            if (okr && a.kr > okr.krs.length) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['fases', i, 'acciones', j],
+                message: `La acción "${a.texto.slice(0, 40)}…" apunta al KR ${a.kr} del OKR ${a.okr}, que solo tiene ${okr.krs.length}`,
+              });
+            }
+          }
         }
       }),
     );

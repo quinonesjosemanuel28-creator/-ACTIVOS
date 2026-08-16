@@ -86,6 +86,25 @@ describe('Plan · validación estructural (lo que SÍ frena la carga)', () => {
     b.okrs = Array.from({ length: 9 }, (_, i) => ({ orden: i + 1, objetivo: `O${i}`, krs: [{ texto: 'k' }] }));
     expect(bloquePlanSchema.safeParse(b).success).toBe(false);
   });
+
+  it('la referencia a un KR (ticket 8) es opcional y ADITIVA: el bloque viejo sigue pasando', () => {
+    expect(bloquePlanSchema.safeParse(bloqueValido()).success).toBe(true); // sin "kr" en ninguna acción
+    const b = bloqueValido();
+    (b.fases as { acciones: { kr?: number }[] }[])[0]!.acciones[0]!.kr = 1;
+    expect(bloquePlanSchema.safeParse(b).success).toBe(true);
+  });
+
+  it('"kr" sin "okr" → error: la posición no dice nada sin saber de qué OKR', () => {
+    const b = bloqueValido();
+    (b.fases as { acciones: Record<string, unknown>[] }[])[0]!.acciones[0] = { texto: 'Huérfana', kr: 1 };
+    expect(bloquePlanSchema.safeParse(b).success).toBe(false);
+  });
+
+  it('"kr" que apunta a una posición que el OKR no tiene → error', () => {
+    const b = bloqueValido();
+    (b.fases as { acciones: { kr?: number }[] }[])[0]!.acciones[0]!.kr = 5; // el OKR 1 tiene 1 solo KR
+    expect(bloquePlanSchema.safeParse(b).success).toBe(false);
+  });
 });
 
 describe('Plan · advertencias (lo que NO frena pero se tiene que VER)', () => {

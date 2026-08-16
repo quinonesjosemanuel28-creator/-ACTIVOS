@@ -369,7 +369,7 @@ export function crearHistorialRepo(db: Database.Database): HistorialRepo {
 interface PlanRow { id: string; alumno_id: string; fecha_inicio: string; etapa: string | null; objetivo_90d: string | null; version: number; creado_en: string }
 interface OkrRow { id: string; plan_id: string; orden: number; objetivo: string; creado_en: string }
 interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; vencimiento: string | null; cumplido_en: string | null; creado_en: string }
-interface AccionRow { id: string; plan_id: string; okr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
+interface AccionRow { id: string; plan_id: string; okr_id: string | null; kr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
 interface CambioFechaRow { id: string; plan_id: string; fecha_anterior: string; fecha_nueva: string; cambiado_por: string; cambiado_en: string; motivo: string | null }
 
 const toKr = (k: KrRow): Kr => ({
@@ -397,7 +397,7 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
     );
     const acciones = (db.prepare('SELECT * FROM acciones WHERE plan_id = ? ORDER BY fase, orden').all(p.id) as AccionRow[]).map(
       (a): Accion => ({
-        id: a.id, planId: a.plan_id, okrId: a.okr_id, fase: a.fase as Accion['fase'],
+        id: a.id, planId: a.plan_id, okrId: a.okr_id, krId: a.kr_id, fase: a.fase as Accion['fase'],
         orden: a.orden, texto: a.texto, creadoEn: a.creado_en,
       }),
     );
@@ -421,8 +421,8 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
       }
     }
     for (const a of pc.acciones) {
-      db.prepare('INSERT INTO acciones (id, plan_id, okr_id, fase, orden, texto, creado_en) VALUES (?,?,?,?,?,?,?)').run(
-        a.id, a.planId, a.okrId, a.fase, a.orden, a.texto, a.creadoEn,
+      db.prepare('INSERT INTO acciones (id, plan_id, okr_id, kr_id, fase, orden, texto, creado_en) VALUES (?,?,?,?,?,?,?,?)').run(
+        a.id, a.planId, a.okrId, a.krId, a.fase, a.orden, a.texto, a.creadoEn,
       );
     }
   });

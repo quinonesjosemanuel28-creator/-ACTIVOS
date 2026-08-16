@@ -352,7 +352,7 @@ export function crearHistorialRepoPg(pool: Pool): HistorialRepo {
 interface PlanRow { id: string; alumno_id: string; fecha_inicio: string; etapa: string | null; objetivo_90d: string | null; version: number; creado_en: string }
 interface OkrRow { id: string; plan_id: string; orden: number; objetivo: string; creado_en: string }
 interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; vencimiento: string | null; cumplido_en: string | null; creado_en: string }
-interface AccionRow { id: string; plan_id: string; okr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
+interface AccionRow { id: string; plan_id: string; okr_id: string | null; kr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
 interface CambioFechaRow { id: string; plan_id: string; fecha_anterior: string; fecha_nueva: string; cambiado_por: string; cambiado_en: string; motivo: string | null }
 
 const toKr = (k: KrRow): Kr => ({
@@ -383,7 +383,7 @@ export function crearPlanesRepoPg(pool: Pool): PlanesRepo {
     }
     const accionRows = (await pool.query('SELECT * FROM acciones WHERE plan_id = $1 ORDER BY fase, orden', [p.id])).rows as AccionRow[];
     const acciones = accionRows.map((a): Accion => ({
-      id: a.id, planId: a.plan_id, okrId: a.okr_id, fase: a.fase as Accion['fase'],
+      id: a.id, planId: a.plan_id, okrId: a.okr_id, krId: a.kr_id, fase: a.fase as Accion['fase'],
       orden: a.orden, texto: a.texto, creadoEn: a.creado_en,
     }));
     return { plan: toPlan(p), okrs, acciones };
@@ -409,8 +409,8 @@ export function crearPlanesRepoPg(pool: Pool): PlanesRepo {
           }
         }
         for (const a of pc.acciones) {
-          await client.query('INSERT INTO acciones (id, plan_id, okr_id, fase, orden, texto, creado_en) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-            [a.id, a.planId, a.okrId, a.fase, a.orden, a.texto, a.creadoEn]);
+          await client.query('INSERT INTO acciones (id, plan_id, okr_id, kr_id, fase, orden, texto, creado_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+            [a.id, a.planId, a.okrId, a.krId, a.fase, a.orden, a.texto, a.creadoEn]);
         }
         await client.query('COMMIT');
       } catch (err) {

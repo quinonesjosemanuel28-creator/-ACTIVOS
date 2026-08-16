@@ -327,6 +327,9 @@ CREATE TABLE IF NOT EXISTS acciones (
   id        TEXT PRIMARY KEY,
   plan_id   TEXT NOT NULL REFERENCES planes(id) ON DELETE CASCADE,
   okr_id    TEXT REFERENCES okrs(id),
+  -- KR al que aporta (ticket 8): agrupa el checklist del alumno bajo su KR.
+  -- Opcional en el contrato; sin él, la acción va a "Otras acciones".
+  kr_id     TEXT REFERENCES krs(id),
   fase      INTEGER NOT NULL CHECK(fase IN (1, 2, 3)),
   orden     INTEGER NOT NULL,
   texto     TEXT NOT NULL,
@@ -460,8 +463,10 @@ export function migrar(db: Database.Database): void {
   // Módulo de alumnos · seguimiento activo (ticket 7C): teléfono en dos campos.
   agregarColumnaSiFalta(db, 'alumnos', 'telefono_pais', 'TEXT');
   agregarColumnaSiFalta(db, 'alumnos', 'telefono_numero', 'TEXT');
-  // Módulo de alumnos · vista del alumno (ticket 8): última apertura del link.
+  // Módulo de alumnos · vista del alumno (ticket 8): última apertura del link
+  // y el KR de cada acción (agrupa el checklist del alumno).
   agregarColumnaSiFalta(db, 'alumnos', 'ultimo_acceso_link', 'TEXT');
+  agregarColumnaSiFalta(db, 'acciones', 'kr_id', 'TEXT REFERENCES krs(id)');
   // Comisiones: flags de setting a nivel de pago + registro de liquidaciones.
   agregarColumnaSiFalta(db, 'pagos', 'aplica_setting', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'pagos', 'setter', 'TEXT');

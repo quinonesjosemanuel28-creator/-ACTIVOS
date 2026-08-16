@@ -60,6 +60,11 @@ export interface Accion {
   planId: string;
   /** OKR al que aporta (para agrupar en el panel). Null = suelta. */
   okrId: string | null;
+  /**
+   * KR al que aporta (ticket 8): agrupa el checklist del ALUMNO bajo su KR —
+   * la tarea con su para qué. Null = va bajo "Otras acciones".
+   */
+  krId: string | null;
   fase: Fase;
   orden: number;
   texto: string;
@@ -99,7 +104,11 @@ export function faseActual(fechaInicio: string, hoyIso: string): Fase {
   return 3;
 }
 
-/** ¿El trimestre ya terminó? (día 90 en adelante). El checklist se congela. */
+/**
+ * ¿El trimestre ya terminó? (día 90 en adelante). La cabecera del link pasa a
+ * "Plan finalizado"; las casillas SIGUEN marcables (ticket 8 — lo que se
+ * completa tarde también es información para la llamada de cierre).
+ */
 export function planVencido(fechaInicio: string, hoyIso: string): boolean {
   const inicio = Date.parse(`${fechaInicio}T00:00:00Z`);
   const hoy = Date.parse(`${hoyIso.slice(0, 10)}T00:00:00Z`);

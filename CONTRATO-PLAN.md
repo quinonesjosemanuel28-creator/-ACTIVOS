@@ -81,9 +81,9 @@ documento.
       "fase": 1,
       "titulo": "Ordenar",
       "acciones": [
-        { "texto": "Armar el tablero en Sheets con las columnas mínimas", "okr": 1 },
-        { "texto": "Abrir una cuenta bancaria solo para el negocio", "okr": 1 },
-        { "texto": "Cargar los créditos vigentes en el tablero", "okr": 1 }
+        { "texto": "Armar el tablero en Sheets con las columnas mínimas", "okr": 1, "kr": 1 },
+        { "texto": "Abrir una cuenta bancaria solo para el negocio", "okr": 1, "kr": 2 },
+        { "texto": "Cargar los créditos vigentes en el tablero", "okr": 1, "kr": 1 }
       ]
     },
     {
@@ -121,6 +121,7 @@ documento.
 | `okrs[].krs[]` | sí | `texto` obligatorio, `meta` opcional. |
 | `fases[]` | sí | **Exactamente 3**, con `fase` 1, 2 y 3. `titulo` opcional. |
 | `fases[].acciones[]` | sí | `texto` obligatorio; `okr` opcional (número de `orden` del OKR al que pertenece, para agrupar en el panel). Si viene, **tiene que existir** en `okrs[]`. |
+| `fases[].acciones[].kr` | no | Posición (1..n) del KR **dentro del OKR referenciado**, para agrupar el checklist del alumno bajo su KR — la tarea con su para qué (ticket 8). Exige `okr` y una posición que exista en sus `krs[]`. Sin él, la acción va bajo "Otras acciones". Aditivo: los bloques anteriores siguen valiendo tal cual. |
 
 ### Reglas de redacción de las acciones
 
@@ -155,6 +156,10 @@ trabajo (después de "Paso 5 — Entregar"):
 >   imperativo, una sola cosa por acción, verificables con un sí o un no, hasta
 >   unos 120 caracteres, entre 3 y 8 por fase. Salen de la sección 6 del plan
 >   (Plan de acción por fases), no de las descripciones estratégicas.
+> - A cada acción, además del `okr`, ponele `kr`: la posición (1, 2, 3…) del
+>   KR de ese OKR al que la acción aporta. El checklist del alumno agrupa las
+>   acciones bajo su KR — la tarea con su para qué. Si una acción no aporta a
+>   un KR puntual, omití el campo.
 > - No inventar datos para completar el bloque: si algo falta, preguntarlo.
 >
 > ```json

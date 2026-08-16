@@ -7,7 +7,7 @@
  * Fase 1 tiene que aterrizar abierta.
  */
 import { describe, it, expect } from 'vitest';
-import { CUPO_ESTA_SEMANA, deudaVencida, diaDelPlan, faseAAbrir, seleccionarEstaSemana } from '../vistaAlumno';
+import { agruparPorKr, CUPO_ESTA_SEMANA, deudaVencida, diaDelPlan, faseAAbrir, seleccionarEstaSemana } from '../vistaAlumno';
 import type { Fase } from '../plan';
 
 type A = { id: string; hecha: boolean };
@@ -56,6 +56,42 @@ describe('Vista del alumno · Esta semana', () => {
   it('el orden de las fases en el payload no importa: se ordena por número', () => {
     const fases = [acciones(3, 0, 3), acciones(1, 0, 3), acciones(2, 0, 3)];
     expect(seleccionarEstaSemana(fases, 2).map((a) => a.id)).toEqual(['f1-a1', 'f1-a2', 'f1-a3']);
+  });
+});
+
+describe('Vista del alumno · agrupar por KR (ticket 8 §5)', () => {
+  const KRS = [
+    { id: 'kr-1', texto: 'Marca registrada' },
+    { id: 'kr-2', texto: 'Cartera bajo contrato' },
+  ];
+  const acc = (id: string, krId: string | null, hecha = false) => ({ id, krId, hecha });
+
+  it('agrupa bajo su KR en orden de plan, con las sueltas al final', () => {
+    const grupos = agruparPorKr(
+      [acc('a1', 'kr-2'), acc('a2', 'kr-1', true), acc('a3', null), acc('a4', 'kr-1')],
+      KRS,
+    );
+    expect(grupos.map((g) => g.kr?.texto ?? 'OTRAS')).toEqual(['Marca registrada', 'Cartera bajo contrato', 'OTRAS']);
+    expect(grupos[0]!.acciones.map((a) => a.id)).toEqual(['a2', 'a4']);
+    expect(grupos[2]!.acciones.map((a) => a.id)).toEqual(['a3']);
+  });
+
+  it('un plan viejo sin vínculos produce UN grupo sin nombre: la vista no se rompe', () => {
+    const grupos = agruparPorKr([acc('a1', null), acc('a2', null)], KRS);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0]!.kr).toBeNull();
+    expect(grupos[0]!.acciones).toHaveLength(2);
+  });
+
+  it('un krId que no está en la lista cae en sueltas (dato roto ≠ vista rota)', () => {
+    const grupos = agruparPorKr([acc('a1', 'kr-fantasma'), acc('a2', 'kr-1')], KRS);
+    expect(grupos.map((g) => g.kr?.id ?? null)).toEqual(['kr-1', null]);
+  });
+
+  it('los KRs sin acciones no generan grupos vacíos', () => {
+    const grupos = agruparPorKr([acc('a1', 'kr-2')], KRS);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0]!.kr!.id).toBe('kr-2');
   });
 });
 

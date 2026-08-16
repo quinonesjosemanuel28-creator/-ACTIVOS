@@ -380,7 +380,7 @@ export interface AvancePlanUI {
     fase: Fase;
     total: number;
     hechas: number;
-    acciones: { id: string; texto: string; fase: Fase; hecha: boolean; okrOrden: number | null; ultimoCambio: string | null }[];
+    acciones: { id: string; texto: string; fase: Fase; hecha: boolean; krId: string | null; okrOrden: number | null; ultimoCambio: string | null }[];
   }[];
   link: { token: string; expiraEn: string } | null;
   cambiosFecha: CambioFechaPlan[];

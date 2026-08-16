@@ -372,6 +372,9 @@ CREATE TABLE IF NOT EXISTS acciones (
   id        TEXT PRIMARY KEY,
   plan_id   TEXT NOT NULL REFERENCES planes(id) ON DELETE CASCADE,
   okr_id    TEXT REFERENCES okrs(id),
+  -- KR al que aporta (ticket 8): agrupa el checklist del alumno bajo su KR.
+  -- Opcional en el contrato; sin él, la acción va a "Otras acciones".
+  kr_id     TEXT REFERENCES krs(id),
   fase      INTEGER NOT NULL CHECK(fase IN (1, 2, 3)),
   orden     INTEGER NOT NULL,
   texto     TEXT NOT NULL,
@@ -518,8 +521,10 @@ ALTER TABLE krs ADD COLUMN IF NOT EXISTS cumplido_en TEXT;
 -- Módulo de alumnos · seguimiento activo (ticket 7C): teléfono en dos campos.
 ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS telefono_pais TEXT;
 ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS telefono_numero TEXT;
--- Módulo de alumnos · vista del alumno (ticket 8): última apertura del link.
+-- Módulo de alumnos · vista del alumno (ticket 8): última apertura del link
+-- y el KR de cada acción (agrupa el checklist del alumno).
 ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS ultimo_acceso_link TEXT;
+ALTER TABLE acciones ADD COLUMN IF NOT EXISTS kr_id TEXT REFERENCES krs(id);
 `;
 
 export async function migrarPg(pool: Pool): Promise<void> {

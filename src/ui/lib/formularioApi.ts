@@ -64,6 +64,8 @@ export interface AccionSeguimientoUI {
   id: string;
   texto: string;
   hecha: boolean;
+  /** KR al que aporta (ticket 8). Null = "Otras acciones". */
+  krId: string | null;
 }
 
 export interface SeguimientoAbiertoUI {
@@ -77,6 +79,8 @@ export interface SeguimientoAbiertoUI {
   /** El consultor pausó el plan: la vista lo dice sin drama. */
   pausado: boolean;
   fases: { fase: 1 | 2 | 3; acciones: AccionSeguimientoUI[] }[];
+  /** Los KRs del plan en orden, para el subtítulo de cada grupo. */
+  krs: { id: string; texto: string }[];
 }
 
 async function reqSeguimiento<T>(path: string, init?: RequestInit): Promise<T> {

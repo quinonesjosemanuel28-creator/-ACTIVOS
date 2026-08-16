@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, CheckCircle2, ChevronDown } from 'lucide-react';
-import { seleccionarEstaSemana, deudaVencida, faseAAbrir } from '@domain/alumnos/vistaAlumno';
+import { agruparPorKr, seleccionarEstaSemana, deudaVencida, faseAAbrir } from '@domain/alumnos/vistaAlumno';
 import { seguimientoApi, ErrorFormulario, type SeguimientoAbiertoUI, type MotivoToken } from '../lib/formularioApi';
 import { Card, Spinner } from '../components/ui/primitives';
 
@@ -197,10 +197,28 @@ export function VistaSeguimiento({ token }: { token: string }) {
                 </span>
               </button>
               {abierta && (
-                <div className="space-y-1 border-t border-navy-100 px-4 py-3 dark:border-navy-700">
-                  {f.acciones.map((a) => (
-                    <CasillaAccion key={a.id} accion={a} onTildar={tildar} />
-                  ))}
+                <div className="space-y-2 border-t border-navy-100 px-4 py-3 dark:border-navy-700">
+                  {/* Las acciones bajo su KR: la tarea con su para qué. El KR
+                      es subtítulo, no casilla — el alumno marca acciones. */}
+                  {agruparPorKr(f.acciones, datos.krs).map((grupo, _gi, grupos) => {
+                    const hechasGrupo = grupo.acciones.filter((a) => a.hecha).length;
+                    const soloSueltas = grupos.length === 1 && grupo.kr === null;
+                    return (
+                      <div key={grupo.kr?.id ?? 'otras'}>
+                        {!soloSueltas && (
+                          <p className="flex items-baseline justify-between gap-2 px-2 pb-0.5 text-xs text-navy-400">
+                            <span>{grupo.kr ? `KR — ${grupo.kr.texto}` : 'Otras acciones'}</span>
+                            <span className="shrink-0">{hechasGrupo}/{grupo.acciones.length}</span>
+                          </p>
+                        )}
+                        <div className="space-y-1">
+                          {grupo.acciones.map((a) => (
+                            <CasillaAccion key={a.id} accion={a} onTildar={tildar} />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </Card>
