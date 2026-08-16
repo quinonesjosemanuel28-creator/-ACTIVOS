@@ -157,6 +157,10 @@ CREATE TABLE IF NOT EXISTS alumnos (
   -- whatsapp (arriba) queda como texto libre del alumno; ESTOS arman wa.me.
   telefono_pais        TEXT,
   telefono_numero      TEXT,
+  -- Última APERTURA del link de seguimiento (ticket 8). Junto al último
+  -- check-in distingue "no abre" (se despegó) de "abre y no marca" (trabado
+  -- en algo concreto): el mismo silencio admite dos mensajes distintos.
+  ultimo_acceso_link   TEXT,
   id_cierre_vinculado  TEXT,
   -- Borrado LÓGICO (ticket 7): no null = papelera. TODA consulta del módulo
   -- filtra eliminado_en IS NULL; el borrado físico existe solo desde la
@@ -456,6 +460,8 @@ export function migrar(db: Database.Database): void {
   // Módulo de alumnos · seguimiento activo (ticket 7C): teléfono en dos campos.
   agregarColumnaSiFalta(db, 'alumnos', 'telefono_pais', 'TEXT');
   agregarColumnaSiFalta(db, 'alumnos', 'telefono_numero', 'TEXT');
+  // Módulo de alumnos · vista del alumno (ticket 8): última apertura del link.
+  agregarColumnaSiFalta(db, 'alumnos', 'ultimo_acceso_link', 'TEXT');
   // Comisiones: flags de setting a nivel de pago + registro de liquidaciones.
   agregarColumnaSiFalta(db, 'pagos', 'aplica_setting', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'pagos', 'setter', 'TEXT');

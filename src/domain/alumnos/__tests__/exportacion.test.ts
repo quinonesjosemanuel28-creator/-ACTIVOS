@@ -29,6 +29,7 @@ const ALUMNO: Alumno = {
   estadoActualizadoEn: null,
   telefonoPais: null,
   telefonoNumero: null,
+  ultimoAccesoLink: null,
   idCierreVinculado: null,
   eliminadoEn: null,
   eliminadoPor: null,

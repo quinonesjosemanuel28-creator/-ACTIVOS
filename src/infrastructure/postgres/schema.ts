@@ -180,6 +180,10 @@ CREATE TABLE IF NOT EXISTS alumnos (
   -- whatsapp (arriba) queda como texto libre del alumno; ESTOS arman wa.me.
   telefono_pais        TEXT,
   telefono_numero      TEXT,
+  -- Última APERTURA del link de seguimiento (ticket 8). Junto al último
+  -- check-in distingue "no abre" (se despegó) de "abre y no marca" (trabado
+  -- en algo concreto): el mismo silencio admite dos mensajes distintos.
+  ultimo_acceso_link   TEXT,
   -- Vínculo futuro con el contable. SIN foreign key a propósito: no debe
   -- existir camino navegable desde un alumno hacia la facturación.
   id_cierre_vinculado  TEXT,
@@ -514,6 +518,8 @@ ALTER TABLE krs ADD COLUMN IF NOT EXISTS cumplido_en TEXT;
 -- Módulo de alumnos · seguimiento activo (ticket 7C): teléfono en dos campos.
 ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS telefono_pais TEXT;
 ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS telefono_numero TEXT;
+-- Módulo de alumnos · vista del alumno (ticket 8): última apertura del link.
+ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS ultimo_acceso_link TEXT;
 `;
 
 export async function migrarPg(pool: Pool): Promise<void> {

@@ -155,20 +155,41 @@ function diasDesde(iso: string): number {
   return Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
 }
 
-/** Última señal del alumno. Con la alerta activa, la celda grita. */
-function UltimaActividad({ iso, alerta }: { iso: string | null; alerta?: AlertaInactividad }) {
+const hace = (iso: string) => {
+  const d = diasDesde(iso);
+  return d === 0 ? 'hoy' : `hace ${d} día${d === 1 ? '' : 's'}`;
+};
+
+/**
+ * Última señal del alumno. Con la alerta activa, la celda grita — y el
+ * último ACCESO al link (ticket 8) distingue el mensaje: "no abre" es
+ * despegue del proceso; "abre y no marca" es un obstáculo concreto.
+ */
+function UltimaActividad({ iso, alerta, accesoLink, conPlan }: {
+  iso: string | null;
+  alerta?: AlertaInactividad;
+  accesoLink?: string | null;
+  conPlan?: boolean;
+}) {
+  const acceso = conPlan ? (
+    <span className="block text-[11px] text-navy-400">
+      {accesoLink ? `abrió el link ${hace(accesoLink)}` : 'nunca abrió el link'}
+    </span>
+  ) : null;
   if (alerta?.activa) {
     return (
-      <span className="flex items-center gap-1 text-xs font-600 text-signal-red">
-        <AlertTriangle size={12} /> sin señales hace {alerta.diasSinSenal} días
+      <span className="text-xs">
+        <span className="flex items-center gap-1 font-600 text-signal-red">
+          <AlertTriangle size={12} /> sin señales hace {alerta.diasSinSenal} días
+        </span>
+        {acceso}
       </span>
     );
   }
-  if (!iso) return <span className="text-xs text-navy-400">—</span>;
-  const d = diasDesde(iso);
   return (
     <span className="text-xs text-navy-500 dark:text-navy-300">
-      {d === 0 ? 'hoy' : `hace ${d} día${d === 1 ? '' : 's'}`}
+      {iso ? hace(iso) : '—'}
+      {acceso}
     </span>
   );
 }
@@ -345,7 +366,9 @@ function FilaPanel({ fila: f, onAbrir }: { fila: FilaPanelUI; onAbrir: (id: stri
       <td className="px-3 py-3 text-xs text-navy-500 dark:text-navy-300">
         {f.krs.totales > 0 ? `${f.krs.cumplidos}/${f.krs.totales}` : '—'}
       </td>
-      <td className="px-3 py-3"><UltimaActividad iso={f.ultimaActividad} alerta={f.alerta} /></td>
+      <td className="px-3 py-3">
+        <UltimaActividad iso={f.ultimaActividad} alerta={f.alerta} accesoLink={f.alumno.ultimoAccesoLink} conPlan={f.plan !== null} />
+      </td>
       <td className="px-3 py-3"><WhatsAppBtn alumno={f.alumno} krPendiente={f.krPendiente} /></td>
       <td className="px-3 py-3 text-xs text-navy-500 dark:text-navy-300">{f.consultorNombre ?? '—'}</td>
     </tr>
@@ -665,6 +688,12 @@ function BarraProgreso({ alumno, vigente }: { alumno: Alumno; vigente: PlanCompl
         </span>
         <SaludBadge salud={salud} />
         {totales > 0 && <span className="text-xs text-navy-400">{cumplidos}/{totales} KRs cumplidos</span>}
+        {/* Dos señales, dos mensajes (ticket 8): "no abre el link" = se
+            despegó del proceso; "abre y no marca" = trabado en algo concreto. */}
+        <span className="text-xs text-navy-400">
+          Última marca: {avance?.ultimaActividad ? hace(avance.ultimaActividad) : 'nunca'} · Abrió el link:{' '}
+          {alumno.ultimoAccesoLink ? hace(alumno.ultimoAccesoLink) : 'nunca'}
+        </span>
         <span className="ml-auto flex items-center gap-1.5 text-xs text-navy-500 dark:text-navy-300">
           <CalendarDays size={14} /> Arrancó el {vigente.plan.fechaInicio}
           <Button variant="ghost" size="sm" onClick={() => { setEditando((v) => !v); setFecha(vigente.plan.fechaInicio); setError(null); }}>

@@ -77,6 +77,7 @@ interface AlumnoRow {
   estado_actualizado_en: string | null;
   telefono_pais: string | null;
   telefono_numero: string | null;
+  ultimo_acceso_link: string | null;
   id_cierre_vinculado: string | null;
   eliminado_en: string | null;
   eliminado_por: string | null;
@@ -99,6 +100,7 @@ const toAlumno = (r: AlumnoRow): Alumno => ({
   estadoActualizadoEn: r.estado_actualizado_en,
   telefonoPais: r.telefono_pais,
   telefonoNumero: r.telefono_numero,
+  ultimoAccesoLink: r.ultimo_acceso_link,
   idCierreVinculado: r.id_cierre_vinculado,
   eliminadoEn: r.eliminado_en,
   eliminadoPor: r.eliminado_por,
@@ -143,8 +145,8 @@ export function crearAlumnosRepo(db: Database.Database): AlumnosRepo {
         `INSERT INTO alumnos
           (id, consultor_id, nombre, edad, zona, whatsapp, marca_comercial, programa,
            canal_origen, moneda, activo, estado, estado_actualizado_en, telefono_pais,
-           telefono_numero, id_cierre_vinculado, eliminado_en, eliminado_por, creado_en)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           telefono_numero, ultimo_acceso_link, id_cierre_vinculado, eliminado_en, eliminado_por, creado_en)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET
            consultor_id=excluded.consultor_id, nombre=excluded.nombre, edad=excluded.edad,
            zona=excluded.zona, whatsapp=excluded.whatsapp, marca_comercial=excluded.marca_comercial,
@@ -155,8 +157,13 @@ export function crearAlumnosRepo(db: Database.Database): AlumnosRepo {
       ).run(
         a.id, a.consultorId, a.nombre, a.edad, a.zona, a.whatsapp, a.marcaComercial, a.programa,
         a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.estado, a.estadoActualizadoEn, a.telefonoPais,
-        a.telefonoNumero, a.idCierreVinculado, a.eliminadoEn, a.eliminadoPor, a.creadoEn,
+        a.telefonoNumero, a.ultimoAccesoLink, a.idCierreVinculado, a.eliminadoEn, a.eliminadoPor, a.creadoEn,
       );
+    },
+    async registrarAccesoLink(id, ahoraIso) {
+      // Canal propio, fuera del upsert de guardar(): la apertura del link
+      // corre en paralelo a cualquier edición de la ficha y no debe pisarse.
+      db.prepare('UPDATE alumnos SET ultimo_acceso_link = ? WHERE id = ?').run(ahoraIso, id);
     },
     async eliminar(id, eliminadoEn, eliminadoPor) {
       db.prepare('UPDATE alumnos SET eliminado_en = ?, eliminado_por = ? WHERE id = ? AND eliminado_en IS NULL').run(

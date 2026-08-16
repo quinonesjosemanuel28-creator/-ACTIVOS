@@ -45,6 +45,12 @@ export interface Alumno {
    */
   telefonoPais: string | null;
   telefonoNumero: string | null;
+  /**
+   * Última APERTURA del link de seguimiento (ticket 8). Con el último
+   * check-in forman dos señales distintas: "no abre" (se despegó del
+   * proceso) vs. "abre y no marca" (trabado en algo concreto).
+   */
+  ultimoAccesoLink: string | null;
   /** Vínculo suelto con el contable. Sin FK a propósito: no es navegable. */
   idCierreVinculado: string | null;
   /**

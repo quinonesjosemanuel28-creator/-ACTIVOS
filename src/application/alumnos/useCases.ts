@@ -132,6 +132,7 @@ export async function crearAlumno(
     estadoActualizadoEn: null,
     telefonoPais: input.telefonoPais ?? null,
     telefonoNumero: input.telefonoNumero ?? null,
+    ultimoAccesoLink: null,
     idCierreVinculado: input.idCierreVinculado ?? null,
     eliminadoEn: null,
     eliminadoPor: null,
@@ -667,6 +668,11 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
   const alumno = await repos.alumnos.obtener(pc.plan.alumnoId);
   const estado = estadoAcciones(await repos.checkins.listarPorPlan(pc.plan.id));
   const pausado = alumno?.estado === 'PAUSADO';
+
+  // La APERTURA es una señal en sí (ticket 8): junto al último check-in, el
+  // panel distingue "no abre" (se despegó) de "abre y no marca" (trabado en
+  // algo concreto). Solo acá — tildar NO registra acceso.
+  if (alumno) await repos.alumnos.registrarAccesoLink(alumno.id, ahora);
 
   const fases: SeguimientoAbierto['fases'] = ([1, 2, 3] as const).map((fase) => ({
     fase,

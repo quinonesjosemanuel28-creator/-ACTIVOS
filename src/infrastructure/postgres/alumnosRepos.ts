@@ -64,6 +64,7 @@ interface AlumnoRow {
   estado_actualizado_en: string | null;
   telefono_pais: string | null;
   telefono_numero: string | null;
+  ultimo_acceso_link: string | null;
   id_cierre_vinculado: string | null;
   eliminado_en: string | null;
   eliminado_por: string | null;
@@ -86,6 +87,7 @@ const toAlumno = (r: AlumnoRow): Alumno => ({
   estadoActualizadoEn: r.estado_actualizado_en,
   telefonoPais: r.telefono_pais,
   telefonoNumero: r.telefono_numero,
+  ultimoAccesoLink: r.ultimo_acceso_link,
   idCierreVinculado: r.id_cierre_vinculado,
   eliminadoEn: r.eliminado_en,
   eliminadoPor: r.eliminado_por,
@@ -130,8 +132,8 @@ export function crearAlumnosRepoPg(pool: Pool): AlumnosRepo {
         `INSERT INTO alumnos
           (id, consultor_id, nombre, edad, zona, whatsapp, marca_comercial, programa,
            canal_origen, moneda, activo, estado, estado_actualizado_en, telefono_pais,
-           telefono_numero, id_cierre_vinculado, eliminado_en, eliminado_por, creado_en)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+           telefono_numero, ultimo_acceso_link, id_cierre_vinculado, eliminado_en, eliminado_por, creado_en)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
          ON CONFLICT (id) DO UPDATE SET
            consultor_id=EXCLUDED.consultor_id, nombre=EXCLUDED.nombre, edad=EXCLUDED.edad,
            zona=EXCLUDED.zona, whatsapp=EXCLUDED.whatsapp, marca_comercial=EXCLUDED.marca_comercial,
@@ -142,9 +144,14 @@ export function crearAlumnosRepoPg(pool: Pool): AlumnosRepo {
         [
           a.id, a.consultorId, a.nombre, a.edad, a.zona, a.whatsapp, a.marcaComercial, a.programa,
           a.canalOrigen, a.moneda, a.activo ? 1 : 0, a.estado, a.estadoActualizadoEn, a.telefonoPais,
-          a.telefonoNumero, a.idCierreVinculado, a.eliminadoEn, a.eliminadoPor, a.creadoEn,
+          a.telefonoNumero, a.ultimoAccesoLink, a.idCierreVinculado, a.eliminadoEn, a.eliminadoPor, a.creadoEn,
         ],
       );
+    },
+    async registrarAccesoLink(id, ahoraIso) {
+      // Canal propio, fuera del upsert de guardar(): la apertura del link
+      // corre en paralelo a cualquier edición de la ficha y no debe pisarse.
+      await pool.query('UPDATE alumnos SET ultimo_acceso_link = $1 WHERE id = $2', [ahoraIso, id]);
     },
     async eliminar(id, eliminadoEn, eliminadoPor) {
       await pool.query('UPDATE alumnos SET eliminado_en = $1, eliminado_por = $2 WHERE id = $3 AND eliminado_en IS NULL', [

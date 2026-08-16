@@ -35,6 +35,11 @@ export interface AlumnosRepo {
   obtener(id: string): Promise<Alumno | null>;
   listar(filtros?: FiltrosAlumnos): Promise<Alumno[]>;
   guardar(alumno: Alumno): Promise<void>; // upsert
+  /**
+   * Última APERTURA del link de seguimiento (ticket 8). Canal propio, fuera
+   * del upsert: corre en paralelo a cualquier edición de la ficha.
+   */
+  registrarAccesoLink(id: string, ahoraIso: string): Promise<void>;
   /** Borrado LÓGICO: manda la ficha a la papelera. */
   eliminar(id: string, eliminadoEn: string, eliminadoPor: string): Promise<void>;
   // ── Papelera (solo ADMIN llega acá por ruta) ──

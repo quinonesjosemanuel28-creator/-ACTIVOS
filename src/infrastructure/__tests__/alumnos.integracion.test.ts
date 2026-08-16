@@ -609,6 +609,26 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     expect(r.hecha).toBe(true);
   });
 
+  it('abrir el link registra ultimo_acceso_link SIN marcar nada; tildar NO registra acceso', async () => {
+    const { repos, alcanceConsu, alumno, plan } = await conPlan();
+
+    // Antes de abrir: nunca accedió.
+    expect((await repos.alumnos.obtener(alumno.id))!.ultimoAccesoLink).toBeNull();
+
+    const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
+    const APERTURA = '2026-08-21T10:00:00.000Z';
+    await ua.abrirSeguimiento(repos, token.token, APERTURA);
+
+    const despues = (await repos.alumnos.obtener(alumno.id))!;
+    expect(despues.ultimoAccesoLink).toBe(APERTURA);
+    // Abrir no marcó ninguna acción.
+    expect(await repos.checkins.listarPorPlan(plan.plan.id)).toHaveLength(0);
+
+    // Tildar es la OTRA señal: no toca el acceso.
+    await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, true, '2026-08-25T10:00:00.000Z');
+    expect((await repos.alumnos.obtener(alumno.id))!.ultimoAccesoLink).toBe(APERTURA);
+  });
+
   it('el plan PAUSADO se declara en el payload, sin drama y sin congelar tildes', async () => {
     const { repos, alcanceConsu, alumno, plan } = await conPlan();
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
