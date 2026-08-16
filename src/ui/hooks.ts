@@ -424,6 +424,21 @@ export function useEliminarAlumno() {
   const inval = useInvalidarAlumnos();
   return useMutation({ mutationFn: (id: string) => api.eliminarAlumno(id), onSuccess: inval });
 }
+/** Documentos del plan (ticket 7B): versiones, la vigente primero. */
+export function useDocumentosPlan(planId: string | null) {
+  return useQuery({
+    queryKey: ['alumnos', 'documentos', planId],
+    queryFn: () => api.documentosPlan(planId!),
+    enabled: !!planId,
+  });
+}
+export function useSubirDocumento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { planId: string; file: File }) => api.subirDocumento(v.planId, v.file),
+    onSuccess: (_r, v) => qc.invalidateQueries({ queryKey: ['alumnos', 'documentos', v.planId] }),
+  });
+}
 export function usePapelera(habilitada: boolean) {
   return useQuery({ queryKey: ['alumnos', 'papelera'], queryFn: () => api.papelera(), enabled: habilitada });
 }

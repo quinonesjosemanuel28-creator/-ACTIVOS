@@ -11,7 +11,8 @@ import type { ResumenEgresos } from '@domain/egresos/metrics';
 import type { ComisionesDelMes } from '@domain/comisiones/calculo';
 import type { Accion, Rol, UsuarioPublico } from '@domain/auth/permisos';
 import type { Alumno, Diagnostico, TokenDiagnostico } from '@domain/alumnos/tipos';
-import type { CambioFechaPlan, Fase, Kr, PlanCompleto, TokenSeguimiento } from '@domain/alumnos/plan';
+import type { CambioFechaPlan, Fase, Kr, PlanCompleto, PlanDocumento, TokenSeguimiento } from '@domain/alumnos/plan';
+import { MIME_DOCX, MIME_PDF } from '@domain/alumnos/plan';
 import type { ChipFase, EstadoAlumno, Salud, SaludCalculada } from '@domain/alumnos/panel';
 
 // ───────────────────── Auth / sesión ─────────────────────
@@ -319,6 +320,24 @@ export const api = {
     ),
   editarKr: (krId: string, patch: { cumplido?: boolean; vencimiento?: string | null }) =>
     req<Kr>(`/krs/${krId}`, { method: 'PUT', body: JSON.stringify(patch) }),
+
+  // El documento del plan (ticket 7B): el binario viaja crudo, el nombre en la query.
+  documentosPlan: (planId: string) => req<PlanDocumento[]>(`/planes/${planId}/documentos`),
+  subirDocumento: async (planId: string, file: File): Promise<PlanDocumento> => {
+    const mime = file.name.toLowerCase().endsWith('.pdf') ? MIME_PDF : MIME_DOCX;
+    const res = await fetch(`/api/planes/${planId}/documentos?nombre=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': mime },
+      body: await file.arrayBuffer(),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new ErrorHttp(res.status, body.error ?? `Error ${res.status}`);
+    }
+    return res.json() as Promise<PlanDocumento>;
+  },
+  /** URL del contenido (visor embebido / descarga). La sesión viaja en la cookie. */
+  urlDocumento: (id: string) => `/api/documentos/${id}`,
   alumno: (id: string) => req<Alumno>(`/alumnos/${id}`),
   crearAlumno: (a: unknown) => req<Alumno>('/alumnos', { method: 'POST', body: JSON.stringify(a) }),
   editarAlumno: (id: string, a: unknown) => req<Alumno>(`/alumnos/${id}`, { method: 'PUT', body: JSON.stringify(a) }),

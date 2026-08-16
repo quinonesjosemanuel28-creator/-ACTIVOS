@@ -24,6 +24,7 @@ import { crearUsuariosRepo, crearSesionesRepo } from '../sqlite/authRepos';
 import {
   crearAlumnosRepo,
   crearDiagnosticosRepo,
+  crearDocumentosRepo,
   crearHistorialRepo,
   crearPlanesRepo,
   crearSeguimientoRepo,
@@ -40,6 +41,7 @@ import { crearUsuariosRepoPg, crearSesionesRepoPg } from '../postgres/authRepos'
 import {
   crearAlumnosRepoPg,
   crearDiagnosticosRepoPg,
+  crearDocumentosRepoPg,
   crearHistorialRepoPg,
   crearPlanesRepoPg,
   crearSeguimientoRepoPg,
@@ -88,6 +90,7 @@ export async function crearInfraestructura(): Promise<Infraestructura> {
         planes: crearPlanesRepoPg(pool),
         seguimiento: crearSeguimientoRepoPg(pool),
         checkins: crearCheckinsRepoPg(pool),
+        documentos: crearDocumentosRepoPg(pool),
       },
     };
   }
@@ -122,6 +125,7 @@ export function infraestructuraDesdeDb(
       planes: crearPlanesRepo(db),
       seguimiento: crearSeguimientoRepo(db),
       checkins: crearCheckinsRepo(db),
+      documentos: crearDocumentosRepo(db),
     },
   };
 }

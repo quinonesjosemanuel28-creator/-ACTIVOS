@@ -17,11 +17,12 @@ import {
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
 import { diasEntre } from '../../domain/alumnos/plan';
-import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
   CheckinsRepo,
   DiagnosticosRepo,
+  DocumentosRepo,
   HistorialRepo,
   PlanesRepo,
   SeguimientoTokensRepo,
@@ -511,6 +512,42 @@ export function crearSeguimientoRepoPg(pool: Pool): SeguimientoTokensRepo {
         ahoraIso, planId,
       ]);
       return r.rowCount ?? 0;
+    },
+  };
+}
+
+// ───────────────────────── Documentos del plan ─────────────────────────
+
+interface DocumentoRow {
+  id: string; plan_id: string; nombre_archivo: string; mime_type: string;
+  tamano_bytes: number; subido_por: string; subido_en: string;
+}
+
+const toDocumento = (r: DocumentoRow): PlanDocumento => ({
+  id: r.id, planId: r.plan_id, nombreArchivo: r.nombre_archivo, mimeType: r.mime_type,
+  tamanoBytes: r.tamano_bytes, subidoPor: r.subido_por, subidoEn: r.subido_en,
+});
+
+/** Columnas SIN contenido: los listados no arrastran megabytes de BYTEA. */
+const COLS_DOCUMENTO = 'id, plan_id, nombre_archivo, mime_type, tamano_bytes, subido_por, subido_en';
+
+export function crearDocumentosRepoPg(pool: Pool): DocumentosRepo {
+  return {
+    async crear(doc, contenido) {
+      await pool.query(
+        `INSERT INTO plan_documentos (id, plan_id, nombre_archivo, mime_type, contenido, tamano_bytes, subido_por, subido_en)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [doc.id, doc.planId, doc.nombreArchivo, doc.mimeType, Buffer.from(contenido), doc.tamanoBytes, doc.subidoPor, doc.subidoEn],
+      );
+    },
+    async listarPorPlan(planId) {
+      const r = await pool.query(`SELECT ${COLS_DOCUMENTO} FROM plan_documentos WHERE plan_id = $1 ORDER BY subido_en DESC`, [planId]);
+      return (r.rows as DocumentoRow[]).map(toDocumento);
+    },
+    async obtener(id) {
+      const r = await pool.query('SELECT * FROM plan_documentos WHERE id = $1', [id]);
+      const row = r.rows[0] as (DocumentoRow & { contenido: Buffer }) | undefined;
+      return row ? { doc: toDocumento(row), contenido: new Uint8Array(row.contenido) } : null;
     },
   };
 }

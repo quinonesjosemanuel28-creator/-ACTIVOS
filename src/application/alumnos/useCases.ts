@@ -54,7 +54,16 @@ import {
   type Salud,
   type SaludCalculada,
 } from '../../domain/alumnos/panel';
-import { fechaCierreEstimada, diasEntre, type CambioFechaPlan, type Kr as KrPlan } from '../../domain/alumnos/plan';
+import {
+  fechaCierreEstimada,
+  diasEntre,
+  MIME_DOCX,
+  MIME_PDF,
+  validarDocumento,
+  type CambioFechaPlan,
+  type Kr as KrPlan,
+  type PlanDocumento,
+} from '../../domain/alumnos/plan';
 import {
   aRespuestas,
   alumnoInputSchema,
@@ -935,6 +944,74 @@ export async function panelAlumnos(
       (a.salud.brecha ?? 0) - (b.salud.brecha ?? 0) ||
       a.alumno.nombre.localeCompare(b.alumno.nombre),
   );
+}
+
+// ───── El documento del plan (ticket 7B) ─────
+
+const MENSAJE_DOC: Record<'tipo' | 'tamano' | 'vacio', string> = {
+  tipo: 'Solo se aceptan .pdf o .docx.',
+  tamano: 'El archivo pasa los 10 MB. Comprimí el PDF o subí una versión más liviana.',
+  vacio: 'El archivo llegó vacío. Probá subirlo de nuevo.',
+};
+
+/**
+ * Sube una versión del documento del plan. El tipo se deriva de la EXTENSIÓN
+ * del nombre (el Content-Type del cliente no es confiable) y el límite de
+ * 10 MB se corta acá, en el borde real. Nunca pisa la versión anterior.
+ */
+export async function subirDocumentoPlan(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  usuarioId: string,
+  planId: string,
+  nombreArchivo: unknown,
+  contenido: Uint8Array,
+  ahora = ahoraIso(),
+): Promise<PlanDocumento> {
+  await planAlcanzado(repos, alcance, planId);
+
+  const nombre = typeof nombreArchivo === 'string' ? nombreArchivo.trim() : '';
+  if (nombre === '') throw new ErrorAlumnos('VALIDACION', 'Falta el nombre del archivo.');
+  const minusculas = nombre.toLowerCase();
+  const mimeType = minusculas.endsWith('.pdf') ? MIME_PDF : minusculas.endsWith('.docx') ? MIME_DOCX : null;
+  if (!mimeType) throw new ErrorAlumnos('VALIDACION', MENSAJE_DOC.tipo);
+
+  const estado = validarDocumento({ mimeType, tamanoBytes: contenido.byteLength });
+  if (!estado.valido) throw new ErrorAlumnos('VALIDACION', MENSAJE_DOC[estado.motivo]);
+
+  const doc: PlanDocumento = {
+    id: randomUUID(),
+    planId,
+    nombreArchivo: nombre,
+    mimeType,
+    tamanoBytes: contenido.byteLength,
+    subidoPor: usuarioId,
+    subidoEn: ahora,
+  };
+  await repos.documentos.crear(doc, contenido);
+  return doc;
+}
+
+/** Versiones del documento, la vigente primero. Solo metadatos. */
+export async function listarDocumentosPlan(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  planId: string,
+): Promise<PlanDocumento[]> {
+  await planAlcanzado(repos, alcance, planId);
+  return repos.documentos.listarPorPlan(planId);
+}
+
+/** Un documento con su contenido (visor embebido / descarga). Ajeno = 404. */
+export async function obtenerDocumentoPlan(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  documentoId: string,
+): Promise<{ doc: PlanDocumento; contenido: Uint8Array }> {
+  const fila = await repos.documentos.obtener(documentoId);
+  if (!fila) throw new ErrorAlumnos('NO_ENCONTRADO', 'Documento inexistente.');
+  await planAlcanzado(repos, alcance, fila.doc.planId);
+  return fila;
 }
 
 // ───── Papelera (borrado lógico; rutas solo ADMIN vía 'eliminar_alumnos') ─────

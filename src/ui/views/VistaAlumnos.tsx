@@ -24,6 +24,7 @@ import {
   useCargarPlan,
   useCrearAlumno,
   useDiagnosticos,
+  useDocumentosPlan,
   useEditarAlumno,
   useEditarDiagnostico,
   useEditarKr,
@@ -38,9 +39,10 @@ import {
   usePreviaPlan,
   useRestaurarAlumno,
   useRevocarLinkSeguimiento,
+  useSubirDocumento,
 } from '../hooks';
 import { usePuede } from '../store';
-import type { FilaPanelUI, PreviaPlanUI } from '../lib/api';
+import { api, type FilaPanelUI, type PreviaPlanUI } from '../lib/api';
 import { Textarea } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import { Badge, Button, Card, Input, Select, Spinner } from '../components/ui/primitives';
@@ -747,6 +749,7 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
               {vigente.plan.objetivo90d}
             </p>
           )}
+          <DocumentoPlan planId={vigente.plan.id} />
           <div className="grid gap-3 lg:grid-cols-2">
             {vigente.okrs.map((o) => (
               <div key={o.id} className="rounded-xl border border-navy-100 p-3 dark:border-navy-700">
@@ -761,6 +764,104 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * El documento del plan (ticket 7B): visor embebido del PDF vigente (el
+ * .docx se descarga), subida de versiones nuevas — nunca pisan la anterior —
+ * y las anteriores en una lista colapsada. El contenido vive en la base:
+ * sobrevive a los reinicios del contenedor y viaja con el backup.
+ */
+function DocumentoPlan({ planId }: { planId: string }) {
+  const { data: docs } = useDocumentosPlan(planId);
+  const subir = useSubirDocumento();
+  const [error, setError] = useState<string | null>(null);
+
+  const vigenteDoc = docs?.[0] ?? null;
+  const anteriores = docs?.slice(1) ?? [];
+
+  const elegir = async (file: File | undefined) => {
+    setError(null);
+    if (!file) return;
+    const nombre = file.name.toLowerCase();
+    if (!nombre.endsWith('.pdf') && !nombre.endsWith('.docx')) {
+      setError('Solo se aceptan .pdf o .docx.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('El archivo pasa los 10 MB. Comprimí el PDF o subí una versión más liviana.');
+      return;
+    }
+    try {
+      await subir.mutateAsync({ planId, file });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo subir el documento.');
+    }
+  };
+
+  const kb = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`);
+
+  return (
+    <div className="space-y-2 rounded-xl border border-navy-100 p-3 dark:border-navy-700">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-600 text-navy-900 dark:text-navy-50">Documento del plan</p>
+        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-sm font-600 text-navy-700 hover:bg-navy-50 dark:border-navy-600 dark:text-navy-200 dark:hover:bg-navy-800">
+          {subir.isPending ? <Spinner className="h-4 w-4" /> : <FileDown size={14} />}
+          {vigenteDoc ? 'Subir versión nueva' : 'Subir el .pdf o .docx'}
+          <input
+            type="file"
+            accept=".pdf,.docx"
+            className="hidden"
+            disabled={subir.isPending}
+            onChange={(e) => { void elegir(e.target.files?.[0]); e.target.value = ''; }}
+          />
+        </label>
+      </div>
+      {error && <p className="text-xs font-600 text-signal-red">{error}</p>}
+
+      {!vigenteDoc ? (
+        <p className="text-xs text-navy-400">
+          Todavía no se subió el documento. La versión que le mandás al alumno conviene tenerla acá: queda con la ficha y sobrevive a los reinicios del servidor.
+        </p>
+      ) : vigenteDoc.mimeType === 'application/pdf' ? (
+        <>
+          <iframe
+            title={vigenteDoc.nombreArchivo}
+            src={api.urlDocumento(vigenteDoc.id)}
+            className="h-[28rem] w-full rounded-lg border border-navy-100 bg-white dark:border-navy-700"
+          />
+          <p className="text-xs text-navy-400">
+            {vigenteDoc.nombreArchivo} · {kb(vigenteDoc.tamanoBytes)} · subido el {vigenteDoc.subidoEn.slice(0, 10)}
+          </p>
+        </>
+      ) : (
+        <a
+          href={api.urlDocumento(vigenteDoc.id)}
+          className="flex items-center gap-2 rounded-lg bg-navy-50 p-3 text-sm text-navy-800 hover:bg-navy-100 dark:bg-navy-800 dark:text-navy-100 dark:hover:bg-navy-700"
+        >
+          <Download size={16} />
+          {vigenteDoc.nombreArchivo}
+          <span className="text-xs text-navy-400">· {kb(vigenteDoc.tamanoBytes)} · subido el {vigenteDoc.subidoEn.slice(0, 10)} — descargar</span>
+        </a>
+      )}
+
+      {anteriores.length > 0 && (
+        <details className="text-xs text-navy-500 dark:text-navy-300">
+          <summary className="cursor-pointer font-600">Versiones anteriores ({anteriores.length})</summary>
+          <ul className="mt-1.5 space-y-1">
+            {anteriores.map((d) => (
+              <li key={d.id}>
+                <a href={api.urlDocumento(d.id)} className="underline hover:text-navy-800 dark:hover:text-navy-100">
+                  {d.nombreArchivo}
+                </a>{' '}
+                · {kb(d.tamanoBytes)} · {d.subidoEn.slice(0, 10)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }
 

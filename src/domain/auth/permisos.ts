@@ -249,4 +249,5 @@ export const TABLAS_SENSIBLES: readonly string[] = [
   'checkins',
   'seguimiento_tokens',
   'plan_fecha_historial',
+  'plan_documentos',
 ] as const;

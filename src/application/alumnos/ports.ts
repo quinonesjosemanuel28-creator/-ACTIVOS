@@ -10,7 +10,7 @@
  * un botón escondido.
  */
 import type { Alumno, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
-import type { CambioFechaPlan, Checkin, Kr, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { CambioFechaPlan, Checkin, Kr, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type { EstadoAlumno } from '../../domain/alumnos/panel';
 
 export interface FiltrosAlumnos {
@@ -125,6 +125,19 @@ export interface CheckinsRepo {
   listarPorPlan(planId: string): Promise<Checkin[]>;
 }
 
+/**
+ * Documentos del plan (ticket 7B). Los LISTADOS devuelven solo metadatos: el
+ * contenido (hasta 10 MB por doc) viaja únicamente cuando se pide UN
+ * documento. Sin update ni delete: las versiones se acumulan, el vigente es
+ * el último subido.
+ */
+export interface DocumentosRepo {
+  crear(doc: PlanDocumento, contenido: Uint8Array): Promise<void>;
+  /** Metadatos, del más nuevo al más viejo (el primero es el vigente). */
+  listarPorPlan(planId: string): Promise<PlanDocumento[]>;
+  obtener(id: string): Promise<{ doc: PlanDocumento; contenido: Uint8Array } | null>;
+}
+
 export interface ReposAlumnos {
   alumnos: AlumnosRepo;
   diagnosticos: DiagnosticosRepo;
@@ -133,4 +146,5 @@ export interface ReposAlumnos {
   planes: PlanesRepo;
   seguimiento: SeguimientoTokensRepo;
   checkins: CheckinsRepo;
+  documentos: DocumentosRepo;
 }

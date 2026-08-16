@@ -128,6 +128,48 @@ export function diasEntre(desde: string, hasta: string): number {
   return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000);
 }
 
+// ───────────────────────── El documento del plan (ticket 7B) ─────────────────────────
+
+/**
+ * Metadatos del .pdf/.docx del plan. El CONTENIDO vive en la base (bytea/BLOB)
+ * a propósito: el filesystem de Railway es efímero — un reinicio del
+ * contenedor se lleva los archivos — y en la base el documento viaja con el
+ * backup sin sumar infraestructura. A este volumen (decenas de docs de pocos
+ * MB) rinde perfecto; si algún día son miles, se migra a object storage.
+ *
+ * Versionado simple: se acumulan por plan, el VIGENTE es el último subido.
+ * Subir uno nuevo nunca pisa el anterior — las planificaciones se corrigen y
+ * conviene poder ver qué cambió.
+ */
+export interface PlanDocumento {
+  id: string;
+  planId: string;
+  nombreArchivo: string;
+  mimeType: string;
+  tamanoBytes: number;
+  subidoPor: string;
+  subidoEn: string;
+}
+
+/** Tipos permitidos: el plan sale de la skill como .docx y se comparte como .pdf. */
+export const MIME_PDF = 'application/pdf';
+export const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+export const MIMES_DOCUMENTO: readonly string[] = [MIME_PDF, MIME_DOCX] as const;
+
+export const MAX_BYTES_DOCUMENTO = 10 * 1024 * 1024; // 10 MB
+
+export type MotivoDocumentoInvalido = 'tipo' | 'tamano' | 'vacio';
+
+/** Validación pura del archivo (el borde real es el server, como siempre). */
+export function validarDocumento(d: { mimeType: string; tamanoBytes: number }):
+  | { valido: true }
+  | { valido: false; motivo: MotivoDocumentoInvalido } {
+  if (!MIMES_DOCUMENTO.includes(d.mimeType)) return { valido: false, motivo: 'tipo' };
+  if (d.tamanoBytes <= 0) return { valido: false, motivo: 'vacio' };
+  if (d.tamanoBytes > MAX_BYTES_DOCUMENTO) return { valido: false, motivo: 'tamano' };
+  return { valido: true };
+}
+
 /**
  * Un cambio de fecha de inicio, auditado. La fecha es el origen del cálculo de
  * fase y salud: moverla sin rastro dejaría un semáforo imposible de explicar.

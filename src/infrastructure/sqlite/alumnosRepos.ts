@@ -21,11 +21,12 @@ import {
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
 import { diasEntre } from '../../domain/alumnos/plan';
-import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
   CheckinsRepo,
   DiagnosticosRepo,
+  DocumentosRepo,
   HistorialRepo,
   PlanesRepo,
   SeguimientoTokensRepo,
@@ -507,6 +508,44 @@ export function crearSeguimientoRepo(db: Database.Database): SeguimientoTokensRe
       return db
         .prepare('UPDATE seguimiento_tokens SET revocado_en = ? WHERE plan_id = ? AND revocado_en IS NULL')
         .run(ahoraIso, planId).changes;
+    },
+  };
+}
+
+// ───────────────────────── Documentos del plan ─────────────────────────
+
+interface DocumentoRow {
+  id: string; plan_id: string; nombre_archivo: string; mime_type: string;
+  tamano_bytes: number; subido_por: string; subido_en: string;
+}
+
+const toDocumento = (r: DocumentoRow): PlanDocumento => ({
+  id: r.id, planId: r.plan_id, nombreArchivo: r.nombre_archivo, mimeType: r.mime_type,
+  tamanoBytes: r.tamano_bytes, subidoPor: r.subido_por, subidoEn: r.subido_en,
+});
+
+/** Columnas SIN contenido: los listados no arrastran megabytes de BLOB. */
+const COLS_DOCUMENTO = 'id, plan_id, nombre_archivo, mime_type, tamano_bytes, subido_por, subido_en';
+
+export function crearDocumentosRepo(db: Database.Database): DocumentosRepo {
+  return {
+    async crear(doc, contenido) {
+      db.prepare(
+        `INSERT INTO plan_documentos (id, plan_id, nombre_archivo, mime_type, contenido, tamano_bytes, subido_por, subido_en)
+         VALUES (?,?,?,?,?,?,?,?)`,
+      ).run(doc.id, doc.planId, doc.nombreArchivo, doc.mimeType, Buffer.from(contenido), doc.tamanoBytes, doc.subidoPor, doc.subidoEn);
+    },
+    async listarPorPlan(planId) {
+      const rows = db
+        .prepare(`SELECT ${COLS_DOCUMENTO} FROM plan_documentos WHERE plan_id = ? ORDER BY subido_en DESC`)
+        .all(planId) as DocumentoRow[];
+      return rows.map(toDocumento);
+    },
+    async obtener(id) {
+      const row = db.prepare('SELECT * FROM plan_documentos WHERE id = ?').get(id) as
+        | (DocumentoRow & { contenido: Buffer })
+        | undefined;
+      return row ? { doc: toDocumento(row), contenido: new Uint8Array(row.contenido) } : null;
     },
   };
 }

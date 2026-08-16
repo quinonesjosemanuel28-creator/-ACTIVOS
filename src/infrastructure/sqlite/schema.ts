@@ -372,6 +372,24 @@ CREATE TABLE IF NOT EXISTS plan_fecha_historial (
 
 CREATE INDEX IF NOT EXISTS idx_plan_fecha_historial ON plan_fecha_historial(plan_id);
 
+-- El documento del plan (.pdf/.docx), ticket 7B. El contenido va EN LA BASE
+-- (BLOB acá, BYTEA en el espejo: la excepción de tipo por motor, como
+-- REAL ↔ DOUBLE PRECISION): el filesystem de Railway es efímero y en la base
+-- el documento viaja con el backup. Versionado simple: se acumulan por plan y
+-- el vigente es el último subido — nunca se pisa el anterior.
+CREATE TABLE IF NOT EXISTS plan_documentos (
+  id              TEXT PRIMARY KEY,
+  plan_id         TEXT NOT NULL REFERENCES planes(id) ON DELETE CASCADE,
+  nombre_archivo  TEXT NOT NULL,
+  mime_type       TEXT NOT NULL,
+  contenido       BLOB NOT NULL,
+  tamano_bytes    INTEGER NOT NULL,
+  subido_por      TEXT NOT NULL REFERENCES usuarios(id),
+  subido_en       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_documentos ON plan_documentos(plan_id);
+
 
 CREATE INDEX IF NOT EXISTS idx_alumnos_consultor   ON alumnos(consultor_id);
 CREATE INDEX IF NOT EXISTS idx_diagnosticos_alumno ON diagnosticos(alumno_id);

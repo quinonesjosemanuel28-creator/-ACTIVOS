@@ -115,7 +115,17 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
-  app.use(express.raw({ type: ['application/octet-stream', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], limit: '50mb' }));
+  app.use(express.raw({
+    type: [
+      'application/octet-stream',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      // El documento del plan (ticket 7B). El límite fino (10 MB) lo corta el
+      // caso de uso con mensaje claro; este es el techo del transporte.
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
+    limit: '50mb',
+  }));
 
   /**
    * Filtro del dashboard. La unidad de negocio la elige el cliente (es un
@@ -484,6 +494,32 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   app.put('/api/krs/:id', requiere('editar_alumnos'), h((req, res) =>
     ual.editarKr(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body),
   ));
+
+  // El documento del plan (ticket 7B): el .pdf/.docx viaja como binario crudo
+  // y vive en la base (el filesystem de Railway es efímero). El nombre va en
+  // la query porque el body ES el archivo. Versionado: nunca pisa el anterior.
+  app.post('/api/planes/:id/documentos', requiere('editar_alumnos'), h((req, res) => {
+    if (!Buffer.isBuffer(req.body)) {
+      throw new ual.ErrorAlumnos('VALIDACION', 'Solo se aceptan .pdf o .docx.');
+    }
+    return ual.subirDocumentoPlan(
+      reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'),
+      typeof req.query.nombre === 'string' ? req.query.nombre : '',
+      new Uint8Array(req.body),
+    );
+  }));
+  app.get('/api/planes/:id/documentos', requiere('ver_alumnos'), h((req, res) =>
+    ual.listarDocumentosPlan(reposAlumnos, alcanceDe(res), param(req, 'id')),
+  ));
+  // El contenido: inline para el visor de PDF, attachment para el .docx. El
+  // ámbito baja igual que en toda fila (el documento ajeno no existe).
+  app.get('/api/documentos/:id', requiere('ver_alumnos'), h(async (req, res) => {
+    const { doc, contenido } = await ual.obtenerDocumentoPlan(reposAlumnos, alcanceDe(res), param(req, 'id'));
+    const disposicion = doc.mimeType === 'application/pdf' ? 'inline' : 'attachment';
+    res.setHeader('Content-Type', doc.mimeType);
+    res.setHeader('Content-Disposition', `${disposicion}; filename*=UTF-8''${encodeURIComponent(doc.nombreArchivo)}`);
+    res.send(Buffer.from(contenido));
+  }));
 
   // ───────────────────── Frontend compilado (producción) ─────────────────────
   // Una ruta /api/* que no matcheó nada llega acá → 404 JSON (no el index.html),
