@@ -1,7 +1,7 @@
 /**
  * Test estructural: las listas de tablas de los scripts de datos no pueden
  * quedar desactualizadas respecto del esquema. Cada tabla nueva tiene que
- * declararse en TABLAS (db:migrar la copia) o en TABLAS_NO_COPIADAS (con su
+ * declararse en TABLAS (db:sembrar-desde-sqlite la copia) o en TABLAS_NO_COPIADAS (con su
  * porqué). Si este test falla al agregar un módulo, la solución es decidir
  * a qué lista va la tabla — no borrar el test.
  *

@@ -12,7 +12,7 @@
     "start": "NODE_ENV=production tsx server/index.ts",
     "preview": "vite preview",
     "seed": "tsx server/scripts/seed.ts",
-    "db:migrar": "tsx server/scripts/migrar-a-postgres.ts",
+    "db:sembrar-desde-sqlite": "tsx server/scripts/migrar-a-postgres.ts",
     "db:migrar-telefonos": "tsx server/scripts/migrar-telefonos.ts",
     "db:validar": "tsx server/scripts/validar-postgres.ts",
     "db:backup": "tsx server/scripts/backup-postgres.ts",

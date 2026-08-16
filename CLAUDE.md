@@ -81,14 +81,14 @@ En `src/domain/auth/permisos.ts` — fuente de verdad única.
 **Eje 1 · acciones.** Dos familias que NO se cruzan:
 
 - Contable/admin: `ver`, `editar`, `importar`, `gestionar_usuarios`
-- Alumnos: `ver_alumnos`, `editar_alumnos`
+- Alumnos: `ver_alumnos`, `editar_alumnos`, `eliminar_alumnos`
 
 | Rol | Acciones |
 |---|---|
 | `LECTOR` | `ver` |
 | `EDITOR` | `ver`, `editar` |
 | `ADMIN` | todas |
-| `CONSULTOR` | `ver_alumnos`, `editar_alumnos` — **sin `ver`: cero contabilidad** |
+| `CONSULTOR` | `ver_alumnos`, `editar_alumnos` — **sin `ver`: cero contabilidad. Sin `eliminar_alumnos`: gestiona su cartera, no la borra** |
 
 `CONSULTOR` no es un escalón más de la escalera del contable. `puede()` es lista blanca por rol, no comparación de nivel.
 
@@ -110,12 +110,16 @@ Toda ruta declara su acción con `requiere(...)`, **incluidas las de lectura**. 
 | # | Ticket | Estado |
 |---|---|---|
 | 0–6 | Exploración · migraciones · rol y ámbito · formulario · panel · exportación · plan + seguimiento | hecho |
-| 7 | Asistente IA sobre el módulo | siguiente |
+| 7 | Panel de control: estado y salud (7A) · documento del plan (7B) · seguimiento activo (7C) | hecho |
+| — | Asistente IA sobre el módulo | **descartado** |
 
-El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así de la skill). Antes de arrancar el ticket 6, leer:
+El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así de la skill). El contrato del bloque JSON que emite la skill vive en `CONTRATO-PLAN.md` (los dos lados).
 
-- `CONTRATO-PLAN.md` — el bloque JSON que la skill emite y la app parsea. Tiene los dos lados del contrato.
-- "Definido para los tickets 6+" en `MODULO-ALUMNOS.md` — el link del alumno **no** puede reusar el token del diagnóstico.
+Con el ticket 7 el módulo es un **panel operativo**: estado del alumno (ACTIVO/PAUSADO/FINALIZADO/ABANDONADO), semáforo de salud por brecha avance−tiempo, orden por riesgo, alerta de inactividad (>8 días sin check-in, la apaga un contacto registrado), WhatsApp con mensaje precargado (regla del 9 argentino), documento del plan versionado en la base (bytea/BLOB) y papelera con borrado lógico (`eliminar_alumnos`, solo ADMIN — el filtro `eliminado_en IS NULL` vive en la consulta).
+
+Las tablas del módulo están TODAS en `TABLAS_SENSIBLES` (excluidas del asistente IA) — **permanente**: el asistente sobre el módulo quedó descartado.
+
+⚠️ `npm run db:sembrar-desde-sqlite` (ex `db:migrar`): NO migra esquema — **siembra datos vaciando el destino**. Contra producción pisa datos reales. El esquema migra solo al arrancar la app; el que valida sin escribir es `db:validar`.
 
 El flujo de fase 1 está completo punta a punta: alta → link → el alumno envía → ficha con índice de claridad y faltantes → corrección del consultor en la llamada (marca `editado_por_consultor`, recalcula el índice; la corrección NO crea fila — "fila nueva" es solo para envíos del formulario). El CONSULTOR tiene shell propio sin contable; ADMIN entra por la vista "Alumnos" del dashboard.
 

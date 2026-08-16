@@ -1,5 +1,5 @@
 /**
- * Listas de tablas para los scripts de datos (db:migrar).
+ * Listas de tablas para los scripts de datos (db:sembrar-desde-sqlite).
  *
  * TODA tabla del esquema tiene que estar en UNA de las dos listas — un test
  * estructural (tablasMigracion.test.ts) lo verifica contra el SCHEMA_SQL_PG,
@@ -7,7 +7,7 @@
  */
 
 /**
- * Tablas que db:migrar COPIA de SQLite local → Postgres, en orden de FK
+ * Tablas que db:sembrar-desde-sqlite COPIA de SQLite local → Postgres, en orden de FK
  * (cobros→ventas, pagos→cierres). Son las del módulo contable, cuya fuente
  * de verdad histórica fue la base local.
  */
@@ -25,7 +25,7 @@ export const TABLAS = [
 ] as const;
 
 /**
- * Tablas que db:migrar NO copia, a propósito. db:migrar VACÍA cada tabla
+ * Tablas que db:sembrar-desde-sqlite NO copia, a propósito. El script VACÍA cada tabla
  * destino antes de copiar: incluir una de estas pisaría datos vivos de
  * producción con una base local vacía o desactualizada.
  *

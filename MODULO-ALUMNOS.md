@@ -109,7 +109,12 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 | 4 | Panel del consultor: ficha, diagnóstico, índice de claridad | hecho |
 | 5 | Exportación del diagnóstico para la skill | hecho |
 | 6 | Plan de 90 días: carga por bloque + seguimiento del alumno | hecho |
-| 7 | Asistente IA sobre el módulo (vistas filtradas + herramientas) | pendiente |
+| 7 | Panel de control: estado y salud (7A) · documento del plan (7B) · seguimiento activo (7C) | hecho |
+| — | Asistente IA sobre el módulo | **descartado** (decisión de José, agosto 2026) |
+
+Quedó anotado para después (fuera del ticket 7): snapshot de cierre a los 90
+días y métricas agregadas de la cartera, notificaciones por mail/push, y
+mensajería automatizada.
 
 Actualizar este estado a medida que se avanza.
 
@@ -136,8 +141,8 @@ Para no volver a discutirlas:
 - **Sin FK entre alumnos y contable.** `alumnos.id_cierre_vinculado` existe pero es texto suelto, sin relación activa.
 - **Opciones de negocio sin CHECK en la base** (programa, canal, moneda…): se validan en Zod. Solo lleva CHECK lo estructural (`diagnosticos.origen`).
 - **Multi-selección como JSON en TEXT** (no JSONB): el espejo SQLite/PostgreSQL exige el mismo tipo en ambos motores.
-- **Asistente IA excluido del módulo — temporal.** Las 4 tablas están en `TABLAS_SENSIBLES` desde el mismo commit que las crea. Se reactiva en el ticket 6 con vistas filtradas por sesión (consulta) y herramientas acotadas (acción); nunca escritura por SQL generado.
-- **db:migrar no copia las tablas de alumnos** (están en `TABLAS_NO_COPIADAS`): el módulo nace en producción y ese script vacía el destino antes de copiar — incluirlas pisaría datos reales con una base local vacía. Su resguardo es `db:backup`.
+- **Asistente IA excluido del módulo.** Las tablas están en `TABLAS_SENSIBLES` desde el mismo commit que las crea. ~~Temporal: se reactiva con vistas filtradas~~ → **quedó permanente: el asistente sobre el módulo se descartó en el ticket 7** (ver esa sección).
+- **El sembrado desde SQLite no copia las tablas de alumnos** (están en `TABLAS_NO_COPIADAS`): el módulo nace en producción y ese script vacía el destino antes de copiar — incluirlas pisaría datos reales con una base local vacía. Su resguardo es `db:backup`. (El script se llamaba `db:migrar`; desde el ticket 7 es `db:sembrar-desde-sqlite`.)
 
 ### Cerradas en el ticket 2 (agosto 2026)
 
@@ -186,3 +191,22 @@ Para no volver a discutirlas:
 - **El link muestra SOLO las acciones**, con la fase actual desplegada y las otras plegadas según la fecha. Nada de diagnóstico, índice, bloqueos ni matriz de riesgos: eso tiene marco de consultor.
 - **El alumno no tiene login.** El tilde es lo que él *declara*, no un hecho verificado; el consultor valida en la llamada.
 - **La skill emite un bloque JSON** junto al `.docx`, para cargar los OKRs y las acciones de un solo pegado. Si hay que tipearlos a mano, el módulo no se usa. **El contrato está en `CONTRATO-PLAN.md`** — tiene los dos lados: lo que la app parsea y el texto que va en la skill. Leerlo antes de arrancar el ticket 6.
+
+### Cerradas en el ticket 7 (agosto 2026) — el panel de control
+
+El criterio rector de todo el ticket: **el panel grita por los que se TRABARON, no por los que van bien.**
+
+- **El asistente IA sobre el módulo quedó DESCARTADO** (decisión de José). La exclusión de las tablas en `TABLAS_SENSIBLES` deja de ser temporal: es permanente, y ya son 12 tablas (se sumaron `plan_fecha_historial`, `plan_documentos` y `contactos`).
+- **Estado del alumno** (`ACTIVO`/`PAUSADO`/`FINALIZADO`/`ABANDONADO`) con CHECK en base: es estructural, como `diagnosticos.origen`. Solo `ACTIVO` calcula semáforo y alerta; `PAUSADO` congela; los otros dos apagan. El booleano `activo` viejo sigue como estaba (gating del formulario público).
+- **Semáforo por brecha, no por avance absoluto**: `brecha = (KRs cumplidos/totales) − min(días/90, 1)`. Verde ≥ −10 %, naranja ≥ −25 %, rojo debajo. Primeros 7 días neutro; sin KRs o sin plan, neutro con motivo. Es lo que hace que el rojo aparezca el día 20 y no el 61. **Los umbrales son punto de partida**: calibrarlos contra planes reales sigue abierto.
+- **`fecha_cierre_estimada` NO se guarda** (desvío del documento de alcance, avisado): se deriva de `fecha_inicio + 90`, igual que las fechas de fase — una columna derivada se desactualiza en cuanto la fecha se edita.
+- **Los KRs ganaron `vencimiento` y `cumplido_en`.** El contrato de la skill no trae fechas: los vencimientos los fija el consultor en el panel. El cumplimiento lo tilda el CONSULTOR (alimenta el semáforo); los checkins del alumno siguen siendo por acción, como antes.
+- **Fecha de inicio editable con auditoría**: cada cambio desplaza TODOS los vencimientos cargados por el delta (transaccional) y deja fila en `plan_fecha_historial`. La UI muestra cuántos KRs se van a mover antes de confirmar.
+- **`eliminar_alumnos` es acción nueva y SOLO de ADMIN** — el espejo de `importar` en el contable. Borrado lógico (`eliminado_en`/`eliminado_por`): el filtro `eliminado_en IS NULL` vive en la CONSULTA (obtener/listar), así ningún listado, conteo, exportación ni link público se olvida. La papelera restaura o purga en físico (cascada por FK) confirmando el nombre exacto.
+- **El documento del plan vive en la base** (`plan_documentos`, BYTEA↔BLOB — la excepción de tipo por motor, como REAL↔DOUBLE PRECISION): el filesystem de Railway es efímero y en la base viaja con `db:backup`. Versionado simple: el vigente es el último subido, nunca se pisa. Tipo por EXTENSIÓN (.pdf/.docx), límite 10 MB, listados sin contenido.
+- **Teléfono en DOS campos** (`telefono_pais` sin `+`, `telefono_numero` solo dígitos); el `whatsapp` libre queda intacto. La regla del 9 argentino (WhatsApp lo exige entre país y área) se aplica al ARMAR el link, en el dominio. La migración de una pasada (`npm run db:migrar-telefonos`) **no adivina**: sin marca internacional clara queda para revisión manual.
+- **El contacto se registra ANTES de abrir WhatsApp** (`contactos`, append-only como los checkins). Es lo que apaga la alerta de inactividad: contacto posterior a la última señal y de hace menos de 8 días.
+- **Alerta de inactividad**: `ACTIVO` y más de 8 días sin check-in (sin check-ins, desde `fecha_inicio`). Sin mails ni push: vive en el panel.
+- **"Trabado" en el filtro y el contador = alerta activa O semáforo rojo** (el documento usa "trabado" para las dos cosas; el filtro las une: es la lista de "a quién escribirle hoy"). En el ORDEN, la alerta va arriba incluso de los rojos.
+- **`db:migrar` se renombró a `db:sembrar-desde-sqlite`**: no migra esquema — siembra datos VACIANDO el destino. El nombre viejo invitaba a correrlo contra producción.
+- **Siguen abiertas**: calibrar los umbrales del semáforo con datos reales, la versión final de la plantilla del mensaje de WhatsApp (hoy va el borrador del ticket, en `domain/alumnos/telefono.ts`), y si la papelera purga sola a los 90 días (hoy: siempre manual).

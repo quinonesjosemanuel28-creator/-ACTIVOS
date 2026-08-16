@@ -74,7 +74,9 @@ La URL **pública** de la base está en el servicio Postgres → *Connect* →
 
 ```bash
 # 1. Copiar (lee tu SQLite local, NO la modifica; idempotente)
-PGSSL=true DATABASE_URL="postgresql://…proxy.rlwy.net:PUERTO/railway" npm run db:migrar
+#    ⚠ VACÍA las tablas contables destino antes de copiar. Solo para el pasaje
+#    inicial — hoy Postgres es la fuente de verdad. (Antes se llamaba db:migrar.)
+PGSSL=true DATABASE_URL="postgresql://…proxy.rlwy.net:PUERTO/railway" npm run db:sembrar-desde-sqlite
 
 # 2. Validar contra la nube: la misma vara que usaste en local
 PGSSL=true DATABASE_URL="postgresql://…proxy.rlwy.net:PUERTO/railway" npm run db:validar

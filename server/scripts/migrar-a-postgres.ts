@@ -3,7 +3,9 @@
  * (data/activos.db) a PostgreSQL (DATABASE_URL). Tabla por tabla, 1:1,
  * sin transformar valores (los esquemas son espejo).
  *
- * Uso: npm run db:migrar
+ * Uso: npm run db:sembrar-desde-sqlite
+ *  - Antes se llamaba db:migrar: el nombre engañaba — NO migra esquema, SIEMBRA
+ *    datos vaciando el destino. Contra una base viva pisa datos reales.
  *  - Requiere DATABASE_URL en el .env (no hace falta DB_DRIVER=postgres).
  *  - VACÍA las tablas destino en Postgres antes de copiar (la fuente de
  *    verdad sigue siendo SQLite hasta que cambies DB_DRIVER).
@@ -35,11 +37,11 @@ try {
     for (const fila of filas) {
       await client.query(`INSERT INTO ${tabla} (${lista}) VALUES (${marcas})`, cols.map((c) => fila[c] ?? null));
     }
-    console.log(`[db:migrar] ${tabla}: ${filas.length} fila(s) copiadas.`);
+    console.log(`[db:sembrar] ${tabla}: ${filas.length} fila(s) copiadas.`);
   }
   await client.query('COMMIT');
-  console.log('[db:migrar] Listo. SQLite quedó intacto; Postgres es una copia exacta.');
-  console.log('[db:migrar] Verificá con: npm run db:validar');
+  console.log('[db:sembrar] Listo. SQLite quedó intacto; Postgres es una copia exacta.');
+  console.log('[db:sembrar] Verificá con: npm run db:validar');
 } catch (err) {
   await client.query('ROLLBACK');
   throw err;

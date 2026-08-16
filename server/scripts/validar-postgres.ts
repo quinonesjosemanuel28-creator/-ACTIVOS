@@ -2,7 +2,7 @@
  * Validación SQLite vs PostgreSQL: corre LOS MISMOS casos de uso sobre los
  * dos motores y compara campo por campo que den números idénticos.
  *
- * Uso: npm run db:validar   (después de npm run db:migrar)
+ * Uso: npm run db:validar   (después de npm run db:sembrar-desde-sqlite)
  *  - Solo lectura en ambas bases.
  *  - Compara, por cada mes con datos: snapshot del dashboard, resumen de
  *    cierres, comisiones, resumen de egresos y funnel; además el histórico
