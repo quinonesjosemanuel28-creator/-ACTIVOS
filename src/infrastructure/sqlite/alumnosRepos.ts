@@ -476,6 +476,21 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
         .all(planId) as CambioFechaRow[];
       return rows.map(toCambioFecha);
     },
+    async buscarAccion(accionId) {
+      const row = db.prepare(
+        `SELECT a.*, p.alumno_id AS ctx_alumno FROM acciones a
+         JOIN planes p ON p.id = a.plan_id WHERE a.id = ?`,
+      ).get(accionId) as (AccionRow & { ctx_alumno: string }) | undefined;
+      if (!row) return null;
+      return {
+        accion: {
+          id: row.id, planId: row.plan_id, okrId: row.okr_id, krId: row.kr_id,
+          fase: row.fase as Accion['fase'], orden: row.orden, texto: row.texto, creadoEn: row.creado_en,
+        },
+        planId: row.plan_id,
+        alumnoId: row.ctx_alumno,
+      };
+    },
     async buscarKr(krId) {
       const row = db.prepare(
         `SELECT k.*, o.plan_id, p.alumno_id FROM krs k

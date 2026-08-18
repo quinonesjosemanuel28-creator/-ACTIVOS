@@ -188,6 +188,12 @@ export const fechaInicioInputSchema = z.object({
 /**
  * Edición de seguimiento de un KR: cumplimiento y/o vencimiento. Ausente = no
  * tocar (mismo criterio que el patch del diagnóstico); null = limpiar.
+ *
+ * ⚠ `cumplido` está DEPRECADO desde el ticket 9B: la UI ya no tiene casilla
+ * de KR (el cierre es derivado de las acciones) y el campo se elimina en el
+ * commit del switch de 9C. Se sigue aceptando SOLO porque el semáforo viejo
+ * — que se muestra hasta el switch — lee cumplido_en, y los tests del ticket
+ * 7 que fijan sus valores son la garantía de "ningún color cambia".
  */
 export const krPatchSchema = z
   .object({
@@ -195,6 +201,20 @@ export const krPatchSchema = z
     vencimiento: fechaYmd.nullable().optional(),
   })
   .refine((v) => v.cumplido !== undefined || v.vencimiento !== undefined, 'Nada para actualizar.');
+
+/**
+ * Corrección de una acción desde el panel (ticket 9B): el consultor fija el
+ * estado — y opcionalmente el porqué. Cada corrección es un checkin nuevo.
+ */
+export const accionEstadoInputSchema = z.object({
+  estado: z.enum(['pendiente', 'en_curso', 'ejecutado']),
+  nota: z.string().trim().transform((s) => (s === '' ? null : s)).nullable().optional(),
+});
+
+/** Carga de una medición (ticket 9B): un número finito, nada más. */
+export const medicionInputSchema = z.object({
+  valor: z.number().finite('El valor tiene que ser un número.'),
+});
 
 /**
  * Registro de contacto (ticket 7C). El canal es opción de negocio: hoy solo

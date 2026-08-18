@@ -472,6 +472,23 @@ export function crearPlanesRepoPg(pool: Pool): PlanesRepo {
       const r = await pool.query('SELECT * FROM plan_fecha_historial WHERE plan_id = $1 ORDER BY cambiado_en DESC', [planId]);
       return (r.rows as CambioFechaRow[]).map(toCambioFecha);
     },
+    async buscarAccion(accionId) {
+      const r = await pool.query(
+        `SELECT a.*, p.alumno_id AS ctx_alumno FROM acciones a
+         JOIN planes p ON p.id = a.plan_id WHERE a.id = $1`,
+        [accionId],
+      );
+      const row = r.rows[0] as (AccionRow & { ctx_alumno: string }) | undefined;
+      if (!row) return null;
+      return {
+        accion: {
+          id: row.id, planId: row.plan_id, okrId: row.okr_id, krId: row.kr_id,
+          fase: row.fase as Accion['fase'], orden: row.orden, texto: row.texto, creadoEn: row.creado_en,
+        },
+        planId: row.plan_id,
+        alumnoId: row.ctx_alumno,
+      };
+    },
     async buscarKr(krId) {
       const r = await pool.query(
         `SELECT k.*, o.plan_id, p.alumno_id FROM krs k

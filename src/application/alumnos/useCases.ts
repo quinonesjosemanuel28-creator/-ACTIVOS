@@ -29,6 +29,7 @@ import { PREGUNTAS_FICHA, type CampoFicha } from '../../domain/alumnos/formulari
 import {
   DIAS_VIGENCIA_LINK,
   estadoAcciones,
+  estadoDe,
   estadoTokenSeguimiento,
   faseActual,
   planVencido,
@@ -66,14 +67,19 @@ import {
   MIME_PDF,
   validarDocumento,
   type CambioFechaPlan,
+  type EstadoAccion,
   type Kr as KrPlan,
+  type Medicion,
   type PlanDocumento,
 } from '../../domain/alumnos/plan';
+import { estadosDeKrs, type EstadoKr } from '../../domain/alumnos/medicion';
 import {
   aRespuestas,
+  accionEstadoInputSchema,
   alumnoInputSchema,
   alumnoPatchSchema,
   contactoInputSchema,
+  medicionInputSchema,
   diagnosticoInputSchema,
   diagnosticoPatchSchema,
   estadoAlumnoInputSchema,
@@ -767,6 +773,10 @@ export interface AvanceAccion extends AccionSeguimiento {
   okrOrden: number | null;
   /** Cuándo cambió por última vez (checkin más nuevo), si alguna vez cambió. */
   ultimoCambio: string | null;
+  /** Estado efectivo (ticket 9): pendiente / en_curso / ejecutado. */
+  estado: EstadoAccion;
+  /** La nota más reciente que acompañó un cambio de esta acción. */
+  nota: string | null;
 }
 
 export interface AvancePlan {
@@ -781,6 +791,14 @@ export interface AvancePlan {
   link: { token: string; expiraEn: string } | null;
   /** Cambios de fecha de inicio, del más nuevo al más viejo (ticket 7). */
   cambiosFecha: CambioFechaPlan[];
+  /**
+   * Estado DERIVADO de cada KR (ticket 9B): entregables por sus acciones,
+   * métricas por su valor, tilde legado honrado. Contador de resultado, sin
+   * color — NO alimenta el semáforo (ese sigue sobre cumplido_en hasta 9C).
+   */
+  estadoKrs: EstadoKr[];
+  /** Todas las mediciones del plan, la más reciente primero (la ficha las agrupa por KR). */
+  mediciones: Medicion[];
 }
 
 /** El tablero de seguimiento del consultor. Lo tildado es lo que el alumno DECLARA. */
@@ -793,7 +811,16 @@ export async function avancePlan(
   const pc = await planAlcanzado(repos, alcance, planId);
   const checkins = await repos.checkins.listarPorPlan(planId);
   const estado = estadoAcciones(checkins);
+  const medicionesPlan = await repos.mediciones.listarPorPlan(planId);
   const okrOrdenPorId = new Map(pc.okrs.map((o) => [o.id, o.orden]));
+  // La nota más reciente por acción (puede venir de un checkin viejo: la nota
+  // no se pierde cuando un cambio posterior llega sin nota).
+  const notaPorAccion = new Map<string, { nota: string; creadoEn: string }>();
+  for (const c of checkins) {
+    if (c.nota === null) continue;
+    const previa = notaPorAccion.get(c.accionId);
+    if (!previa || c.creadoEn > previa.creadoEn) notaPorAccion.set(c.accionId, { nota: c.nota, creadoEn: c.creadoEn });
+  }
 
   const fases: AvancePlan['fases'] = ([1, 2, 3] as const).map((fase) => {
     const acciones = pc.acciones
@@ -808,6 +835,8 @@ export async function avancePlan(
           krId: a.krId,
           okrOrden: a.okrId ? okrOrdenPorId.get(a.okrId) ?? null : null,
           ultimoCambio: ultimo?.creadoEn ?? null,
+          estado: ultimo ? estadoDe(ultimo) : 'pendiente',
+          nota: notaPorAccion.get(a.id)?.nota ?? null,
         };
       });
     return { fase, total: acciones.length, hechas: acciones.filter((a) => a.hecha).length, acciones };
@@ -823,6 +852,8 @@ export async function avancePlan(
     fases,
     link: vigente ? { token: vigente.token, expiraEn: vigente.expiraEn } : null,
     cambiosFecha: await repos.planes.listarCambiosFecha(planId),
+    estadoKrs: estadosDeKrs(pc, checkins, medicionesPlan),
+    mediciones: medicionesPlan,
   };
 }
 
@@ -921,6 +952,76 @@ export async function editarKr(
   };
 }
 
+/**
+ * Corrección de una acción desde el PANEL (ticket 9B). La única superficie de
+ * marcado es la acción, y la pueden tocar los dos: esto es el lado del
+ * consultor — un checkin nuevo con origen 'consultor' y su usuario, jamás un
+ * UPDATE. Sirve para las dos direcciones: "figura ejecutado y no está hecho"
+ * y "lo hizo y no lo marcó". Un checkin del consultor NO cuenta como señal
+ * del alumno: la alerta de inactividad sigue mirando origen 'alumno'.
+ */
+export async function corregirAccion(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  usuarioId: string,
+  accionId: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<{ estado: EstadoAccion }> {
+  const contexto = await repos.planes.buscarAccion(accionId);
+  const alumno = contexto ? await repos.alumnos.obtener(contexto.alumnoId) : null;
+  if (!contexto || !alumno || !alcanzaFila(alcance, alumno.consultorId)) {
+    throw new ErrorAlumnos('NO_ENCONTRADO', 'Acción inexistente.');
+  }
+  const input = accionEstadoInputSchema.parse(entrada);
+  await repos.checkins.crear({
+    id: randomUUID(),
+    accionId,
+    // marcado se sigue escribiendo, derivado: reversible por revert (9A).
+    marcado: input.estado === 'ejecutado',
+    estado: input.estado,
+    nota: input.nota ?? null,
+    origen: 'consultor',
+    usuarioId,
+    creadoEn: ahora,
+  });
+  return { estado: input.estado };
+}
+
+/**
+ * Carga de una medición desde el panel (ticket 9B). Append-only: cada carga
+ * es una fila; la serie completa es la historia del número. La carga por el
+ * alumno desde su link llega en 9D.
+ */
+export async function cargarMedicion(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  usuarioId: string,
+  krId: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<Medicion> {
+  const contexto = await repos.planes.buscarKr(krId);
+  const alumno = contexto ? await repos.alumnos.obtener(contexto.alumnoId) : null;
+  if (!contexto || !alumno || !alcanzaFila(alcance, alumno.consultorId)) {
+    throw new ErrorAlumnos('NO_ENCONTRADO', 'KR inexistente.');
+  }
+  if (contexto.kr.tipo !== 'metrica') {
+    throw new ErrorAlumnos('VALIDACION', 'Este KR es un entregable: se cierra solo cuando sus acciones están ejecutadas, no con un valor.');
+  }
+  const input = medicionInputSchema.parse(entrada);
+  const medicion: Medicion = {
+    id: randomUUID(),
+    krId,
+    valor: input.valor,
+    origen: 'consultor',
+    usuarioId,
+    cargadoEn: ahora,
+  };
+  await repos.mediciones.crear(medicion);
+  return medicion;
+}
+
 // ───── El panel: listado con fase, salud y orden por riesgo ─────
 
 export interface FiltrosPanel {
@@ -982,19 +1083,27 @@ export async function panelAlumnos(
   for (const alumno of alumnos) {
     const vigente = (await repos.planes.listarPorAlumno(alumno.id))[0] ?? null;
     const todosLosKrs = vigente ? vigente.okrs.flatMap((o) => o.krs) : [];
-    const krs = avanceKrs(todosLosKrs);
+    // ⚠ ENTRADA DEL SEMÁFORO: sigue siendo el tilde manual (cumplido_en),
+    // exactamente como en producción — no se toca hasta el switch de 9C.
+    const entradaSemaforo = avanceKrs(todosLosKrs);
+    const checkinsVigente = vigente ? await repos.checkins.listarPorPlan(vigente.plan.id) : [];
+    // Lo que se MUESTRA como contador de resultado (ticket 9B): el estado
+    // derivado — entregables por acciones, métricas por valor, tilde legado
+    // honrado. Solo puede ser ≥ que el contador viejo (derivado ∪ legado).
+    const derivados = vigente
+      ? estadosDeKrs(vigente, checkinsVigente, await repos.mediciones.listarPorPlan(vigente.plan.id))
+      : [];
+    const krs = { totales: derivados.length, cumplidos: derivados.filter((k) => k.cumplida).length };
     const salud = calcularSalud(
       {
         estado: alumno.estado,
         fechaInicio: vigente?.plan.fechaInicio ?? null,
-        krsTotales: krs.totales,
-        krsCumplidos: krs.cumplidos,
+        krsTotales: entradaSemaforo.totales,
+        krsCumplidos: entradaSemaforo.cumplidos,
       },
       ahora,
     );
-    const ultimaActividad = vigente
-      ? ultimaActividadAlumno(await repos.checkins.listarPorPlan(vigente.plan.id))
-      : null;
+    const ultimaActividad = vigente ? ultimaActividadAlumno(checkinsVigente) : null;
     const ultimoContacto = (await repos.contactos.ultimoDeAlumno(alumno.id))?.contactadoEn ?? null;
     const alerta = alertaInactividad(
       {

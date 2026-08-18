@@ -11,7 +11,8 @@ import type { ResumenEgresos } from '@domain/egresos/metrics';
 import type { ComisionesDelMes } from '@domain/comisiones/calculo';
 import type { Accion, Rol, UsuarioPublico } from '@domain/auth/permisos';
 import type { Alumno, Contacto, Diagnostico, TokenDiagnostico } from '@domain/alumnos/tipos';
-import type { CambioFechaPlan, Fase, Kr, PlanCompleto, PlanDocumento, TokenSeguimiento } from '@domain/alumnos/plan';
+import type { CambioFechaPlan, EstadoAccion, Fase, Kr, Medicion, PlanCompleto, PlanDocumento, TokenSeguimiento } from '@domain/alumnos/plan';
+import type { EstadoKr } from '@domain/alumnos/medicion';
 import { MIME_DOCX, MIME_PDF } from '@domain/alumnos/plan';
 import type { AlertaInactividad, ChipFase, EstadoAlumno, Salud, SaludCalculada } from '@domain/alumnos/panel';
 
@@ -325,8 +326,14 @@ export const api = {
       `/planes/${planId}/fecha-inicio`,
       { method: 'PUT', body: JSON.stringify({ fechaNueva, motivo }) },
     ),
-  editarKr: (krId: string, patch: { cumplido?: boolean; vencimiento?: string | null }) =>
+  editarKr: (krId: string, patch: { vencimiento?: string | null }) =>
     req<Kr>(`/krs/${krId}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  // Ticket 9B: la única superficie de marcado es la ACCIÓN (checkin nuevo,
+  // origen consultor). El cierre del KR se deriva solo.
+  corregirAccion: (accionId: string, estado: EstadoAccion, nota?: string) =>
+    req<{ estado: EstadoAccion }>(`/acciones/${accionId}/estado`, { method: 'PUT', body: JSON.stringify({ estado, nota }) }),
+  cargarMedicion: (krId: string, valor: number) =>
+    req<Medicion>(`/krs/${krId}/mediciones`, { method: 'POST', body: JSON.stringify({ valor }) }),
 
   // El documento del plan (ticket 7B): el binario viaja crudo, el nombre en la query.
   documentosPlan: (planId: string) => req<PlanDocumento[]>(`/planes/${planId}/documentos`),
@@ -380,10 +387,13 @@ export interface AvancePlanUI {
     fase: Fase;
     total: number;
     hechas: number;
-    acciones: { id: string; texto: string; fase: Fase; hecha: boolean; krId: string | null; okrOrden: number | null; ultimoCambio: string | null }[];
+    acciones: { id: string; texto: string; fase: Fase; hecha: boolean; krId: string | null; okrOrden: number | null; ultimoCambio: string | null; estado: EstadoAccion; nota: string | null }[];
   }[];
   link: { token: string; expiraEn: string } | null;
   cambiosFecha: CambioFechaPlan[];
+  /** Ticket 9B: estado derivado por KR (contador de resultado, sin color). */
+  estadoKrs: EstadoKr[];
+  mediciones: Medicion[];
 }
 
 // ───── Panel de control (ticket 7) ─────

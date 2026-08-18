@@ -500,8 +500,19 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   ));
   // Seguimiento de un KR (ticket 7): cumplimiento (alimenta el semáforo) y
   // vencimiento. El KR de un alumno ajeno responde 404, como toda fila ajena.
+  // ⚠ `cumplido` está deprecado desde 9B (la UI ya no lo manda); se elimina
+  // en el switch de 9C junto con la columna que lo respalda.
   app.put('/api/krs/:id', requiere('editar_alumnos'), h((req, res) =>
     ual.editarKr(reposAlumnos, alcanceDe(res), param(req, 'id'), req.body),
+  ));
+  // Corrección de una acción desde el panel (ticket 9B): un checkin nuevo con
+  // origen consultor — nunca silencia la alerta de inactividad del alumno.
+  app.put('/api/acciones/:id/estado', requiere('editar_alumnos'), h((req, res) =>
+    ual.corregirAccion(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
+  ));
+  // Carga de una medición (ticket 9B): append-only, solo KRs de tipo métrica.
+  app.post('/api/krs/:id/mediciones', requiere('editar_alumnos'), h((req, res) =>
+    ual.cargarMedicion(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
   ));
 
   // El documento del plan (ticket 7B): el .pdf/.docx viaja como binario crudo

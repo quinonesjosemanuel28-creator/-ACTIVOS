@@ -10,7 +10,7 @@
  * un botón escondido.
  */
 import type { Alumno, Contacto, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
-import type { CambioFechaPlan, Checkin, Kr, Medicion, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { Accion, CambioFechaPlan, Checkin, Kr, Medicion, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type { EstadoAlumno } from '../../domain/alumnos/panel';
 
 export interface FiltrosAlumnos {
@@ -110,6 +110,8 @@ export interface PlanesRepo {
   listarCambiosFecha(planId: string): Promise<CambioFechaPlan[]>;
   /** KR con su contexto (plan y alumno), para bajar el ámbito hasta la fila. */
   buscarKr(krId: string): Promise<{ kr: Kr; planId: string; alumnoId: string } | null>;
+  /** Acción con su contexto (ticket 9B): la corrección del consultor baja el ámbito igual. */
+  buscarAccion(accionId: string): Promise<{ accion: Accion; planId: string; alumnoId: string } | null>;
   /** Cumplimiento y/o vencimiento de un KR. `undefined` = no tocar ese campo. */
   actualizarKr(krId: string, campos: { cumplidoEn?: string | null; vencimiento?: string | null }): Promise<void>;
 }

@@ -11,7 +11,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { AlertTriangle, ArrowLeft, CalendarDays, Check, ClipboardPaste, Copy, Download, FileDown, GraduationCap, Link2, MessageCircle, Pencil, Plus, RotateCcw, Target, Trash2, UserRound, X } from 'lucide-react';
 import type { Alumno, Diagnostico } from '@domain/alumnos/tipos';
-import type { Kr, PlanCompleto } from '@domain/alumnos/plan';
+import type { EstadoAccion, Kr, Medicion, PlanCompleto } from '@domain/alumnos/plan';
+import type { EstadoKr } from '@domain/alumnos/medicion';
 import { avanceKrs, calcularSalud, diasDelPlan, ESTADOS_ALUMNO, type AlertaInactividad, type EstadoAlumno, type SaludCalculada } from '@domain/alumnos/panel';
 import { fechaCierreEstimada } from '@domain/alumnos/plan';
 import { linkWhatsapp, mensajeSeguimiento } from '@domain/alumnos/telefono';
@@ -22,8 +23,10 @@ import {
   useAvancePlan,
   useCambiarEstadoAlumno,
   useCambiarFechaInicio,
+  useCargarMedicion,
   useCargarPlan,
   useContactos,
+  useCorregirAccion,
   useCrearAlumno,
   useDiagnosticos,
   useDocumentosPlan,
@@ -45,7 +48,7 @@ import {
   useSubirDocumento,
 } from '../hooks';
 import { usePuede } from '../store';
-import { api, type FilaPanelUI, type PreviaPlanUI } from '../lib/api';
+import { api, type AvancePlanUI, type FilaPanelUI, type PreviaPlanUI } from '../lib/api';
 import { Textarea } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import { Badge, Button, Card, Input, Select, Spinner } from '../components/ui/primitives';
@@ -863,16 +866,7 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
             </p>
           )}
           <DocumentoPlan planId={vigente.plan.id} />
-          <div className="grid gap-3 lg:grid-cols-2">
-            {vigente.okrs.map((o) => (
-              <div key={o.id} className="rounded-xl border border-navy-100 p-3 dark:border-navy-700">
-                <p className="text-sm font-600 text-navy-900 dark:text-navy-50">{o.orden}. {o.objetivo}</p>
-                <ul className="mt-1.5 space-y-1.5">
-                  {o.krs.map((k) => <KrItem key={k.id} kr={k} />)}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <KrsDelPlan planId={vigente.plan.id} okrs={vigente.okrs} />
           <SeguimientoPlan planId={vigente.plan.id} />
         </div>
       )}
@@ -979,36 +973,116 @@ function DocumentoPlan({ planId }: { planId: string }) {
 }
 
 /**
- * Un KR del tablero: check de cumplimiento (lo marca el CONSULTOR — alimenta
- * el semáforo de salud) y vencimiento editable. Los vencimientos se desplazan
- * en bloque cuando se mueve la fecha de inicio del plan.
+ * Los KRs del plan con su estado DERIVADO (ticket 9B): las entregables
+ * cierran solas cuando todas sus acciones están ejecutadas; las métricas, por
+ * valor contra la meta. No hay casilla de KR — la única superficie de marcado
+ * es la acción. El tilde legado del ticket 7 se honra como cumplida.
  */
-function KrItem({ kr }: { kr: Kr }) {
-  const editar = useEditarKr();
-  const cumplido = kr.cumplidoEn !== null;
-  const vencido = !cumplido && kr.vencimiento !== null && kr.vencimiento < new Date().toISOString().slice(0, 10);
+function KrsDelPlan({ planId, okrs }: { planId: string; okrs: PlanCompleto['okrs'] }) {
+  const { data: avance } = useAvancePlan(planId);
+  const estadoPorKr = new Map((avance?.estadoKrs ?? []).map((e) => [e.krId, e]));
   return (
-    <li className="flex items-start gap-2 text-xs">
-      <input
-        type="checkbox"
-        className="mt-0.5 h-3.5 w-3.5 accent-gold-500"
-        checked={cumplido}
-        disabled={editar.isPending}
-        onChange={(e) => void editar.mutateAsync({ krId: kr.id, patch: { cumplido: e.target.checked } })}
-        title={cumplido ? `Cumplido el ${kr.cumplidoEn!.slice(0, 10)}` : 'Marcar como cumplido'}
-      />
-      <span className={`flex-1 ${cumplido ? 'text-navy-400 line-through' : 'text-navy-600 dark:text-navy-300'}`}>
-        {kr.texto}{kr.meta && <span className="text-navy-400"> — {kr.meta}</span>}
-        {cumplido && <span className="ml-1 text-signal-green">✓ {kr.cumplidoEn!.slice(0, 10)}</span>}
-      </span>
-      <input
-        type="date"
-        className={`rounded border px-1 py-0.5 text-[11px] dark:bg-navy-800 ${vencido ? 'border-signal-red text-signal-red' : 'border-navy-200 text-navy-500 dark:border-navy-600 dark:text-navy-300'}`}
-        value={kr.vencimiento ?? ''}
-        disabled={editar.isPending}
-        onChange={(e) => void editar.mutateAsync({ krId: kr.id, patch: { vencimiento: e.target.value || null } })}
-        title="Vencimiento del KR (se desplaza si se mueve la fecha de inicio)"
-      />
+    <div className="grid gap-3 lg:grid-cols-2">
+      {okrs.map((o) => (
+        <div key={o.id} className="rounded-xl border border-navy-100 p-3 dark:border-navy-700">
+          <p className="text-sm font-600 text-navy-900 dark:text-navy-50">{o.orden}. {o.objetivo}</p>
+          <ul className="mt-1.5 space-y-2">
+            {o.krs.map((k) => (
+              <KrItem
+                key={k.id}
+                kr={k}
+                estado={estadoPorKr.get(k.id) ?? null}
+                mediciones={(avance?.mediciones ?? []).filter((m) => m.krId === k.id)}
+              />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Un KR del tablero (ticket 9B): estado derivado, sin casilla. El vencimiento
+ * sigue editable (se desplaza con la fecha de inicio); las métricas cargan su
+ * valor acá. "Sin acciones vinculadas" = el plan la declara pero no la
+ * ejecuta: se corrige agregando la acción, no tildando.
+ */
+function KrItem({ kr, estado, mediciones }: { kr: Kr; estado: EstadoKr | null; mediciones: Medicion[] }) {
+  const editar = useEditarKr();
+  const cargar = useCargarMedicion();
+  const [valorNuevo, setValorNuevo] = useState('');
+  const vencido = !estado?.cumplida && kr.vencimiento !== null && kr.vencimiento < new Date().toISOString().slice(0, 10);
+
+  const cargarValor = async () => {
+    const n = Number(valorNuevo.replace(',', '.'));
+    if (!Number.isFinite(n)) return;
+    await cargar.mutateAsync({ krId: kr.id, valor: n });
+    setValorNuevo('');
+  };
+
+  return (
+    <li className="space-y-1 text-xs">
+      <div className="flex items-start gap-2">
+        <span className={`flex-1 ${estado?.cumplida ? 'text-navy-400 line-through' : 'text-navy-600 dark:text-navy-300'}`}>
+          {kr.texto}{kr.meta && <span className="text-navy-400"> — {kr.meta}</span>}
+        </span>
+        <input
+          type="date"
+          className={`rounded border px-1 py-0.5 text-[11px] dark:bg-navy-800 ${vencido ? 'border-signal-red text-signal-red' : 'border-navy-200 text-navy-500 dark:border-navy-600 dark:text-navy-300'}`}
+          value={kr.vencimiento ?? ''}
+          disabled={editar.isPending}
+          onChange={(e) => void editar.mutateAsync({ krId: kr.id, patch: { vencimiento: e.target.value || null } })}
+          title="Vencimiento del KR (se desplaza si se mueve la fecha de inicio)"
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 pl-0.5">
+        {estado?.cumplida ? (
+          <Badge tone="gold">
+            ✓ Cumplida{estado.motivo === 'derivada' ? '' : estado.motivo === 'valor' ? ' (por valor)' : ' (tilde del consultor)'}
+          </Badge>
+        ) : estado?.tipo === 'metrica' ? null : estado?.sinAcciones ? (
+          <Badge tone="amber">sin acciones vinculadas</Badge>
+        ) : (
+          <span className="text-navy-400">{estado ? `${estado.ejecutadas}/${estado.totalAcciones} acciones` : '…'}</span>
+        )}
+        {kr.tipo === 'metrica' && (
+          <span className="flex flex-wrap items-center gap-1.5 text-navy-500 dark:text-navy-300">
+            {estado?.valorActual !== null && estado?.valorActual !== undefined ? (
+              <>
+                {kr.valorInicial !== null && <span>{kr.valorInicial}{kr.unidad}</span>}
+                {kr.valorInicial !== null && <span>→</span>}
+                <span className="font-600 text-navy-800 dark:text-navy-100">{estado.valorActual}{kr.unidad}</span>
+              </>
+            ) : (
+              <span className="text-navy-400">sin datos</span>
+            )}
+            {kr.meta90 !== null && <span>· meta {kr.meta90}{kr.unidad}</span>}
+            <Input
+              value={valorNuevo}
+              onChange={(e) => setValorNuevo(e.target.value)}
+              placeholder="valor"
+              className="h-6 w-16 px-1.5 text-[11px]"
+            />
+            <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" disabled={cargar.isPending || valorNuevo.trim() === ''} onClick={() => void cargarValor()}>
+              Cargar
+            </Button>
+          </span>
+        )}
+      </div>
+      {kr.tipo === 'metrica' && mediciones.length > 0 && (
+        <details className="pl-0.5 text-[11px] text-navy-400">
+          <summary className="cursor-pointer">Serie ({mediciones.length})</summary>
+          <ul className="mt-0.5 space-y-0.5">
+            {mediciones.map((m) => (
+              <li key={m.id}>
+                {m.cargadoEn.slice(0, 10)}: <span className="text-navy-600 dark:text-navy-200">{m.valor}{kr.unidad}</span>
+                {m.origen === 'alumno' ? ' · cargó el alumno' : ''}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </li>
   );
 }
@@ -1094,19 +1168,51 @@ function SeguimientoPlan({ planId }: { planId: string }) {
                 {f.hechas}/{f.total}
               </span>
             </div>
-            <ul className="mt-1.5 space-y-1">
-              {f.acciones.map((a) => (
-                <li key={a.id} className={`text-xs ${a.hecha ? 'text-navy-400 line-through' : 'text-navy-700 dark:text-navy-200'}`}>
-                  {a.hecha ? '☑' : '☐'} {a.texto}
-                  {a.okrOrden !== null && <span className="ml-1 text-navy-300">· OKR {a.okrOrden}</span>}
-                </li>
-              ))}
+            <ul className="mt-1.5 space-y-1.5">
+              {f.acciones.map((a) => <AccionCorregible key={a.id} accion={a} />)}
             </ul>
           </div>
         ))}
       </div>
-      <p className="text-xs text-navy-400">Lo tildado es lo que el alumno declara — validalo en la llamada.</p>
+      <p className="text-xs text-navy-400">
+        Lo marcado es lo que el alumno declara — validalo en la llamada. Si algo figura distinto de la realidad,
+        corregilo acá: queda registrado como tuyo y no cuenta como señal del alumno.
+      </p>
     </div>
+  );
+}
+
+const ETIQUETA_ESTADO: Record<EstadoAccion, string> = { pendiente: '· pendiente', en_curso: '· en curso', ejecutado: '· ejecutado' };
+
+/**
+ * Una acción del tablero, corregible por el consultor (ticket 9B): cambiar el
+ * estado crea un checkin nuevo con origen consultor — auditado por la propia
+ * tabla y SIN contar como señal del alumno (la alerta no se apaga).
+ */
+function AccionCorregible({ accion: a }: { accion: AvancePlanUI['fases'][number]['acciones'][number] }) {
+  const corregir = useCorregirAccion();
+  return (
+    <li className="text-xs">
+      <div className="flex items-center gap-1.5">
+        <select
+          className="rounded border border-navy-200 bg-white px-1 py-0.5 text-[11px] text-navy-600 dark:border-navy-600 dark:bg-navy-800 dark:text-navy-200"
+          value={a.estado}
+          disabled={corregir.isPending}
+          onChange={(e) => void corregir.mutateAsync({ accionId: a.id, estado: e.target.value as EstadoAccion })}
+          title="Corregir el estado (queda registrado como tuyo)"
+        >
+          <option value="pendiente">☐</option>
+          <option value="en_curso">◐</option>
+          <option value="ejecutado">☑</option>
+        </select>
+        <span className={a.estado === 'ejecutado' ? 'text-navy-400 line-through' : a.estado === 'en_curso' ? 'text-gold-500' : 'text-navy-700 dark:text-navy-200'}>
+          {a.texto}
+        </span>
+        {a.estado === 'en_curso' && <span className="text-[10px] text-gold-500">{ETIQUETA_ESTADO.en_curso}</span>}
+        {a.okrOrden !== null && <span className="text-navy-300">· OKR {a.okrOrden}</span>}
+      </div>
+      {a.nota && <p className="mt-0.5 pl-6 italic text-navy-400">“{a.nota}”</p>}
+    </li>
   );
 }
 

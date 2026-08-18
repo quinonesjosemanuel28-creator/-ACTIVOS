@@ -412,6 +412,22 @@ export function useCambiarFechaInicio() {
     onSuccess: inval,
   });
 }
+/** Ticket 9B: corrección de una acción y carga de mediciones (panel). */
+export function useCorregirAccion() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { accionId: string; estado: import('@domain/alumnos/plan').EstadoAccion; nota?: string }) =>
+      api.corregirAccion(v.accionId, v.estado, v.nota),
+    onSuccess: inval,
+  });
+}
+export function useCargarMedicion() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { krId: string; valor: number }) => api.cargarMedicion(v.krId, v.valor),
+    onSuccess: inval,
+  });
+}
 export function useEditarKr() {
   const inval = useInvalidarAlumnos();
   return useMutation({
