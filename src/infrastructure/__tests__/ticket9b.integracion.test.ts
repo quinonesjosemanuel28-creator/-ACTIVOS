@@ -30,7 +30,11 @@ async function armar(diasAtras = 15) {
   const inicio = new Date(Date.now() - diasAtras * 86_400_000).toISOString().slice(0, 10);
   const plan = await ua.cargarPlan(infra.reposAlumnos, alcance, alumno.id, JSON.stringify({
     version: 1, alumno: 'Gonzalo', fecha_inicio: inicio,
-    okrs: [{ orden: 1, objetivo: 'Ordenar', krs: [{ texto: 'Tablero al día' }, { texto: 'Bajar la mora' }] }],
+    okrs: [{ orden: 1, objetivo: 'Ordenar', krs: [
+      { texto: 'Tablero al día' },
+      // Contrato v3: la skill emite el tipo. La métrica llega con su paquete.
+      { texto: 'Bajar la mora', tipo: 'metrica', valor_inicial: 20, meta_90: 10, unidad: '%', direccion: 'baja' },
+    ] }],
     fases: [
       { fase: 1, acciones: [{ texto: 'A', okr: 1, kr: 1 }, { texto: 'B', okr: 1, kr: 1 }, { texto: 'C' }] },
       { fase: 2, acciones: [{ texto: 'D' }, { texto: 'E' }, { texto: 'F' }] },
@@ -96,17 +100,18 @@ describe('Ticket 9B · corrección del consultor', () => {
 
 describe('Ticket 9B · mediciones', () => {
   it('un entregable rechaza mediciones; una métrica las acumula y cumple por dirección', async () => {
-    const { db, infra, admin, alcance, plan } = await armar();
+    const { infra, admin, alcance, alumno, plan } = await armar();
     const [krEntregable, krMora] = plan.okrs[0]!.krs;
+
+    // El tipado del contrato v3 sobrevive el viaje bloque → base → relectura.
+    const [releido] = await infra.reposAlumnos.planes.listarPorAlumno(alumno.id);
+    const mora9 = releido!.okrs[0]!.krs.find((k) => k.id === krMora!.id)!;
+    expect(mora9).toMatchObject({ tipo: 'metrica', valorInicial: 20, meta90: 10, unidad: '%', direccion: 'baja' });
+    expect(releido!.okrs[0]!.krs.find((k) => k.id === krEntregable!.id)).toMatchObject({ tipo: 'entregable' });
 
     await expect(
       ua.cargarMedicion(infra.reposAlumnos, alcance, admin.id, krEntregable!.id, { valor: 10 }),
     ).rejects.toMatchObject({ codigo: 'VALIDACION' });
-
-    // Hasta que el contrato emita tipo (próximo paso del §12), la métrica se
-    // tipa a mano — exactamente lo que va a pasar con los planes ya cargados.
-    db.prepare("UPDATE krs SET tipo = 'metrica', valor_inicial = 20, meta_90 = 10, unidad = '%', direccion = 'baja' WHERE id = ?")
-      .run(krMora!.id);
 
     await ua.cargarMedicion(infra.reposAlumnos, alcance, admin.id, krMora!.id, { valor: 14 }, '2026-08-10T00:00:00.000Z');
     await ua.cargarMedicion(infra.reposAlumnos, alcance, admin.id, krMora!.id, { valor: 9 }, '2026-08-16T00:00:00.000Z');

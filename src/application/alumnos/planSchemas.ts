@@ -18,10 +18,38 @@ const fechaISO = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va como YYYY-MM-DD (ej: 2026-08-18)')
   .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)), 'Fecha inválida');
 
-const krSchema = z.object({
-  texto: z.string().trim().min(1, 'Un KR sin texto'),
-  meta: z.string().trim().min(1).nullable().optional(),
-});
+/**
+ * Ticket 9: el KR viene tipado. `entregable` cierra solo por sus acciones;
+ * `metrica` exige el paquete completo para poder medirse — una métrica sin
+ * meta_90 o sin dirección es una promesa que nunca puede cumplirse, así que
+ * es error ESTRUCTURAL, no advertencia. Sin `tipo`, entra como entregable
+ * (aditivo: los bloques anteriores siguen valiendo tal cual).
+ */
+const krSchema = z
+  .object({
+    texto: z.string().trim().min(1, 'Un KR sin texto'),
+    meta: z.string().trim().min(1).nullable().optional(),
+    tipo: z.enum(['entregable', 'metrica']).optional(),
+    valor_inicial: z.number().finite().optional(),
+    meta_30: z.number().finite().optional(),
+    meta_60: z.number().finite().optional(),
+    meta_90: z.number().finite().optional(),
+    unidad: z.string().trim().min(1).optional(),
+    direccion: z.enum(['sube', 'baja']).optional(),
+  })
+  .superRefine((k, ctx) => {
+    if (k.tipo === 'metrica') {
+      for (const campo of ['valor_inicial', 'meta_90', 'unidad', 'direccion'] as const) {
+        if (k[campo] === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [campo],
+            message: `El KR métrica "${k.texto.slice(0, 40)}" necesita ${campo} (los valores van como número, sin comillas; el símbolo va en unidad)`,
+          });
+        }
+      }
+    }
+  });
 
 const okrSchema = z.object({
   orden: z.number().int().min(1),
@@ -173,6 +201,49 @@ export function advertenciasDe(crudo: Record<string, unknown>, bloque: BloquePla
   const conAccion = new Set(bloque.fases.flatMap((f) => f.acciones.map((a) => a.okr)).filter((x) => x !== undefined));
   for (const o of bloque.okrs) {
     if (!conAccion.has(o.orden)) avisos.push(`El OKR ${o.orden} ("${o.objetivo.slice(0, 40)}…") no tiene ninguna acción asociada.`);
+  }
+
+  // ── Ticket 9: coherencia del cierre automático ──
+
+  // KR entregable sin ninguna acción que lo referencie: no va a poder
+  // cerrarse NUNCA. Con un bloque que no usa referencias kr en absoluto, un
+  // aviso por KR sería puro ruido — se agrupa en uno solo.
+  const referencias = bloque.fases.flatMap((f) => f.acciones).filter((a) => a.kr !== undefined);
+  const hayEntregables = bloque.okrs.some((o) => o.krs.some((k) => (k.tipo ?? 'entregable') === 'entregable'));
+  if (referencias.length === 0 && hayEntregables) {
+    avisos.push(
+      'Ninguna acción referencia KRs (campo "kr"): los KRs entregables no van a poder cerrarse solos. ' +
+        'Pedile a la skill el bloque con las referencias, o cargalo sabiendo que el cierre queda manual sobre las acciones.',
+    );
+  } else if (referencias.length > 0) {
+    const referenciados = new Set(referencias.map((a) => `${a.okr}:${a.kr}`));
+    for (const o of bloque.okrs) {
+      o.krs.forEach((k, i) => {
+        if ((k.tipo ?? 'entregable') === 'entregable' && !referenciados.has(`${o.orden}:${i + 1}`)) {
+          avisos.push(
+            `El KR "${k.texto.slice(0, 40)}" del OKR ${o.orden} es entregable y ninguna acción lo referencia: no va a poder cerrarse nunca.`,
+          );
+        }
+      });
+    }
+  }
+
+  // Métricas: los tramos intermedios son lo que el alumno ve.
+  for (const o of bloque.okrs) {
+    for (const k of o.krs) {
+      if (k.tipo === 'metrica' && (k.meta_30 === undefined || k.meta_60 === undefined)) {
+        avisos.push(`El KR métrica "${k.texto.slice(0, 40)}" viene sin meta_30/meta_60: el alumno no va a ver tramos intermedios.`);
+      }
+    }
+  }
+
+  // Regla de proporción del contrato: la mayoría de los KRs son entregables.
+  const todos = bloque.okrs.flatMap((o) => o.krs);
+  const metricas = todos.filter((k) => k.tipo === 'metrica').length;
+  if (todos.length > 0 && metricas > todos.length / 2) {
+    avisos.push(
+      `${metricas} de ${todos.length} KRs vienen como métrica. Revisá: lo que "existe o no existe" es entregable, no métrica.`,
+    );
   }
 
   return avisos;

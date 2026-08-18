@@ -549,15 +549,15 @@ export async function cargarPlan(
           orden: i + 1,
           texto: k.texto,
           meta: k.meta ?? null,
-          // Ticket 9: hasta que el contrato emita tipo, todo entra como
-          // 'entregable' (conservador). Los campos de métrica llegan en 9B.
-          tipo: 'entregable' as const,
-          valorInicial: null,
-          meta30: null,
-          meta60: null,
-          meta90: null,
-          unidad: null,
-          direccion: null,
+          // Ticket 9 · contrato v3: el tipo viene de la skill. Sin él, entra
+          // como entregable (aditivo: los bloques anteriores siguen valiendo).
+          tipo: k.tipo ?? 'entregable',
+          valorInicial: k.valor_inicial ?? null,
+          meta30: k.meta_30 ?? null,
+          meta60: k.meta_60 ?? null,
+          meta90: k.meta_90 ?? null,
+          unidad: k.unidad ?? null,
+          direccion: k.direccion ?? null,
           // El contrato de la skill no trae fechas ni cumplimiento: los fija el
           // consultor en el panel (ticket 7).
           vencimiento: null,

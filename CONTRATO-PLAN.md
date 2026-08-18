@@ -56,23 +56,43 @@ documento.
       "orden": 1,
       "objetivo": "Ordenar la administración financiera",
       "krs": [
-        { "texto": "Tablero único con todos los créditos cargados", "meta": "100% de la cartera" },
-        { "texto": "Separar la caja del negocio de la personal", "meta": "2 cuentas distintas" }
+        { "texto": "Tablero único con todos los créditos cargados", "meta": "100% de la cartera", "tipo": "entregable" },
+        { "texto": "Separar la caja del negocio de la personal", "meta": "2 cuentas distintas", "tipo": "entregable" }
       ]
     },
     {
       "orden": 2,
       "objetivo": "Profesionalizar las cobranzas",
       "krs": [
-        { "texto": "Protocolo de cobranza por tramos", "meta": "escrito y aplicado" },
-        { "texto": "Bajar la mora de la cartera", "meta": "por debajo del 10%" }
+        { "texto": "Protocolo de cobranza por tramos", "meta": "escrito y aplicado", "tipo": "entregable" },
+        {
+          "texto": "Bajar la mora de la cartera",
+          "meta": "por debajo del 10%",
+          "tipo": "metrica",
+          "valor_inicial": 20,
+          "meta_30": 16,
+          "meta_60": 13,
+          "meta_90": 10,
+          "unidad": "%",
+          "direccion": "baja"
+        }
       ]
     },
     {
       "orden": 3,
       "objetivo": "Escalar la cartera de forma controlada",
       "krs": [
-        { "texto": "Sumar clientes nuevos por referido calificado", "meta": "28 clientes nuevos" }
+        {
+          "texto": "Sumar clientes nuevos por referido calificado",
+          "meta": "28 clientes nuevos",
+          "tipo": "metrica",
+          "valor_inicial": 0,
+          "meta_30": 6,
+          "meta_60": 16,
+          "meta_90": 28,
+          "unidad": "clientes",
+          "direccion": "sube"
+        }
       ]
     }
   ],
@@ -90,18 +110,18 @@ documento.
       "fase": 2,
       "titulo": "Optimizar",
       "acciones": [
-        { "texto": "Escribir el protocolo de cobranza por tramos", "okr": 2 },
-        { "texto": "Llamar a todos los morosos de más de 30 días", "okr": 2 },
-        { "texto": "Hacer el cierre financiero todos los viernes", "okr": 1 }
+        { "texto": "Escribir el protocolo de cobranza por tramos", "okr": 2, "kr": 1 },
+        { "texto": "Llamar a todos los morosos de más de 30 días", "okr": 2, "kr": 2 },
+        { "texto": "Hacer el cierre financiero todos los viernes", "okr": 1, "kr": 1 }
       ]
     },
     {
       "fase": 3,
       "titulo": "Escalar",
       "acciones": [
-        { "texto": "Pedir referidos a los 10 mejores clientes", "okr": 3 },
+        { "texto": "Pedir referidos a los 10 mejores clientes", "okr": 3, "kr": 1 },
         { "texto": "Definir el monto máximo por cliente nuevo", "okr": 3 },
-        { "texto": "Revisar la mora antes de colocar capital nuevo", "okr": 2 }
+        { "texto": "Revisar la mora antes de colocar capital nuevo", "okr": 2, "kr": 2 }
       ]
     }
   ]
@@ -118,7 +138,10 @@ documento.
 | `etapa` | no | Una de las 4 etapas evolutivas. Contexto para el panel. |
 | `objetivo_90d` | no | El objetivo maestro (sección 4 del plan). |
 | `okrs[]` | sí | Entre 1 y 8. `orden` (1..n), `objetivo` (título), `krs[]`. |
-| `okrs[].krs[]` | sí | `texto` obligatorio, `meta` opcional. |
+| `okrs[].krs[]` | sí | `texto` obligatorio, `meta` opcional, más el tipado de abajo (ticket 9). |
+| `okrs[].krs[].tipo` | para la skill sí; la app tolera que falte | `"entregable"` (algo que existe o no existe; **se cierra solo** cuando todas las acciones que lo referencian están ejecutadas) o `"metrica"` (un número que tiene que moverse; se cierra por valor). Sin `tipo`, el KR entra como entregable — los bloques anteriores siguen valiendo tal cual. |
+| `valor_inicial` `meta_90` `unidad` `direccion` | si `tipo` es `"metrica"`, sí | El paquete mínimo para poder medir: de dónde arranca, adónde llega, en qué unidad y para qué lado. **Sin alguno de los cuatro la carga se frena** (error, no advertencia): una métrica que no puede medirse es una promesa incumplible. Los valores van como **número, sin comillas ni símbolo** — el símbolo va en `unidad`. `direccion` es `"sube"` o `"baja"`, exactamente. |
+| `meta_30` `meta_60` | no (recomendados) | Tramos intermedios de la métrica. Sin ellos el plan carga, pero el alumno no ve el tramo del mes — la previa lo avisa. |
 | `fases[]` | sí | **Exactamente 3**, con `fase` 1, 2 y 3. `titulo` opcional. |
 | `fases[].acciones[]` | sí | `texto` obligatorio; `okr` opcional (número de `orden` del OKR al que pertenece, para agrupar en el panel). Si viene, **tiene que existir** en `okrs[]`. |
 | `fases[].acciones[].kr` | no | Posición (1..n) del KR **dentro del OKR referenciado**, para agrupar el checklist del alumno bajo su KR — la tarea con su para qué (ticket 8). Exige `okr` y una posición que exista en sus `krs[]`. Sin él, la acción va bajo "Otras acciones". Aditivo: los bloques anteriores siguen valiendo tal cual. |
@@ -160,6 +183,23 @@ trabajo (después de "Paso 5 — Entregar"):
 >   KR de ese OKR al que la acción aporta. El checklist del alumno agrupa las
 >   acciones bajo su KR — la tarea con su para qué. Si una acción no aporta a
 >   un KR puntual, omití el campo.
+> - `tipo` obligatorio en cada KR. Si el KR se expresa como un número que
+>   tiene que moverse, es `"metrica"`; si es algo que existe o no existe, es
+>   `"entregable"`. El dato ya está en la tabla de KRs de la sección 5 del
+>   plan: es extraerlo, no inventarlo.
+> - Para `"metrica"`: `valor_inicial`, `meta_90`, `unidad` y `direccion`
+>   obligatorios; `meta_30` y `meta_60` recomendados. Los valores van como
+>   **número, sin comillas ni símbolo** — el símbolo va en `unidad`.
+>   `direccion` es `"sube"` o `"baja"`, exactamente.
+> - El `valor_inicial` sale del diagnóstico. Si el diagnóstico no lo trae, el
+>   KR se emite como `"entregable"` y el dato pendiente va a la sección 12 del
+>   documento. **No inventar valores de partida.**
+> - **Todo KR `"entregable"` tiene que tener al menos una acción que lo
+>   referencie** (`okr` + `kr`). Un entregable sin acciones no puede cerrarse
+>   nunca: el plan lo declara pero no lo ejecuta.
+> - Proporción: la mayoría de los KRs de un plan son entregables. Si más de la
+>   mitad te salen `"metrica"`, revisá — lo que "existe o no existe" es
+>   entregable, no métrica.
 > - No inventar datos para completar el bloque: si algo falta, preguntarlo.
 >
 > ```json
@@ -179,9 +219,15 @@ trabajo (después de "Paso 5 — Entregar"):
   dentro del bloque, la previa los lista como ignorados — y eso es lo correcto,
   no un bug.
 
-## Del lado de la app (ticket 6)
+## Del lado de la app (tickets 6–9)
 
 - Zod valida el bloque en el borde, con los mismos criterios de la tabla.
+- Ticket 9: un KR entregable que ninguna acción referencia se avisa en la
+  previa («no va a poder cerrarse nunca»); si el bloque no trae ninguna
+  referencia `kr`, el aviso es uno solo, agregado. La métrica sin
+  `meta_30`/`meta_60` y la proporción invertida (más métricas que entregables)
+  también se avisan. Nada de eso frena la carga; el paquete métrico incompleto
+  sí (error estructural).
 - Si `alumno` no coincide con la ficha, **se avisa y se pide confirmación**; no
   se bloquea (el consultor puede haberlo escrito distinto).
 - El consultor ve una **previsualización** antes de guardar: cuántos OKRs,
