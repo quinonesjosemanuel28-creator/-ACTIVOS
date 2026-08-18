@@ -111,7 +111,8 @@ Toda ruta declara su acción con `requiere(...)`, **incluidas las de lectura**. 
 |---|---|---|
 | 0–6 | Exploración · migraciones · rol y ámbito · formulario · panel · exportación · plan + seguimiento | hecho |
 | 7 | Panel de control: estado y salud (7A) · documento del plan (7B) · seguimiento activo (7C) | hecho |
-| 8 | El link del alumno: "Esta semana", copy sin castigo, último acceso, agrupado por KR | hecho (en `desarrollo`, sin promover) |
+| 8 | El link del alumno: "Esta semana", copy sin castigo, último acceso, agrupado por KR | hecho |
+| 9 | Cierre por acciones: 9A modelo · 9B cierre y métricas · contrato v3 · 9C paralelo de semáforos · 9D vista del alumno | hecho en `desarrollo`, sin promover — **falta el switch de 9C** (espera la semana de observación con cartera real) |
 | — | Asistente IA sobre el módulo | **descartado** |
 
 El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así de la skill). El contrato del bloque JSON que emite la skill vive en `CONTRATO-PLAN.md` (los dos lados).
@@ -120,7 +121,9 @@ Con el ticket 7 el módulo es un **panel operativo**: estado del alumno (ACTIVO/
 
 Las tablas del módulo están TODAS en `TABLAS_SENSIBLES` (excluidas del asistente IA) — **permanente**: el asistente sobre el módulo quedó descartado.
 
-Con el ticket 8, la vista del alumno (`/seguimiento/:token`) **orienta en vez de alarmar**: bloque "Esta semana" (3 acciones, deuda primero), día del plan explícito, acciones agrupadas bajo su KR, y nunca rojo ni "trabado" — esa regla es dura. Dos reversas a saber: pasado el día 90 las casillas siguen marcables (revierte el ticket 6), y el contrato de la skill ganó el campo opcional `kr` por acción (CONTRATO-PLAN.md, hay que actualizar la skill). El semáforo del consultor NO cambió: sigue midiendo KRs tildados por el consultor.
+Con el ticket 8, la vista del alumno (`/seguimiento/:token`) **orienta en vez de alarmar**: bloque "Esta semana" (3 acciones), día del plan explícito, acciones agrupadas bajo su KR, y nunca rojo ni "trabado" — esa regla es dura. Una reversa a saber: pasado el día 90 las casillas siguen marcables (revierte el ticket 6).
+
+Con el ticket 9 (TICKET-9.md es la especificación): checkins extendido como única fuente del estado de las acciones (tres estados, solo `ejecutado` puntúa), KRs tipadas (`entregable` cierra sola por sus acciones, `metrica` por valor contra metas — sin casilla manual), `mediciones` append-only, y la skill emite el tipado (contrato v3, ya aplicado). El alumno marca los tres estados desde su link (círculo = ejecutado; el texto abre el detalle con nota), lo empezado va primero en "Esta semana", y "Tus números" muestra sus métricas sin juicio, con carga propia. ⚠️ **El semáforo del consultor sigue midiendo KRs tildados (`cumplido_en`) contra días/90 — intacto**: el cálculo nuevo (acciones contra la agenda del plan) corre en paralelo on-read y se ve SOLO en `GET /api/alumnos/comparacion-semaforo` (ámbito total). El **switch** es un commit aparte que espera una semana de observación con cartera real cargada; hasta entonces, no tocar `calcularSalud` ni sus tests. Backup nocturno con ensayo de restauración: workflow de GitHub Actions + `npm run db:restaurar` (DEPLOY.md paso 7).
 
 ⚠️ `npm run db:sembrar-desde-sqlite` (ex `db:migrar`): NO migra esquema — **siembra datos vaciando el destino**. Contra producción pisa datos reales. El esquema migra solo al arrancar la app; el que valida sin escribir es `db:validar`.
 
