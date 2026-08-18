@@ -83,6 +83,16 @@ export interface EntradaSalud {
 }
 
 /**
+ * Mapeo brecha → color. Extraído para que el cálculo por acciones (ticket 9C,
+ * saludAcciones.ts) use EXACTAMENTE los mismos umbrales: una sola fuente.
+ */
+export function saludDeBrecha(brecha: number): Salud {
+  if (brecha >= UMBRAL_NARANJA) return 'VERDE';
+  if (brecha >= UMBRAL_ROJO) return 'NARANJA';
+  return 'ROJO';
+}
+
+/**
  * El semáforo. `avance = cumplidos/totales`, `tiempo = min(dias/90, 1)`,
  * `brecha = avance − tiempo`:
  *
@@ -101,9 +111,7 @@ export function calcularSalud(e: EntradaSalud, hoyIso: string): SaludCalculada {
   const avance = e.krsCumplidos / e.krsTotales;
   const tiempo = Math.min(dias / 90, 1);
   const brecha = avance - tiempo;
-  if (brecha >= UMBRAL_NARANJA) return { salud: 'VERDE', brecha };
-  if (brecha >= UMBRAL_ROJO) return { salud: 'NARANJA', brecha };
-  return { salud: 'ROJO', brecha };
+  return { salud: saludDeBrecha(brecha), brecha };
 }
 
 /** Avance de KRs de un plan: el numerador y denominador de la salud. */

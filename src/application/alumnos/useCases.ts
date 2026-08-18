@@ -55,9 +55,15 @@ import {
   type AlertaInactividad,
   type ChipFase,
   type EstadoAlumno,
+  type MotivoNeutro,
   type Salud,
   type SaludCalculada,
 } from '../../domain/alumnos/panel';
+import {
+  accionesPorFase,
+  calcularSaludPorAcciones,
+  type MotivoNeutroAcciones,
+} from '../../domain/alumnos/saludAcciones';
 import { parsearTelefono } from '../../domain/alumnos/telefono';
 import { diaDelPlan } from '../../domain/alumnos/vistaAlumno';
 import {
@@ -1156,6 +1162,77 @@ export async function panelAlumnos(
       (a.salud.brecha ?? 0) - (b.salud.brecha ?? 0) ||
       a.alumno.nombre.localeCompare(b.alumno.nombre),
   );
+}
+
+// ───── Comparación de semáforos (ticket 9C · paralelo on-read) ─────
+
+export interface ComparacionAlumno {
+  alumnoId: string;
+  nombre: string;
+  estado: EstadoAlumno;
+  /** El que se muestra hoy: KRs tildados (cumplido_en) contra días/90. */
+  viejo: { salud: Salud | null; motivo: MotivoNeutro | null; brecha: number | null };
+  /** El candidato: acciones ejecutadas contra la agenda del plan. Vive SOLO acá. */
+  nuevo: { salud: Salud | null; motivo: MotivoNeutroAcciones | null; brecha: number | null };
+  coinciden: boolean;
+  acciones: { ejecutadas: number; totales: number };
+  /** La ENTRADA del semáforo viejo (tilde manual), no el contador derivado de 9B. */
+  krs: { cumplidas: number; totales: number };
+}
+
+export interface ComparacionSemaforo {
+  generadoEn: string;
+  divergencias: number;
+  alumnos: ComparacionAlumno[];
+}
+
+/**
+ * El export ADMIN de la semana de observación (TICKET-9.md §7.1): los dos
+ * semáforos lado a lado, por alumno, calculados on-read — sin scheduler y sin
+ * serie histórica. El valor nuevo NO viaja en /api/alumnos/panel: los
+ * consultores siguen viendo solo el viejo hasta el switch.
+ *
+ * Lectura de la semana: si todos los planes cargados tienen reparto parejo,
+ * cero divergencia ES la confirmación de que el switch es seguro (con reparto
+ * parejo la fórmula nueva es idéntica a días/90), no un test que no corrió.
+ *
+ * El ámbito lo corta la ruta (exigirAmbitoTotal) ANTES de llegar acá: este
+ * caso de uso es de ámbito total por definición y no acota por titular.
+ */
+export async function comparacionSemaforo(repos: ReposAlumnos, ahora = ahoraIso()): Promise<ComparacionSemaforo> {
+  const alumnos = await repos.alumnos.listar({});
+  const filas: ComparacionAlumno[] = [];
+  for (const alumno of alumnos) {
+    const vigente = (await repos.planes.listarPorAlumno(alumno.id))[0] ?? null;
+    const fechaInicio = vigente?.plan.fechaInicio ?? null;
+
+    const entradaVieja = avanceKrs(vigente ? vigente.okrs.flatMap((o) => o.krs) : []);
+    const viejo = calcularSalud(
+      { estado: alumno.estado, fechaInicio, krsTotales: entradaVieja.totales, krsCumplidos: entradaVieja.cumplidos },
+      ahora,
+    );
+
+    const checkins = vigente ? await repos.checkins.listarPorPlan(vigente.plan.id) : [];
+    const porFase = accionesPorFase(vigente?.acciones ?? [], checkins);
+    const nuevo = calcularSaludPorAcciones({ estado: alumno.estado, fechaInicio, porFase }, ahora);
+
+    filas.push({
+      alumnoId: alumno.id,
+      nombre: alumno.nombre,
+      estado: alumno.estado,
+      viejo: { salud: viejo.salud, motivo: viejo.motivo ?? null, brecha: viejo.brecha ?? null },
+      nuevo: { salud: nuevo.salud, motivo: nuevo.motivo ?? null, brecha: nuevo.brecha ?? null },
+      coinciden: viejo.salud === nuevo.salud,
+      acciones: {
+        ejecutadas: porFase.reduce((s, f) => s + f.ejecutadas, 0),
+        totales: porFase.reduce((s, f) => s + f.totales, 0),
+      },
+      krs: { cumplidas: entradaVieja.cumplidos, totales: entradaVieja.totales },
+    });
+  }
+  // Divergentes primero: son la razón de ser del export. Después, alfabético.
+  filas.sort((a, b) => Number(a.coinciden) - Number(b.coinciden) || a.nombre.localeCompare(b.nombre));
+  return { generadoEn: ahora, divergencias: filas.filter((f) => !f.coinciden).length, alumnos: filas };
 }
 
 // ───── Seguimiento activo (ticket 7C): contactos y teléfonos ─────

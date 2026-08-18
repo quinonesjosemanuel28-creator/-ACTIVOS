@@ -17,7 +17,7 @@ import {
   type Alcance,
   type Usuario,
 } from '../src/domain/auth/permisos';
-import { usuarioDeSesion } from '../src/application/auth/useCases';
+import { ErrorAuth, usuarioDeSesion } from '../src/application/auth/useCases';
 import type { ReposAuth } from '../src/application/auth/ports';
 
 export const NOMBRE_COOKIE = 'activos_sesion';
@@ -68,7 +68,9 @@ export function alcanceDe(res: express.Response): Alcance {
  */
 export function exigirAmbitoTotal(alcance: Alcance, recurso: string): void {
   if (alcance.ambito !== 'todos') {
-    throw new Error(`El recurso "${recurso}" no sabe acotar por titular: consulta bloqueada.`);
+    // ErrorAuth y no Error pelado: h() lo mapea a 403 (prohibido), que es lo
+    // que es — un 400 diría "pedido mal armado" y el pedido está bien armado.
+    throw new ErrorAuth('NO_AUTORIZADO', `El recurso "${recurso}" no sabe acotar por titular: consulta bloqueada.`);
   }
 }
 

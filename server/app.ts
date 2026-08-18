@@ -412,6 +412,14 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
       consultorId: typeof req.query.consultor === 'string' ? req.query.consultor : undefined,
     }),
   ));
+  // Comparación de semáforos (ticket 9C · paralelo): el viejo y el candidato
+  // lado a lado, para la semana de observación. Solo ámbito total (hoy, ADMIN):
+  // es lectura de calibración, no operación de cartera — y el valor nuevo NO
+  // viaja en /api/alumnos/panel. También antes de /:id por el matcheo.
+  app.get('/api/alumnos/comparacion-semaforo', requiere('ver_alumnos'), h((_req, res) => {
+    exigirAmbitoTotal(alcanceDe(res), 'comparacion-semaforo');
+    return ual.comparacionSemaforo(reposAlumnos);
+  }));
   // Papelera (ticket 7): borrado lógico, restaurar y purga definitiva. La
   // acción 'eliminar_alumnos' la tiene SOLO ADMIN — un consultor gestiona su
   // cartera pero no la borra. También antes de /:id por el matcheo.

@@ -494,3 +494,37 @@ describe('HTTP · rutas privadas: ámbito por fila de punta a punta', () => {
     expect(d.editadoPorConsultor).toBe(true);
   });
 });
+
+describe('HTTP · comparación de semáforos (ticket 9C · solo ámbito total)', () => {
+  it('ADMIN ve ambos semáforos por alumno; el panel sigue sin traer el valor nuevo', async () => {
+    await crearAlumnoConToken(ctx.cookies.consultor); // que haya al menos una fila
+    const res = await fetch(`${ctx.base}/api/alumnos/comparacion-semaforo`, { headers: { cookie: ctx.cookies.admin } });
+    expect(res.status).toBe(200);
+    const cmp = (await res.json()) as {
+      generadoEn: string;
+      divergencias: number;
+      alumnos: Record<string, unknown>[];
+    };
+    expect(cmp.alumnos.length).toBeGreaterThan(0);
+    expect(Object.keys(cmp.alumnos[0]!).sort()).toEqual([
+      'acciones', 'alumnoId', 'coinciden', 'estado', 'krs', 'nombre', 'nuevo', 'viejo',
+    ]);
+
+    // La respuesta del panel que consumen los consultores no cambió.
+    const panel = await fetch(`${ctx.base}/api/alumnos/panel`, { headers: { cookie: ctx.cookies.consultor } });
+    expect(panel.status).toBe(200);
+    const crudo = await panel.text();
+    expect(crudo).not.toContain('"nuevo"');
+    expect(crudo).not.toContain('"coinciden"');
+  });
+
+  it('un CONSULTOR recibe 403: tiene ver_alumnos pero su ámbito no alcanza todas las filas', async () => {
+    const res = await fetch(`${ctx.base}/api/alumnos/comparacion-semaforo`, { headers: { cookie: ctx.cookies.consultor } });
+    expect(res.status).toBe(403);
+  });
+
+  it('un LECTOR del contable recibe 403: sin ver_alumnos ni siquiera llega al ámbito', async () => {
+    const res = await fetch(`${ctx.base}/api/alumnos/comparacion-semaforo`, { headers: { cookie: ctx.cookies.lector } });
+    expect(res.status).toBe(403);
+  });
+});
