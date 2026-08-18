@@ -97,12 +97,35 @@ primer ingreso el sistema les exige elegir la propia.
 
 1. **Plataforma**: servicio Postgres → pestaña *Backups* → activar/verificar
    los backups automáticos y su retención (según plan).
-2. **Tu copia local** (fuera de Railway, recomendado semanal y antes de cada
-   import grande):
+2. **Backup automático nocturno con ensayo de restauración** (GitHub Actions,
+   `.github/workflows/backup.yml`). Configurarlo una sola vez:
+   - En GitHub: repo → *Settings → Secrets and variables → Actions* →
+     *New repository secret* → nombre `BACKUP_DATABASE_URL`, valor la URL
+     **pública** de Postgres de Railway
+     (`postgresql://postgres:CLAVE@xxxx.proxy.rlwy.net:PUERTO/railway`).
+   - Probarlo en el momento: pestaña *Actions* → *Backup de producción* →
+     *Run workflow*. Verde = backup hecho **y restauración ensayada**.
+
+   Cada noche (03:00 AR) el workflow hace `pg_dump` de producción, **restaura
+   ese mismo dump en un Postgres descartable**, corre las migraciones encima
+   y compara fila por tabla contra lo que el dump declara. Si algo no cierra,
+   el workflow falla y GitHub avisa por mail: un backup irrestaurable se
+   detecta esa noche, no el día del desastre. El `.sql` queda como *artifact*
+   del run (pestaña Actions → el run → Artifacts), con 30 días de retención.
+3. **Tu copia local** (fuera de Railway y de GitHub, recomendado antes de
+   cada import grande):
    ```bash
    PGSSL=true DATABASE_URL="postgresql://…proxy.rlwy.net:PUERTO/railway" npm run db:backup
-   # → backups/activos-FECHA.sql · restaurar: psql "$DATABASE_URL" -f backups/…
+   # → backups/activos-FECHA.sql
    ```
+4. **Restaurar de verdad** (desastre o mudanza): apuntar `DATABASE_URL` a la
+   base destino **vacía** y correr
+   ```bash
+   npm run db:restaurar -- backups/activos-FECHA.sql
+   ```
+   El script se niega si la base destino tiene tablas (`--pisar` la vacía
+   primero — es la maniobra de "se vacía la base y se vuelve a copiar" de
+   arriba, ahora automatizada y con verificación al final).
 
 ## Paso 8 — Verificación final (checklist)
 
@@ -112,6 +135,8 @@ primer ingreso el sistema les exige elegir la propia.
 - [ ] Un EDITOR puede cargar un pago; un LECTOR no ve botones de edición.
 - [ ] El Asistente IA responde (la API key quedó bien cargada).
 - [ ] `db:backup` corrió y tenés el `.sql` en tu Mac.
+- [ ] El secreto `BACKUP_DATABASE_URL` está cargado y el workflow *Backup de
+      producción* corrió en verde al menos una vez (Actions → Run workflow).
 - [ ] (Opcional) Dominio propio: Settings → Networking → Custom Domain.
 
 ## Operatoria posterior

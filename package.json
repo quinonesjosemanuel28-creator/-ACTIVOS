@@ -16,6 +16,7 @@
     "db:migrar-telefonos": "tsx server/scripts/migrar-telefonos.ts",
     "db:validar": "tsx server/scripts/validar-postgres.ts",
     "db:backup": "tsx server/scripts/backup-postgres.ts",
+    "db:restaurar": "tsx server/scripts/restaurar-postgres.ts",
     "backfill:closer": "tsx server/scripts/backfill-closer-pagos.ts",
     "clear:funnel": "tsx server/scripts/clear-funnel.ts",
     "test": "vitest run",
