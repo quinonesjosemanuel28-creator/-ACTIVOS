@@ -115,8 +115,8 @@ describe('Ticket 9A · aditivo puro: el semáforo no se mueve', () => {
   it('marcarAccion escribe estado y marcado COHERENTES (reversible por revert)', async () => {
     const { infra, alcance, plan } = await armar();
     const { token } = await ua.emitirLinkSeguimiento(infra.reposAlumnos, alcance, plan.plan.id);
-    await ua.marcarAccion(infra.reposAlumnos, token.token, plan.acciones[0]!.id, true, '2026-08-16T12:00:00.000Z');
-    await ua.marcarAccion(infra.reposAlumnos, token.token, plan.acciones[1]!.id, false, '2026-08-16T12:01:00.000Z');
+    await ua.marcarAccion(infra.reposAlumnos, token.token, plan.acciones[0]!.id, { marcado: true }, '2026-08-16T12:00:00.000Z');
+    await ua.marcarAccion(infra.reposAlumnos, token.token, plan.acciones[1]!.id, { marcado: false }, '2026-08-16T12:01:00.000Z');
 
     const checkins = await infra.reposAlumnos.checkins.listarPorPlan(plan.plan.id);
     expect(checkins).toHaveLength(2);

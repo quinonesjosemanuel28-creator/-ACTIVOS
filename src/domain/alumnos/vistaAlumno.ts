@@ -17,6 +17,12 @@ import { diasDelPlan } from './panel';
 /** Lo mínimo que la selección necesita saber de una acción. */
 export interface AccionSeleccionable {
   hecha: boolean;
+  /**
+   * Empezada y sin cerrar (ticket 9D). Opcional y aditivo: quien no distingue
+   * estados (o un dato viejo) la trata como pendiente. Para la DEUDA no
+   * cambia nada: lo único que cierra es ejecutado.
+   */
+  enCurso?: boolean;
 }
 
 export interface FaseParaVista<T extends AccionSeleccionable> {
@@ -32,7 +38,9 @@ export const CUPO_ESTA_SEMANA = 3;
 
 /**
  * Deuda de fases VENCIDAS por calendario: pendientes de fases anteriores a la
- * actual, de la más vieja a la más nueva. Vacía = va al día.
+ * actual, de la más vieja a la más nueva. Vacía = va al día. Una acción EN
+ * CURSO de fase vencida sigue contando (ticket 9D): lo único que cierra la
+ * deuda es ejecutado.
  */
 export function deudaVencida<T extends AccionSeleccionable>(
   fases: FaseParaVista<T>[],
@@ -63,11 +71,28 @@ export function seleccionarEstaSemana<T extends AccionSeleccionable>(
   const orden = [...fases].sort((a, b) => a.fase - b.fase);
   const pendientesDe = (filtro: (fase: Fase) => boolean): T[] =>
     orden.filter((f) => filtro(f.fase)).flatMap((f) => f.acciones.filter((a) => !a.hecha));
-  return [
+  const candidatas = [
     ...pendientesDe((f) => f < faseActual),
     ...pendientesDe((f) => f === faseActual),
     ...pendientesDe((f) => f > faseActual),
-  ].slice(0, cupo);
+  ];
+  // Ticket 9D: lo EMPEZADO va primero. Si el bloque escondiera lo en curso,
+  // taparía justo el perfil a vigilar — el que abre frentes y no cierra
+  // ninguno. Y con más en curso que cupos, el bloque muestra SOLO esas: no
+  // se sugiere arrancar nada nuevo con tanto a medias (el aviso lo pone la
+  // vista con accionesAMedias).
+  const enCurso = candidatas.filter((a) => a.enCurso === true);
+  if (enCurso.length > cupo) return enCurso.slice(0, cupo);
+  return [...enCurso, ...candidatas.filter((a) => a.enCurso !== true)].slice(0, cupo);
+}
+
+/**
+ * Cuántas acciones del plan están empezadas y sin cerrar. Con más que
+ * CUPO_ESTA_SEMANA, la vista antepone al bloque: "Tenés N acciones a medias.
+ * Cerrá algunas antes de arrancar otra." — describe, no reprocha.
+ */
+export function accionesAMedias<T extends AccionSeleccionable>(fases: FaseParaVista<T>[]): number {
+  return fases.flatMap((f) => f.acciones).filter((a) => !a.hecha && a.enCurso === true).length;
 }
 
 /**

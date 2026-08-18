@@ -237,7 +237,12 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
     ual.abrirSeguimiento(reposAlumnos, param(req, 'token')),
   ));
   app.post('/api/seguimiento/:token/acciones/:accionId', conLimiteSeguimiento((req) =>
-    ual.marcarAccion(reposAlumnos, param(req, 'token'), param(req, 'accionId'), req.body?.marcado),
+    // El cuerpo entero: {marcado} (el círculo) o {estado, nota?} (el detalle, 9D).
+    ual.marcarAccion(reposAlumnos, param(req, 'token'), param(req, 'accionId'), req.body),
+  ));
+  // "Tus números" (9D): el alumno carga el valor del mes de una métrica.
+  app.post('/api/seguimiento/:token/krs/:krId/mediciones', conLimiteSeguimiento((req) =>
+    ual.cargarMedicionDesdeLink(reposAlumnos, param(req, 'token'), param(req, 'krId'), req.body),
   ));
 
   // ───────────────────── Gate global: de acá en adelante, SESIÓN ─────────────────────

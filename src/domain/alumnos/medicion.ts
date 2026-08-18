@@ -118,3 +118,19 @@ export function estadosDeKrs(
     }),
   );
 }
+
+/**
+ * Progreso de una métrica para la vista del ALUMNO (ticket 9D §8.6): si el
+ * valor se movió en la dirección correcta desde el arranque, `mejoro` con el
+ * `delta` en unidades para decir "bajó 6 puntos desde que arrancaste". Si no
+ * se movió (o fue para el otro lado), mejoro=false y la vista muestra el
+ * número solo, SIN comentario — nunca "no llegaste", nunca rojo.
+ */
+export function progresoMetrica(
+  direccion: 'sube' | 'baja',
+  valorInicial: number,
+  valorActual: number,
+): { mejoro: boolean; delta: number } {
+  const mejoro = direccion === 'baja' ? valorActual < valorInicial : valorActual > valorInicial;
+  return { mejoro, delta: Math.abs(valorActual - valorInicial) };
+}

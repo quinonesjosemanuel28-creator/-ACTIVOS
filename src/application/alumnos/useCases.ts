@@ -78,7 +78,7 @@ import {
   type Medicion,
   type PlanDocumento,
 } from '../../domain/alumnos/plan';
-import { estadosDeKrs, type EstadoKr } from '../../domain/alumnos/medicion';
+import { estadosDeKrs, valorActual as valorActualDe, type EstadoKr } from '../../domain/alumnos/medicion';
 import {
   aRespuestas,
   accionEstadoInputSchema,
@@ -664,6 +664,25 @@ export interface AccionSeguimiento {
   hecha: boolean;
   /** KR al que aporta (ticket 8), para agrupar. Null = "Otras acciones". */
   krId: string | null;
+  /** Estado efectivo (ticket 9D): el círculo marca ejecutado; en_curso se ve dorado. */
+  estado: EstadoAccion;
+}
+
+/**
+ * Una métrica del bloque "Tus números" (ticket 9D §8.6). Solo viajan las que
+ * tienen el paquete completo Y al menos una medición: sin valor cargado la
+ * métrica NO se muestra — no se deja un hueco vacío. El copy ("bajó 6 puntos
+ * desde que arrancaste" / número solo) lo arma la vista con progresoMetrica;
+ * acá van los números pelados, nunca un juicio.
+ */
+export interface MetricaSeguimiento {
+  krId: string;
+  texto: string;
+  unidad: string;
+  direccion: 'sube' | 'baja';
+  valorInicial: number;
+  meta90: number;
+  valorActual: number;
 }
 
 /** Lo MÍNIMO que el link muestra: acciones por fase. Ni diagnóstico, ni índice, ni OKRs. */
@@ -685,6 +704,8 @@ export interface SeguimientoAbierto {
    * baja al link del alumno.
    */
   krs: { id: string; texto: string }[];
+  /** "Tus números" (ticket 9D): las métricas con valor cargado. */
+  metricas: MetricaSeguimiento[];
 }
 
 async function planDeToken(repos: ReposAlumnos, token: string, ahora: string): Promise<PlanCompleto> {
@@ -715,8 +736,35 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
     fase,
     acciones: pc.acciones
       .filter((a) => a.fase === fase)
-      .map((a) => ({ id: a.id, texto: a.texto, hecha: estado.get(a.id)?.marcado === true, krId: a.krId })),
+      .map((a) => {
+        // estadoDe honra el checkin legado (marcado sin estado, 9A).
+        const ultimo = estado.get(a.id);
+        const e = ultimo ? estadoDe(ultimo) : 'pendiente';
+        return { id: a.id, texto: a.texto, hecha: e === 'ejecutado', krId: a.krId, estado: e };
+      }),
   }));
+
+  // "Tus números" (9D): métricas con paquete completo Y valor cargado. La que
+  // no tiene mediciones no aparece — la estrena el consultor en la llamada.
+  const mediciones = await repos.mediciones.listarPorPlan(pc.plan.id);
+  const metricas: MetricaSeguimiento[] = pc.okrs
+    .flatMap((o) => o.krs)
+    .filter((k) => k.tipo === 'metrica')
+    .flatMap((k) => {
+      const actual = valorActualDe(mediciones.filter((m) => m.krId === k.id));
+      if (actual === null || k.valorInicial === null || k.meta90 === null || k.unidad === null || k.direccion === null) {
+        return [];
+      }
+      return [{
+        krId: k.id,
+        texto: k.texto,
+        unidad: k.unidad,
+        direccion: k.direccion,
+        valorInicial: k.valorInicial,
+        meta90: k.meta90,
+        valorActual: actual,
+      }];
+    });
 
   const { dia, restantes } = diaDelPlan(pc.plan.fechaInicio, ahora);
   return {
@@ -729,21 +777,41 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
     pausado,
     fases,
     krs: pc.okrs.flatMap((o) => o.krs.map((k) => ({ id: k.id, texto: k.texto }))),
+    metricas,
   };
 }
 
 /**
- * El tilde del alumno: un checkin nuevo, append-only. Nunca un UPDATE — la
+ * La marca del alumno: un checkin nuevo, append-only. Nunca un UPDATE — la
  * historia completa queda, y el estado actual es el último checkin.
+ *
+ * Dos formas del cuerpo (ticket 9D):
+ *  - `{ marcado }` — el círculo. Un toque, binario, el 90% de los casos, y
+ *    lo que la vista vieja siempre mandó: sigue valiendo tal cual.
+ *  - `{ estado, nota? }` — el detalle de la acción: los tres estados y la
+ *    nota opcional. Las notas se ACUMULAN (cada guardado es una fila); la
+ *    más reciente la ve el consultor en la ficha. No se deriva ni espera
+ *    respuesta — eso es del ticket 10, prometerlo sin flujo sería peor.
  */
 export async function marcarAccion(
   repos: ReposAlumnos,
   token: string,
   accionId: string,
-  marcado: unknown,
+  cuerpo: unknown,
   ahora = ahoraIso(),
-): Promise<{ hecha: boolean }> {
-  if (typeof marcado !== 'boolean') throw new ErrorAlumnos('VALIDACION', 'marcado tiene que ser true o false.');
+): Promise<{ hecha: boolean; estado: EstadoAccion }> {
+  const crudo = (cuerpo ?? {}) as Record<string, unknown>;
+  let estado: EstadoAccion;
+  let nota: string | null = null;
+  if (typeof crudo.marcado === 'boolean') {
+    estado = crudo.marcado ? 'ejecutado' : 'pendiente';
+  } else if (crudo.estado !== undefined) {
+    const input = accionEstadoInputSchema.parse(crudo);
+    estado = input.estado;
+    nota = input.nota ?? null;
+  } else {
+    throw new ErrorAlumnos('VALIDACION', 'Mandá marcado (true/false) o estado (pendiente/en_curso/ejecutado).');
+  }
   const pc = await planDeToken(repos, token, ahora);
 
   // Pasado el día 90 las casillas SIGUEN marcables (ticket 8 §4.7, revierte
@@ -754,21 +822,53 @@ export async function marcarAccion(
   // La acción de OTRO plan no existe para este token (mismo trato que el ámbito).
   if (!accion) throw new ErrorAlumnos('NO_ENCONTRADO', 'Acción inexistente.');
 
-  // Ticket 9A: el estado nace del booleano del link (que sigue siendo
-  // binario hasta 9D). `marcado` se sigue escribiendo, derivado — es lo que
-  // hace el bloque reversible por revert de código.
+  // `marcado` se sigue escribiendo, derivado del estado (9A): es lo que hace
+  // el ticket reversible por revert de código.
   const checkin: Checkin = {
     id: randomUUID(),
     accionId,
-    marcado,
-    estado: marcado ? 'ejecutado' : 'pendiente',
-    nota: null,
+    marcado: estado === 'ejecutado',
+    estado,
+    nota,
     origen: 'alumno',
     usuarioId: null,
     creadoEn: ahora,
   };
   await repos.checkins.crear(checkin);
-  return { hecha: marcado };
+  return { hecha: estado === 'ejecutado', estado };
+}
+
+/**
+ * El valor del mes, cargado por el ALUMNO desde su link (ticket 9D §8.6): es
+ * un dato que necesita para su propio negocio, no un reporte que le pedimos.
+ * Fila nueva en mediciones con origen 'alumno' y sin usuario — append-only,
+ * igual que la carga del consultor (9B), que nunca se pisa.
+ */
+export async function cargarMedicionDesdeLink(
+  repos: ReposAlumnos,
+  token: string,
+  krId: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<{ valor: number; cargadoEn: string }> {
+  const input = medicionInputSchema.parse(entrada ?? {});
+  const pc = await planDeToken(repos, token, ahora);
+  // El KR de OTRO plan no existe para este token (mismo trato que el ámbito).
+  const kr = pc.okrs.flatMap((o) => o.krs).find((k) => k.id === krId);
+  if (!kr) throw new ErrorAlumnos('NO_ENCONTRADO', 'KR inexistente.');
+  if (kr.tipo !== 'metrica') {
+    throw new ErrorAlumnos('VALIDACION', 'Este KR no lleva valores: se cierra solo con sus acciones.');
+  }
+  const medicion: Medicion = {
+    id: randomUUID(),
+    krId,
+    valor: input.valor,
+    origen: 'alumno',
+    usuarioId: null,
+    cargadoEn: ahora,
+  };
+  await repos.mediciones.crear(medicion);
+  return { valor: medicion.valor, cargadoEn: medicion.cargadoEn };
 }
 
 // ───────────────────────── El avance (panel del consultor) ─────────────────────────

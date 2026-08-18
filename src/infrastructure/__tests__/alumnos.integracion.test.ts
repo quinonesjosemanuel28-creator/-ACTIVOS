@@ -568,7 +568,7 @@ describe('Alumnos · link de seguimiento y tildes', () => {
 
     const abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
     // dia/restantes/pausado/krs son derivados del plan y del propio alumno (ticket 8).
-    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'dia', 'faseActual', 'fases', 'fechaInicio', 'krs', 'pausado', 'restantes', 'vencido']);
+    expect(Object.keys(abierto).sort()).toEqual(['alumno', 'dia', 'faseActual', 'fases', 'fechaInicio', 'krs', 'metricas', 'pausado', 'restantes', 'vencido']);
     expect(abierto.alumno).toBe('Gonzalo');
     expect(abierto.faseActual).toBe(1);
     expect(abierto.vencido).toBe(false);
@@ -592,11 +592,11 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
     const accion = plan.acciones[0]!;
 
-    await ua.marcarAccion(repos, token.token, accion.id, true, '2026-08-20T10:00:00.000Z');
+    await ua.marcarAccion(repos, token.token, accion.id, { marcado: true }, '2026-08-20T10:00:00.000Z');
     let abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
     expect(abierto.fases[0]!.acciones.find((a) => a.id === accion.id)!.hecha).toBe(true);
 
-    await ua.marcarAccion(repos, token.token, accion.id, false, '2026-08-21T10:00:00.000Z');
+    await ua.marcarAccion(repos, token.token, accion.id, { marcado: false }, '2026-08-21T10:00:00.000Z');
     abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-21T12:00:00.000Z');
     expect(abierto.fases[0]!.acciones.find((a) => a.id === accion.id)!.hecha).toBe(false);
 
@@ -616,7 +616,7 @@ describe('Alumnos · link de seguimiento y tildes', () => {
 
     // Lo que se completa tarde también es información para la llamada de
     // cierre. El límite real es la vigencia del token (120 días).
-    const r = await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, true, DIA_91);
+    const r = await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, { marcado: true }, DIA_91);
     expect(r.hecha).toBe(true);
   });
 
@@ -636,7 +636,7 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     expect(await repos.checkins.listarPorPlan(plan.plan.id)).toHaveLength(0);
 
     // Tildar es la OTRA señal: no toca el acceso.
-    await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, true, '2026-08-25T10:00:00.000Z');
+    await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, { marcado: true }, '2026-08-25T10:00:00.000Z');
     expect((await repos.alumnos.obtener(alumno.id))!.ultimoAccesoLink).toBe(APERTURA);
   });
 
@@ -647,7 +647,7 @@ describe('Alumnos · link de seguimiento y tildes', () => {
 
     const abierto = await ua.abrirSeguimiento(repos, token.token, '2026-08-20T12:00:00.000Z');
     expect(abierto.pausado).toBe(true);
-    const r = await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, true, '2026-08-20T12:05:00.000Z');
+    const r = await ua.marcarAccion(repos, token.token, plan.acciones[0]!.id, { marcado: true }, '2026-08-20T12:05:00.000Z');
     expect(r.hecha).toBe(true);
   });
 
@@ -658,7 +658,7 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
 
     await expect(
-      ua.marcarAccion(repos, token.token, otroPlan.acciones[0]!.id, true),
+      ua.marcarAccion(repos, token.token, otroPlan.acciones[0]!.id, { marcado: true }),
     ).rejects.toThrow(/inexistente/i);
   });
 
@@ -666,8 +666,8 @@ describe('Alumnos · link de seguimiento y tildes', () => {
     const { repos, alcanceConsu, plan } = await conPlan();
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
     const [a1, a2] = plan.acciones;
-    await ua.marcarAccion(repos, token.token, a1!.id, true, '2026-08-20T10:00:00.000Z');
-    await ua.marcarAccion(repos, token.token, a2!.id, true, '2026-08-22T10:00:00.000Z');
+    await ua.marcarAccion(repos, token.token, a1!.id, { marcado: true }, '2026-08-20T10:00:00.000Z');
+    await ua.marcarAccion(repos, token.token, a2!.id, { marcado: true }, '2026-08-22T10:00:00.000Z');
 
     const avance = await ua.avancePlan(repos, alcanceConsu, plan.plan.id, '2026-08-25T12:00:00.000Z');
     expect(avance.fases[0]!.hechas).toBe(2);

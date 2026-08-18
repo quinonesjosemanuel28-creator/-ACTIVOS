@@ -7,7 +7,7 @@
  * Fase 1 tiene que aterrizar abierta.
  */
 import { describe, it, expect } from 'vitest';
-import { agruparPorKr, CUPO_ESTA_SEMANA, deudaVencida, diaDelPlan, faseAAbrir, seleccionarEstaSemana } from '../vistaAlumno';
+import { accionesAMedias, agruparPorKr, CUPO_ESTA_SEMANA, deudaVencida, diaDelPlan, faseAAbrir, seleccionarEstaSemana } from '../vistaAlumno';
 import type { Fase } from '../plan';
 
 type A = { id: string; hecha: boolean };
@@ -104,5 +104,56 @@ describe('Vista del alumno · día del plan', () => {
     expect(diaDelPlan('2026-08-16', '2026-08-16T09:00:00.000Z')).toEqual({ dia: 1, restantes: 89, finalizado: false });
     expect(diaDelPlan('2026-05-19', '2026-08-16T00:00:00.000Z')).toEqual({ dia: 90, restantes: 0, finalizado: false });
     expect(diaDelPlan('2026-05-01', '2026-08-16T00:00:00.000Z')).toEqual({ dia: 90, restantes: 0, finalizado: true });
+  });
+});
+
+describe('Vista del alumno · en curso (ticket 9D)', () => {
+  type AE = { id: string; hecha: boolean; enCurso?: boolean };
+  const fase = (n: Fase, xs: AE[]): { fase: Fase; acciones: AE[] } => ({ fase: n, acciones: xs });
+
+  it('lo empezado va primero en el bloque, aun por delante de la deuda vencida', () => {
+    const fases = [
+      fase(1, [{ id: 'deuda', hecha: false }]),
+      fase(2, [{ id: 'empezada', hecha: false, enCurso: true }, { id: 'pendiente', hecha: false }]),
+      fase(3, [{ id: 'futura', hecha: false }]),
+    ];
+    expect(seleccionarEstaSemana(fases, 2).map((a) => a.id)).toEqual(['empezada', 'deuda', 'pendiente']);
+  });
+
+  it('con más en curso que cupos, el bloque muestra SOLO en curso — y el contador dice cuántas hay', () => {
+    const fases = [
+      fase(1, [{ id: 'e1', hecha: false, enCurso: true }, { id: 'p1', hecha: false }]),
+      fase(2, [{ id: 'e2', hecha: false, enCurso: true }, { id: 'e3', hecha: false, enCurso: true }]),
+      fase(3, [{ id: 'e4', hecha: false, enCurso: true }]),
+    ];
+    const semana = seleccionarEstaSemana(fases, 2);
+    expect(semana.map((a) => a.id)).toEqual(['e1', 'e2', 'e3']); // ni una pendiente nueva
+    expect(accionesAMedias(fases)).toBe(4); // "Tenés 4 acciones a medias."
+  });
+
+  it('con 3 o menos en curso no hay aviso que dar: entran ellas y se completa con pendientes', () => {
+    const fases = [
+      fase(1, [{ id: 'e1', hecha: false, enCurso: true }, { id: 'p1', hecha: false }, { id: 'p2', hecha: false }]),
+      fase(2, [{ id: 'p3', hecha: false }]),
+      fase(3, []),
+    ];
+    expect(seleccionarEstaSemana(fases, 1).map((a) => a.id)).toEqual(['e1', 'p1', 'p2']);
+    expect(accionesAMedias(fases)).toBe(1);
+  });
+
+  it('una acción en curso de fase vencida sigue contando como deuda: solo ejecutado la cierra', () => {
+    const fases = [
+      fase(1, [{ id: 'e1', hecha: false, enCurso: true }, { id: 'h1', hecha: true }]),
+      fase(2, [{ id: 'p1', hecha: false }]),
+      fase(3, []),
+    ];
+    expect(deudaVencida(fases, 2)).toEqual([{ fase: 1, pendientes: 1 }]);
+    expect(faseAAbrir(fases, 2)).toBe(1);
+  });
+
+  it('el bloque del ticket 8 sin estados sigue idéntico: enCurso ausente = pendiente', () => {
+    const fases = [acciones(1, 2, 8), acciones(2, 0, 8), acciones(3, 0, 8)];
+    expect(seleccionarEstaSemana(fases, 2).map((a) => a.id)).toEqual(['f1-a3', 'f1-a4', 'f1-a5']);
+    expect(accionesAMedias(fases)).toBe(0);
   });
 });
