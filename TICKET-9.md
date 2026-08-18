@@ -268,6 +268,16 @@ Al final de la semana, la pregunta por cada alumno es una sola:
 
 Si el nuevo acierta donde el viejo fallaba, el switch está justificado. Si falla en algún caso, se decide con ese caso concreto delante si el problema es el cálculo o el umbral.
 
+> **Si la semana da CERO divergencia, el switch es seguro — no es un test que no corrió.** ▲ rev2
+> Está verificado que en planes de reparto parejo la fórmula nueva es idéntica a
+> `días/90` en los 91 días del trimestre. Si toda la cartera cargada tiene reparto
+> parejo, la coincidencia total es el **resultado esperado**, y confirma que el
+> switch no mueve ningún color. La divergencia solo puede aparecer con planes
+> desparejos; si no hay ninguno cargado, no hay nada que diverger.
+> Lo que sí hay que verificar en ese caso es que el export haya devuelto los dos
+> valores por alumno (o sea: que el cálculo nuevo efectivamente corrió), no que
+> los números sean distintos.
+
 ### 7.3 Tiempo dos — El switch
 
 Un commit chico: el panel pasa a mostrar el semáforo nuevo y **deja de leer `krs.cumplido_en`**. El estado de las KRs queda 100 % derivado (entregables) o cargado como valor (métricas), y funciona como contador de resultado, sin color.
@@ -316,7 +326,25 @@ Cada bloque responde **una sola pregunta**. Nada se repite entre bloques.
 
 Los estados y las notas no agregan **ni un elemento** a la pantalla principal. Área táctil del círculo: mínimo 44 × 44 px, separada de la del texto.
 
-### 8.3 Un solo lenguaje visual nuevo
+### 8.3 `en_curso` en el bloque "Esta semana" ▲ rev2
+
+Una acción `en_curso` **sigue apareciendo** en el bloque de 3, y **va primero**.
+
+Si desapareciera, el bloque escondería trabajo empezado y sin cerrar — que es
+justo el perfil que más hay que vigilar: el alumno que abre muchos frentes y no
+termina ninguno.
+
+Reglas:
+
+- Dentro de los 3 cupos, las `en_curso` van **antes** que las pendientes.
+- **Si hay más de 3 en curso, se muestran solo esas** (las que entren), con una
+  línea arriba del bloque:
+  > `Tenés N acciones a medias. Cerrá algunas antes de arrancar otra.`
+  El tono es el del ticket 8: describe, no reprocha. Sin rojo.
+- Una acción `en_curso` de una **fase vencida sigue contando como deuda**, igual
+  que una pendiente: para `deudaVencida` lo único que cierra es `ejecutado`.
+
+### 8.4 Un solo lenguaje visual nuevo
 
 - `ejecutado` — tachado con check, como hoy
 - `en_curso` — dorado suave, con la etiqueta "En curso" debajo del texto
@@ -324,7 +352,7 @@ Los estados y las notas no agregan **ni un elemento** a la pantalla principal. �
 
 Tres estados, **dos tratamientos visuales**. Si cada estado tuviera color propio, con 30 acciones la pantalla se convierte en un semáforo — y eso rompe la regla dura del ticket 8.
 
-### 8.4 El detalle de la acción
+### 8.5 El detalle de la acción
 
 Se abre al tocar el texto. Contiene:
 
@@ -334,7 +362,7 @@ Se abre al tocar el texto. Contiene:
 
 Cada guardado crea un **checkin nuevo** con su estado y su nota: las notas se acumulan, no se pisan. La última se muestra en la ficha del panel junto a la acción. En este ticket es solo una nota: no se deriva ni espera respuesta. El interruptor *"quiero que me respondan"* y el flujo de derivación son del **ticket 10** — prometer una respuesta que nadie va a contestar es peor que no ofrecerla.
 
-### 8.5 Las métricas
+### 8.6 Las métricas
 
 ```
 Mora de tu cartera
@@ -354,6 +382,9 @@ Mora de tu cartera
 - [ ] Tocar el círculo marca `ejecutado` sin abrir nada.
 - [ ] Tocar el texto abre el detalle con estado y nota; no marca la acción.
 - [ ] Una acción en `en_curso` se ve distinta de una pendiente y de una ejecutada, en dorado, sin rojo.
+- [ ] Una acción en `en_curso` aparece en "Esta semana" y **antes** que las pendientes.
+- [ ] Con 4+ acciones en `en_curso`, el bloque muestra solo esas y el aviso de "acciones a medias".
+- [ ] Una acción en `en_curso` de una fase vencida cuenta como deuda.
 - [ ] Guardar una nota crea un checkin nuevo; la nota anterior no se pierde.
 - [ ] La nota más reciente del alumno aparece en la ficha del panel del consultor.
 - [ ] Una métrica sin mediciones no aparece en la vista del alumno.
@@ -430,6 +461,9 @@ Del lado de la app: `tipo` es aditivo (sin él, todo entra como `entregable`), p
 | KR métrica sin mediciones | "Sin datos". No cuenta como cumplida ni como incumplida |
 | Acción sin `kr_id` | Cuenta para el semáforo; no cierra ninguna KR |
 | Acción en `en_curso` | No cuenta para el semáforo. Solo `ejecutado` puntúa |
+| Acción en `en_curso` en "Esta semana" | Se queda y va primero de los 3 |
+| Más de 3 acciones en `en_curso` | El bloque muestra solo esas, con el aviso de "acciones a medias" |
+| Acción en `en_curso` de una fase vencida | Cuenta como deuda, igual que una pendiente |
 | Checkin sin `estado` (previo a 9A) | Se lee con fallback desde `marcado` |
 | Checkin con `origen='consultor'` | Cuenta para el estado de la acción; **no** para la alerta de inactividad |
 | Todas las acciones ejecutadas antes del día 90 | Verde. El adelanto no penaliza |
