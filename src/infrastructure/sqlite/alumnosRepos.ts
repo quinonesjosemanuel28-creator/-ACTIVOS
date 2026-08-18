@@ -22,7 +22,7 @@ import {
   type TokenDiagnostico,
 } from '../../domain/alumnos/tipos';
 import { diasEntre } from '../../domain/alumnos/plan';
-import type { Accion, CambioFechaPlan, Checkin, Kr, Okr, Plan, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { Accion, CambioFechaPlan, Checkin, Kr, Medicion, Okr, Plan, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
   CheckinsRepo,
@@ -30,6 +30,7 @@ import type {
   DiagnosticosRepo,
   DocumentosRepo,
   HistorialRepo,
+  MedicionesRepo,
   PlanesRepo,
   SeguimientoTokensRepo,
   TokensRepo,
@@ -368,12 +369,15 @@ export function crearHistorialRepo(db: Database.Database): HistorialRepo {
 
 interface PlanRow { id: string; alumno_id: string; fecha_inicio: string; etapa: string | null; objetivo_90d: string | null; version: number; creado_en: string }
 interface OkrRow { id: string; plan_id: string; orden: number; objetivo: string; creado_en: string }
-interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; vencimiento: string | null; cumplido_en: string | null; creado_en: string }
+interface KrRow { id: string; okr_id: string; orden: number; texto: string; meta: string | null; tipo: string; valor_inicial: number | null; meta_30: number | null; meta_60: number | null; meta_90: number | null; unidad: string | null; direccion: string | null; vencimiento: string | null; cumplido_en: string | null; creado_en: string }
 interface AccionRow { id: string; plan_id: string; okr_id: string | null; kr_id: string | null; fase: number; orden: number; texto: string; creado_en: string }
 interface CambioFechaRow { id: string; plan_id: string; fecha_anterior: string; fecha_nueva: string; cambiado_por: string; cambiado_en: string; motivo: string | null }
 
 const toKr = (k: KrRow): Kr => ({
   id: k.id, okrId: k.okr_id, orden: k.orden, texto: k.texto, meta: k.meta,
+  tipo: k.tipo as Kr['tipo'], valorInicial: k.valor_inicial, meta30: k.meta_30,
+  meta60: k.meta_60, meta90: k.meta_90, unidad: k.unidad,
+  direccion: k.direccion as Kr['direccion'],
   vencimiento: k.vencimiento, cumplidoEn: k.cumplido_en, creadoEn: k.creado_en,
 });
 
@@ -415,8 +419,12 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
         o.id, o.planId, o.orden, o.objetivo, o.creadoEn,
       );
       for (const k of o.krs) {
-        db.prepare('INSERT INTO krs (id, okr_id, orden, texto, meta, vencimiento, cumplido_en, creado_en) VALUES (?,?,?,?,?,?,?,?)').run(
-          k.id, k.okrId, k.orden, k.texto, k.meta, k.vencimiento, k.cumplidoEn, k.creadoEn,
+        db.prepare(
+          `INSERT INTO krs (id, okr_id, orden, texto, meta, tipo, valor_inicial, meta_30, meta_60, meta_90, unidad, direccion, vencimiento, cumplido_en, creado_en)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ).run(
+          k.id, k.okrId, k.orden, k.texto, k.meta, k.tipo, k.valorInicial, k.meta30, k.meta60, k.meta90,
+          k.unidad, k.direccion, k.vencimiento, k.cumplidoEn, k.creadoEn,
         );
       }
     }
@@ -491,14 +499,15 @@ export function crearPlanesRepo(db: Database.Database): PlanesRepo {
 // ───────────────────────── Seguimiento: tokens y checkins ─────────────────────────
 
 interface SeguimientoRow { token: string; plan_id: string; expira_en: string; revocado_en: string | null; creado_en: string }
-interface CheckinRow { id: string; accion_id: string; marcado: number; origen: string; creado_en: string }
+interface CheckinRow { id: string; accion_id: string; marcado: number; estado: string | null; nota: string | null; origen: string; usuario_id: string | null; creado_en: string }
 
 const toSeguimiento = (r: SeguimientoRow): TokenSeguimiento => ({
   token: r.token, planId: r.plan_id, expiraEn: r.expira_en, revocadoEn: r.revocado_en, creadoEn: r.creado_en,
 });
 const toCheckin = (r: CheckinRow): Checkin => ({
   id: r.id, accionId: r.accion_id, marcado: r.marcado === 1,
-  origen: r.origen as Checkin['origen'], creadoEn: r.creado_en,
+  estado: r.estado as Checkin['estado'], nota: r.nota,
+  origen: r.origen as Checkin['origen'], usuarioId: r.usuario_id, creadoEn: r.creado_en,
 });
 
 export function crearSeguimientoRepo(db: Database.Database): SeguimientoTokensRepo {
@@ -576,6 +585,39 @@ const toDocumento = (r: DocumentoRow): PlanDocumento => ({
 /** Columnas SIN contenido: los listados no arrastran megabytes de BLOB. */
 const COLS_DOCUMENTO = 'id, plan_id, nombre_archivo, mime_type, tamano_bytes, subido_por, subido_en';
 
+export function crearMedicionesRepo(db: Database.Database): MedicionesRepo {
+  return {
+    async crear(m) {
+      // Solo INSERT: una medición jamás pisa a la anterior (append-only).
+      db.prepare('INSERT INTO mediciones (id, kr_id, valor, origen, usuario_id, cargado_en) VALUES (?,?,?,?,?,?)').run(
+        m.id, m.krId, m.valor, m.origen, m.usuarioId, m.cargadoEn,
+      );
+    },
+    async listarPorKr(krId) {
+      const rows = db
+        .prepare('SELECT * FROM mediciones WHERE kr_id = ? ORDER BY cargado_en DESC')
+        .all(krId) as MedicionRow[];
+      return rows.map(toMedicion);
+    },
+    async listarPorPlan(planId) {
+      const rows = db
+        .prepare(
+          `SELECT m.* FROM mediciones m JOIN krs k ON k.id = m.kr_id
+           JOIN okrs o ON o.id = k.okr_id WHERE o.plan_id = ? ORDER BY m.cargado_en DESC`,
+        )
+        .all(planId) as MedicionRow[];
+      return rows.map(toMedicion);
+    },
+  };
+}
+
+interface MedicionRow { id: string; kr_id: string; valor: number; origen: string; usuario_id: string | null; cargado_en: string }
+
+const toMedicion = (r: MedicionRow): Medicion => ({
+  id: r.id, krId: r.kr_id, valor: r.valor, origen: r.origen as Medicion['origen'],
+  usuarioId: r.usuario_id, cargadoEn: r.cargado_en,
+});
+
 export function crearDocumentosRepo(db: Database.Database): DocumentosRepo {
   return {
     async crear(doc, contenido) {
@@ -603,8 +645,8 @@ export function crearCheckinsRepo(db: Database.Database): CheckinsRepo {
   return {
     async crear(c) {
       // Solo INSERT: los checkins no se editan ni se borran, a propósito.
-      db.prepare('INSERT INTO checkins (id, accion_id, marcado, origen, creado_en) VALUES (?,?,?,?,?)').run(
-        c.id, c.accionId, c.marcado ? 1 : 0, c.origen, c.creadoEn,
+      db.prepare('INSERT INTO checkins (id, accion_id, marcado, estado, nota, origen, usuario_id, creado_en) VALUES (?,?,?,?,?,?,?,?)').run(
+        c.id, c.accionId, c.marcado ? 1 : 0, c.estado, c.nota, c.origen, c.usuarioId, c.creadoEn,
       );
     },
     async listarPorPlan(planId) {

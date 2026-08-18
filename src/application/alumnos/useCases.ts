@@ -543,6 +543,15 @@ export async function cargarPlan(
           orden: i + 1,
           texto: k.texto,
           meta: k.meta ?? null,
+          // Ticket 9: hasta que el contrato emita tipo, todo entra como
+          // 'entregable' (conservador). Los campos de métrica llegan en 9B.
+          tipo: 'entregable' as const,
+          valorInicial: null,
+          meta30: null,
+          meta60: null,
+          meta90: null,
+          unidad: null,
+          direccion: null,
           // El contrato de la skill no trae fechas ni cumplimiento: los fija el
           // consultor en el panel (ticket 7).
           vencimiento: null,
@@ -733,7 +742,19 @@ export async function marcarAccion(
   // La acción de OTRO plan no existe para este token (mismo trato que el ámbito).
   if (!accion) throw new ErrorAlumnos('NO_ENCONTRADO', 'Acción inexistente.');
 
-  const checkin: Checkin = { id: randomUUID(), accionId, marcado, origen: 'alumno', creadoEn: ahora };
+  // Ticket 9A: el estado nace del booleano del link (que sigue siendo
+  // binario hasta 9D). `marcado` se sigue escribiendo, derivado — es lo que
+  // hace el bloque reversible por revert de código.
+  const checkin: Checkin = {
+    id: randomUUID(),
+    accionId,
+    marcado,
+    estado: marcado ? 'ejecutado' : 'pendiente',
+    nota: null,
+    origen: 'alumno',
+    usuarioId: null,
+    creadoEn: ahora,
+  };
   await repos.checkins.crear(checkin);
   return { hecha: marcado };
 }

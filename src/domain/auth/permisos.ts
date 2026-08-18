@@ -251,4 +251,5 @@ export const TABLAS_SENSIBLES: readonly string[] = [
   'plan_fecha_historial',
   'plan_documentos',
   'contactos',
+  'mediciones',
 ] as const;

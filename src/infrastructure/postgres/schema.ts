@@ -360,6 +360,17 @@ CREATE TABLE IF NOT EXISTS krs (
   orden     INTEGER NOT NULL,
   texto     TEXT NOT NULL,
   meta      TEXT,
+  -- Ticket 9: tipo de KR. Las 'entregable' cierran solas (todas sus acciones
+  -- ejecutadas); las 'metrica' cierran por valor contra metas 30/60/90.
+  -- Metas y valores NUMÉRICOS: la comparación de cumplimiento tiene dos
+  -- lados, y como TEXT '9' > '10'. El símbolo va en unidad.
+  tipo      TEXT NOT NULL DEFAULT 'entregable' CHECK(tipo IN ('entregable','metrica')),
+  valor_inicial DOUBLE PRECISION,
+  meta_30   DOUBLE PRECISION,
+  meta_60   DOUBLE PRECISION,
+  meta_90   DOUBLE PRECISION,
+  unidad    TEXT,
+  direccion TEXT CHECK(direccion IS NULL OR direccion IN ('sube','baja')),
   -- Ticket 7: el cronograma del tablero. vencimiento lo fija el consultor (el
   -- contrato de la skill no trae fechas) y se desplaza junto con fecha_inicio;
   -- cumplido_en alimenta el semáforo de salud (avance = cumplidos/totales).
@@ -384,10 +395,34 @@ CREATE TABLE IF NOT EXISTS acciones (
 CREATE TABLE IF NOT EXISTS checkins (
   id         TEXT PRIMARY KEY,
   accion_id  TEXT NOT NULL REFERENCES acciones(id) ON DELETE CASCADE,
+  -- LEGADO (ticket 9): derivado de estado, se SIGUE escribiendo para que un
+  -- revert de código deje la app funcionando. Se borra un ticket después
+  -- del switch del semáforo, junto con krs.cumplido_en.
   marcado    INTEGER NOT NULL,
+  -- Ticket 9: pendiente → en_curso → ejecutado. NULLABLE a propósito: las
+  -- filas previas se backfillean (idempotente) y se leen con fallback al
+  -- booleano — NOT NULL DEFAULT pisaría la distinción "no migrada".
+  estado     TEXT CHECK(estado IS NULL OR estado IN ('pendiente','en_curso','ejecutado')),
+  -- Nota opcional del cambio. Append-only: cada nota es una fila nueva.
+  nota       TEXT,
   origen     TEXT NOT NULL CHECK(origen IN ('alumno','consultor')),
+  -- Quién, cuando origen = 'consultor'. Null cuando marca el alumno.
+  usuario_id TEXT REFERENCES usuarios(id),
   creado_en  TEXT NOT NULL
 );
+
+-- Mediciones de KRs métrica (ticket 9), APPEND-ONLY como los checkins: cada
+-- carga es una fila nueva — la serie completa es la historia del número.
+CREATE TABLE IF NOT EXISTS mediciones (
+  id          TEXT PRIMARY KEY,
+  kr_id       TEXT NOT NULL REFERENCES krs(id) ON DELETE CASCADE,
+  valor       DOUBLE PRECISION NOT NULL,
+  origen      TEXT NOT NULL CHECK(origen IN ('alumno','consultor')),
+  usuario_id  TEXT REFERENCES usuarios(id),
+  cargado_en  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mediciones_kr ON mediciones(kr_id);
 
 CREATE INDEX IF NOT EXISTS idx_planes_alumno   ON planes(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_okrs_plan       ON okrs(plan_id);
@@ -525,6 +560,23 @@ ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS telefono_numero TEXT;
 -- y el KR de cada acción (agrupa el checklist del alumno).
 ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS ultimo_acceso_link TEXT;
 ALTER TABLE acciones ADD COLUMN IF NOT EXISTS kr_id TEXT REFERENCES krs(id);
+-- Módulo de alumnos · medición automática (ticket 9A): tipo de KR con metas
+-- numéricas, y checkins con estado/nota/autor. Aditivo puro.
+ALTER TABLE krs ADD COLUMN IF NOT EXISTS tipo TEXT NOT NULL DEFAULT 'entregable' CHECK(tipo IN ('entregable','metrica'));
+ALTER TABLE krs ADD COLUMN IF NOT EXISTS valor_inicial DOUBLE PRECISION;
+ALTER TABLE krs ADD COLUMN IF NOT EXISTS meta_30 DOUBLE PRECISION;
+ALTER TABLE krs ADD COLUMN IF NOT EXISTS meta_60 DOUBLE PRECISION;
+ALTER TABLE krs ADD COLUMN IF NOT EXISTS meta_90 DOUBLE PRECISION;
+ALTER TABLE krs ADD COLUMN IF NOT EXISTS unidad TEXT;
+ALTER TABLE krs ADD COLUMN IF NOT EXISTS direccion TEXT CHECK(direccion IS NULL OR direccion IN ('sube','baja'));
+ALTER TABLE checkins ADD COLUMN IF NOT EXISTS estado TEXT CHECK(estado IS NULL OR estado IN ('pendiente','en_curso','ejecutado'));
+ALTER TABLE checkins ADD COLUMN IF NOT EXISTS nota TEXT;
+ALTER TABLE checkins ADD COLUMN IF NOT EXISTS usuario_id TEXT REFERENCES usuarios(id);
+-- Backfill de DATOS (no solo esquema), idempotente por el WHERE: los
+-- checkins previos al ticket 9 ganan su estado desde el booleano legado.
+UPDATE checkins
+   SET estado = CASE WHEN marcado = 1 THEN 'ejecutado' ELSE 'pendiente' END
+ WHERE estado IS NULL;
 `;
 
 export async function migrarPg(pool: Pool): Promise<void> {

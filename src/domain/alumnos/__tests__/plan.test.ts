@@ -44,6 +44,8 @@ describe('Plan · aislamiento del asistente IA', () => {
 describe('Plan · estado del checklist (append-only, gana el último)', () => {
   const c = (accionId: string, marcado: boolean, creadoEn: string, origen: 'alumno' | 'consultor' = 'alumno'): Checkin => ({
     id: `${accionId}-${creadoEn}`, accionId, marcado, origen, creadoEn,
+    // Ticket 9: fixture como fila LEGADA (sin estado) — estadoDe cae al booleano.
+    estado: null, nota: null, usuarioId: null,
   });
 
   it('el checkin más nuevo de cada acción define su estado', () => {

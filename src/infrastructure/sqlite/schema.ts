@@ -313,6 +313,17 @@ CREATE TABLE IF NOT EXISTS krs (
   orden     INTEGER NOT NULL,
   texto     TEXT NOT NULL,
   meta      TEXT,
+  -- Ticket 9: tipo de KR. Las 'entregable' cierran solas (todas sus acciones
+  -- ejecutadas); las 'metrica' cierran por valor contra metas 30/60/90.
+  -- Metas y valores NUMÉRICOS: la comparación de cumplimiento tiene dos
+  -- lados, y como TEXT '9' > '10'. El símbolo va en unidad.
+  tipo      TEXT NOT NULL DEFAULT 'entregable' CHECK(tipo IN ('entregable','metrica')),
+  valor_inicial REAL,
+  meta_30   REAL,
+  meta_60   REAL,
+  meta_90   REAL,
+  unidad    TEXT,
+  direccion TEXT CHECK(direccion IS NULL OR direccion IN ('sube','baja')),
   -- Ticket 7: el cronograma del tablero. vencimiento lo fija el consultor (el
   -- contrato de la skill no trae fechas) y se desplaza junto con fecha_inicio;
   -- cumplido_en alimenta el semáforo de salud (avance = cumplidos/totales).
@@ -342,10 +353,34 @@ CREATE TABLE IF NOT EXISTS acciones (
 CREATE TABLE IF NOT EXISTS checkins (
   id         TEXT PRIMARY KEY,
   accion_id  TEXT NOT NULL REFERENCES acciones(id) ON DELETE CASCADE,
+  -- LEGADO (ticket 9): derivado de estado, se SIGUE escribiendo para que un
+  -- revert de código deje la app funcionando. Se borra un ticket después
+  -- del switch del semáforo, junto con krs.cumplido_en.
   marcado    INTEGER NOT NULL,
+  -- Ticket 9: pendiente → en_curso → ejecutado. NULLABLE a propósito: las
+  -- filas previas se backfillean (idempotente) y se leen con fallback al
+  -- booleano — NOT NULL DEFAULT pisaría la distinción "no migrada".
+  estado     TEXT CHECK(estado IS NULL OR estado IN ('pendiente','en_curso','ejecutado')),
+  -- Nota opcional del cambio. Append-only: cada nota es una fila nueva.
+  nota       TEXT,
   origen     TEXT NOT NULL CHECK(origen IN ('alumno','consultor')),
+  -- Quién, cuando origen = 'consultor'. Null cuando marca el alumno.
+  usuario_id TEXT REFERENCES usuarios(id),
   creado_en  TEXT NOT NULL
 );
+
+-- Mediciones de KRs métrica (ticket 9), APPEND-ONLY como los checkins: cada
+-- carga es una fila nueva — la serie completa es la historia del número.
+CREATE TABLE IF NOT EXISTS mediciones (
+  id          TEXT PRIMARY KEY,
+  kr_id       TEXT NOT NULL REFERENCES krs(id) ON DELETE CASCADE,
+  valor       REAL NOT NULL,
+  origen      TEXT NOT NULL CHECK(origen IN ('alumno','consultor')),
+  usuario_id  TEXT REFERENCES usuarios(id),
+  cargado_en  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mediciones_kr ON mediciones(kr_id);
 
 CREATE INDEX IF NOT EXISTS idx_planes_alumno   ON planes(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_okrs_plan       ON okrs(plan_id);
@@ -467,6 +502,25 @@ export function migrar(db: Database.Database): void {
   // y el KR de cada acción (agrupa el checklist del alumno).
   agregarColumnaSiFalta(db, 'alumnos', 'ultimo_acceso_link', 'TEXT');
   agregarColumnaSiFalta(db, 'acciones', 'kr_id', 'TEXT REFERENCES krs(id)');
+  // Módulo de alumnos · medición automática (ticket 9A): tipo de KR con metas
+  // numéricas, y checkins con estado/nota/autor. Aditivo puro.
+  agregarColumnaSiFalta(db, 'krs', 'tipo', "TEXT NOT NULL DEFAULT 'entregable' CHECK(tipo IN ('entregable','metrica'))");
+  agregarColumnaSiFalta(db, 'krs', 'valor_inicial', 'REAL');
+  agregarColumnaSiFalta(db, 'krs', 'meta_30', 'REAL');
+  agregarColumnaSiFalta(db, 'krs', 'meta_60', 'REAL');
+  agregarColumnaSiFalta(db, 'krs', 'meta_90', 'REAL');
+  agregarColumnaSiFalta(db, 'krs', 'unidad', 'TEXT');
+  agregarColumnaSiFalta(db, 'krs', 'direccion', "TEXT CHECK(direccion IS NULL OR direccion IN ('sube','baja'))");
+  agregarColumnaSiFalta(db, 'checkins', 'estado', "TEXT CHECK(estado IS NULL OR estado IN ('pendiente','en_curso','ejecutado'))");
+  agregarColumnaSiFalta(db, 'checkins', 'nota', 'TEXT');
+  agregarColumnaSiFalta(db, 'checkins', 'usuario_id', 'TEXT REFERENCES usuarios(id)');
+  // Backfill de DATOS (no solo esquema), idempotente por el WHERE: los
+  // checkins previos al ticket 9 ganan su estado desde el booleano legado.
+  db.exec(`
+    UPDATE checkins
+       SET estado = CASE WHEN marcado = 1 THEN 'ejecutado' ELSE 'pendiente' END
+     WHERE estado IS NULL;
+  `);
   // Comisiones: flags de setting a nivel de pago + registro de liquidaciones.
   agregarColumnaSiFalta(db, 'pagos', 'aplica_setting', 'INTEGER NOT NULL DEFAULT 0');
   agregarColumnaSiFalta(db, 'pagos', 'setter', 'TEXT');

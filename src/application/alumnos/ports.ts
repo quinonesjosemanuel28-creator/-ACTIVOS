@@ -10,7 +10,7 @@
  * un botón escondido.
  */
 import type { Alumno, Contacto, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
-import type { CambioFechaPlan, Checkin, Kr, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { CambioFechaPlan, Checkin, Kr, Medicion, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type { EstadoAlumno } from '../../domain/alumnos/panel';
 
 export interface FiltrosAlumnos {
@@ -155,6 +155,18 @@ export interface ContactosRepo {
   listarPorAlumno(alumnoId: string): Promise<Contacto[]>;
 }
 
+/**
+ * Mediciones de KRs métrica (ticket 9). APPEND-ONLY como los checkins: cada
+ * carga es una fila nueva — la serie es la historia del número.
+ */
+export interface MedicionesRepo {
+  crear(m: Medicion): Promise<void>;
+  /** Serie del KR, la más reciente primero. */
+  listarPorKr(krId: string): Promise<Medicion[]>;
+  /** Todas las mediciones de los KRs del plan (para la ficha). */
+  listarPorPlan(planId: string): Promise<Medicion[]>;
+}
+
 export interface ReposAlumnos {
   alumnos: AlumnosRepo;
   diagnosticos: DiagnosticosRepo;
@@ -165,4 +177,5 @@ export interface ReposAlumnos {
   checkins: CheckinsRepo;
   documentos: DocumentosRepo;
   contactos: ContactosRepo;
+  mediciones: MedicionesRepo;
 }

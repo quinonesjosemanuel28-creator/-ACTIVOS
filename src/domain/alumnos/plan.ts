@@ -28,12 +28,31 @@ export interface Plan {
   creadoEn: string;
 }
 
+/**
+ * Tipo de KR (ticket 9): las `entregable` cierran SOLAS cuando todas sus
+ * acciones están ejecutadas; las `metrica` cierran con un valor numérico
+ * contra metas 30/60/90. Default entregable: comportamiento conservador.
+ */
+export type TipoKr = 'entregable' | 'metrica';
+
+/** La mora BAJA, los clientes SUBEN: sin dirección, 14 vs 20 no dice nada. */
+export type DireccionMetrica = 'sube' | 'baja';
+
 export interface Kr {
   id: string;
   okrId: string;
   orden: number;
   texto: string;
   meta: string | null;
+  /** Ticket 9. Los planes previos migran a 'entregable'. */
+  tipo: TipoKr;
+  /** Solo para tipo 'metrica'. Numéricos: la comparación tiene dos lados. */
+  valorInicial: number | null;
+  meta30: number | null;
+  meta60: number | null;
+  meta90: number | null;
+  unidad: string | null;
+  direccion: DireccionMetrica | null;
   /**
    * YYYY-MM-DD. El contrato de la skill no trae fechas: lo fija el consultor
    * en el panel. Al mover fecha_inicio, TODOS los vencimientos cargados se
@@ -71,13 +90,57 @@ export interface Accion {
   creadoEn: string;
 }
 
+/**
+ * Estado de una acción (ticket 9). `en_curso` NO puntúa para el semáforo —
+ * solo distingue "trabado en esta" de "ni la empezó".
+ */
+export type EstadoAccion = 'pendiente' | 'en_curso' | 'ejecutado';
+
 export interface Checkin {
   id: string;
   accionId: string;
-  /** true = la marcó como hecha; false = la desmarcó. */
+  /**
+   * true = la marcó como hecha; false = la desmarcó. LEGADO desde el ticket
+   * 9: se deriva de `estado` y se SIGUE escribiendo para que un revert de
+   * código deje la app funcionando. Se elimina un ticket después del switch.
+   */
   marcado: boolean;
+  /**
+   * Ticket 9. NULL = fila anterior a la migración (el backfill la completa;
+   * mientras tanto se lee con `estadoDe`, que cae al booleano).
+   */
+  estado: EstadoAccion | null;
+  /** Nota opcional del cambio ("¿qué pasó con esta acción?"). Append-only. */
+  nota: string | null;
   origen: 'alumno' | 'consultor';
+  /** Quién, cuando origen = 'consultor'. Null cuando marca el alumno. */
+  usuarioId: string | null;
   creadoEn: string;
+}
+
+/**
+ * El estado efectivo de un checkin, con fallback al booleano legado: una
+ * fila sin backfillear se lee igual de bien. Única forma correcta de leer
+ * el estado — no leer `.estado` a pelo.
+ */
+export function estadoDe(c: Pick<Checkin, 'estado' | 'marcado'>): EstadoAccion {
+  return c.estado ?? (c.marcado ? 'ejecutado' : 'pendiente');
+}
+
+// ───────────────────────── Mediciones (ticket 9) ─────────────────────────
+
+/**
+ * Una medición de un KR métrica. APPEND-ONLY como los checkins: cada carga
+ * es una fila nueva — la serie completa es la historia del número.
+ */
+export interface Medicion {
+  id: string;
+  krId: string;
+  valor: number;
+  origen: 'alumno' | 'consultor';
+  /** Quién, cuando origen = 'consultor'. Null cuando carga el alumno. */
+  usuarioId: string | null;
+  cargadoEn: string;
 }
 
 /** El agregado completo, como lo consumen el panel y (después) el link. */
