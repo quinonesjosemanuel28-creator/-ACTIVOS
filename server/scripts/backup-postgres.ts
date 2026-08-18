@@ -3,8 +3,10 @@
  *
  * Uso: npm run db:backup
  *  - Requiere DATABASE_URL en el entorno (la de Railway o la local).
- *  - Requiere pg_dump instalado (viene con PostgreSQL; en Mac: brew install
- *    postgresql@16). Es SOLO LECTURA sobre la base: no la modifica.
+ *  - Requiere pg_dump instalado, y de una versión MAYOR O IGUAL que la del
+ *    servidor: si no, se niega a volcar ("server version mismatch"). Railway
+ *    corre PostgreSQL 18 → en Mac: brew install postgresql@18. Es SOLO
+ *    LECTURA sobre la base: no la modifica.
  *  - Escribe backups/activos-YYYY-MM-DD-HHmm.sql (carpeta en .gitignore) y
  *    deja una copia FUERA de Railway, en tu poder. Restaurar:
  *      psql "$DATABASE_URL" -f backups/activos-XXXX.sql

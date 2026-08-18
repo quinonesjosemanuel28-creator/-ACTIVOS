@@ -26,9 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
-      # El Postgres descartable del ensayo. Versión 17 ≥ cualquier Railway.
+      # El Postgres descartable del ensayo, en la MISMA versión mayor que
+      # producción (Railway corre 18): restaurar un dump de 18 en un server
+      # más viejo falla, y ensayar contra otra versión no probaría nada.
       ensayo:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_PASSWORD: ensayo
           POSTGRES_DB: ensayo
@@ -59,15 +61,25 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      # El cliente 17 de PGDG: pg_dump tiene que ser ≥ que el server de
-      # Railway, y el que trae ubuntu-latest puede quedar viejo.
-      - name: Instalar cliente PostgreSQL 17
+      # El cliente 18 de PGDG: pg_dump se niega a volcar un server MAYOR que
+      # él, y el runner trae el 16. Instalar el paquete no alcanza — hay que
+      # poner su bin PRIMERO en el PATH, porque /usr/bin/pg_dump sigue
+      # resolviendo al viejo (así falló el primer run: server 18.4 con
+      # pg_dump 16.14).
+      - name: Instalar cliente PostgreSQL 18
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -sSf -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-17
+          sudo apt-get install -y -qq postgresql-client-18
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
+
+      - name: Verificar que pg_dump sea el 18
+        run: |
+          which pg_dump psql
+          pg_dump --version
+          psql --version
 
       - name: Backup de producción (pg_dump, solo lectura)
         env:

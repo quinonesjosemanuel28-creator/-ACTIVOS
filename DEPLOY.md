@@ -115,9 +115,14 @@ primer ingreso el sistema les exige elegir la propia.
 3. **Tu copia local** (fuera de Railway y de GitHub, recomendado antes de
    cada import grande):
    ```bash
-   PGSSL=true DATABASE_URL="postgresql://…proxy.rlwy.net:PUERTO/railway" npm run db:backup
+   DATABASE_URL="postgresql://…proxy.rlwy.net:PUERTO/railway" npm run db:backup
    # → backups/activos-FECHA.sql
    ```
+   Tu `pg_dump` tiene que ser **≥ que el servidor** o se niega a volcar.
+   Railway corre PostgreSQL 18: `brew install postgresql@18` y, si tenés
+   varias, poné la 18 primero en el PATH
+   (`export PATH="$(brew --prefix postgresql@18)/bin:$PATH"`).
+   Verificalo con `pg_dump --version`.
 4. **Restaurar de verdad** (desastre o mudanza): apuntar `DATABASE_URL` a la
    base destino **vacía** y correr
    ```bash
