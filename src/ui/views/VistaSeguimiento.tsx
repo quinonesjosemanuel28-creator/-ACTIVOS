@@ -1,20 +1,44 @@
 /**
  * El checklist del alumno (segunda ruta pública de la SPA): abre por el link
- * de WhatsApp, sin cuenta, y tilda lo que fue completando.
+ * de WhatsApp, sin cuenta, y marca lo que fue completando.
  *
  * Ticket 8 — la vista ORIENTA, no alarma. Regla dura: acá no hay semáforo,
  * ni rojo, ni "trabado", ni porcentajes de atraso. El bloque "Esta semana"
- * (3 acciones, la deuda primero) le dice por dónde empezar; el resto queda
- * abajo como panorama. Aterriza abierta la fase con la acción más urgente.
+ * (3 acciones) le dice por dónde empezar; el resto queda abajo como
+ * panorama. Aterriza abierta la fase con la acción más urgente.
  *
- * El tilde es optimista: se pinta ya y se confirma contra el server con un
+ * Ticket 9D — un solo gesto por elemento: el CÍRCULO marca ejecutado (un
+ * toque, como siempre); el TEXTO abre el detalle, donde viven los tres
+ * estados y la nota. Tres estados, dos tratamientos visuales: ejecutado
+ * tachado con check, en curso dorado suave con etiqueta, pendiente sin
+ * tratamiento — si cada estado tuviera color propio, 30 acciones serían un
+ * semáforo. "Tus números" muestra las métricas sin juicio: si mejoró lo
+ * dice, si no, el número solo.
+ *
+ * La marca es optimista: se pinta ya y se confirma contra el server con un
  * "Guardado ✓" visible; si falla, vuelve atrás y avisa. Nunca queda una
  * casilla marcada sin confirmación del servidor.
  */
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, CheckCircle2, ChevronDown } from 'lucide-react';
-import { agruparPorKr, seleccionarEstaSemana, deudaVencida, faseAAbrir } from '@domain/alumnos/vistaAlumno';
-import { seguimientoApi, ErrorFormulario, type SeguimientoAbiertoUI, type MotivoToken } from '../lib/formularioApi';
+import {
+  accionesAMedias,
+  agruparPorKr,
+  CUPO_ESTA_SEMANA,
+  deudaVencida,
+  faseAAbrir,
+  seleccionarEstaSemana,
+} from '@domain/alumnos/vistaAlumno';
+import { progresoMetrica } from '@domain/alumnos/medicion';
+import {
+  seguimientoApi,
+  ErrorFormulario,
+  type AccionSeguimientoUI,
+  type EstadoAccionUI,
+  type MetricaSeguimientoUI,
+  type SeguimientoAbiertoUI,
+  type MotivoToken,
+} from '../lib/formularioApi';
 import { Card, Spinner } from '../components/ui/primitives';
 
 const MENSAJE_TERMINAL: Record<string, { titulo: string; detalle: string }> = {
@@ -24,6 +48,13 @@ const MENSAJE_TERMINAL: Record<string, { titulo: string; detalle: string }> = {
 };
 
 const RANGO_FASE: Record<1 | 2 | 3, string> = { 1: 'días 1-30', 2: 'días 31-60', 3: 'días 61-90' };
+
+/** Las fases con lo que la selección de dominio necesita: en curso explícito. */
+const conEnCurso = (fases: SeguimientoAbiertoUI['fases']) =>
+  fases.map((f) => ({ fase: f.fase, acciones: f.acciones.map((a) => ({ ...a, enCurso: a.estado === 'en_curso' })) }));
+
+/** Números sin ruido: enteros pelados, decimales con coma y hasta 2 cifras. */
+const fmt = (n: number): string => (Number.isInteger(n) ? String(n) : n.toLocaleString('es-AR', { maximumFractionDigits: 2 }));
 
 export function VistaSeguimiento({ token }: { token: string }) {
   const [datos, setDatos] = useState<SeguimientoAbiertoUI | null>(null);
@@ -36,10 +67,12 @@ export function VistaSeguimiento({ token }: { token: string }) {
   const [abiertas, setAbiertas] = useState<Set<number>>(new Set());
   /**
    * El bloque "Esta semana" se elige UNA vez al abrir y queda fijo: si se
-   * recalculara con cada tilde, la acción marcada desaparecería del bloque y
+   * recalculara con cada marca, la acción marcada desaparecería del bloque y
    * entraría otra — y el "empezá por estas tres" se volvería una cinta sin fin.
    */
   const [idsEstaSemana, setIdsEstaSemana] = useState<string[]>([]);
+  /** El detalle abierto (9D): tocar el TEXTO llega acá; el círculo no. */
+  const [detalle, setDetalle] = useState<AccionSeguimientoUI | null>(null);
 
   useEffect(() => {
     seguimientoApi
@@ -47,39 +80,64 @@ export function VistaSeguimiento({ token }: { token: string }) {
       .then((d) => {
         setDatos(d);
         setAbiertas(new Set([faseAAbrir(d.fases, d.faseActual)]));
-        setIdsEstaSemana(seleccionarEstaSemana(d.fases, d.faseActual).map((a) => a.id));
+        setIdsEstaSemana(seleccionarEstaSemana(conEnCurso(d.fases), d.faseActual).map((a) => a.id));
       })
       .catch((err) => setTerminal(err instanceof ErrorFormulario && err.motivo ? err.motivo : 'inexistente'))
       .finally(() => setCargando(false));
   }, [token]);
 
-  const tildar = async (accionId: string, hecha: boolean) => {
-    // Pasado el día 90 las casillas SIGUEN marcables (ticket 8): lo que se
-    // completa tarde también es información para la llamada de cierre.
+  const confirmarGuardado = () => {
+    setGuardado(true);
+    if (timerGuardado.current) clearTimeout(timerGuardado.current);
+    timerGuardado.current = setTimeout(() => setGuardado(false), 1500);
+  };
+
+  const pintarEstado = (accionId: string, estado: EstadoAccionUI) =>
+    setDatos((d) =>
+      d && {
+        ...d,
+        fases: d.fases.map((f) => ({
+          ...f,
+          acciones: f.acciones.map((a) => (a.id === accionId ? { ...a, estado, hecha: estado === 'ejecutado' } : a)),
+        })),
+      },
+    );
+
+  const fallo = (err: unknown) => {
+    if (err instanceof ErrorFormulario && err.motivo) setTerminal(err.motivo as MotivoToken);
+    else setErrorTilde('No se pudo guardar, probá de nuevo.');
+  };
+
+  /** El círculo: binario, un toque. Pasado el día 90 SIGUE marcable (ticket 8). */
+  const tildar = async (accion: AccionSeguimientoUI, hecha: boolean) => {
     if (!datos) return;
     setErrorTilde(null);
+    const previo = accion.estado;
     // Optimista: se pinta ya, se confirma después. El "Guardado ✓" recién
     // aparece con el OK del server — esa es la confirmación de verdad.
-    const pintar = (valor: boolean) =>
-      setDatos((d) =>
-        d && {
-          ...d,
-          fases: d.fases.map((f) => ({
-            ...f,
-            acciones: f.acciones.map((a) => (a.id === accionId ? { ...a, hecha: valor } : a)),
-          })),
-        },
-      );
-    pintar(hecha);
+    pintarEstado(accion.id, hecha ? 'ejecutado' : 'pendiente');
     try {
-      await seguimientoApi.marcar(token, accionId, hecha);
-      setGuardado(true);
-      if (timerGuardado.current) clearTimeout(timerGuardado.current);
-      timerGuardado.current = setTimeout(() => setGuardado(false), 1500);
+      await seguimientoApi.marcar(token, accion.id, hecha);
+      confirmarGuardado();
     } catch (err) {
-      pintar(!hecha); // vuelta atrás: nunca queda marcada sin confirmación
-      if (err instanceof ErrorFormulario && err.motivo) setTerminal(err.motivo as MotivoToken);
-      else setErrorTilde('No se pudo guardar, probá de nuevo.');
+      pintarEstado(accion.id, previo); // vuelta atrás: nunca queda marcada sin confirmación
+      fallo(err);
+    }
+  };
+
+  /** El detalle (9D): estado explícito + nota. Cada guardado es una fila nueva. */
+  const guardarDetalle = async (accion: AccionSeguimientoUI, estado: EstadoAccionUI, nota: string) => {
+    if (!datos) return;
+    setErrorTilde(null);
+    const previo = accion.estado;
+    pintarEstado(accion.id, estado);
+    setDetalle(null);
+    try {
+      await seguimientoApi.marcarEstado(token, accion.id, estado, nota);
+      confirmarGuardado();
+    } catch (err) {
+      pintarEstado(accion.id, previo);
+      fallo(err);
     }
   };
 
@@ -105,6 +163,8 @@ export function VistaSeguimiento({ token }: { token: string }) {
     .map((id) => todas.find((a) => a.id === id))
     .filter((a): a is NonNullable<typeof a> => a !== undefined);
   const pendientesEstaSemana = estaSemana.some((a) => !a.hecha);
+  // El aviso de "a medias" (9D): vivo, no congelado — cerrar acciones lo apaga.
+  const aMedias = accionesAMedias(conEnCurso(datos.fases));
 
   return (
     <div className="min-h-screen bg-navy-50 pb-16 dark:bg-navy-950">
@@ -160,21 +220,32 @@ export function VistaSeguimiento({ token }: { token: string }) {
           </Card>
         )}
 
-        {/* ── Esta semana: exactamente 3, la deuda primero, casillas funcionales ── */}
+        {/* ── Esta semana: 3 acciones, lo empezado primero (9D) ── */}
         {!datos.vencido && estaSemana.length > 0 && pendientesEstaSemana && (
           <Card className="border-gold-400/60 p-4">
             <p className="font-display text-base font-700 text-navy-900 dark:text-navy-50">Esta semana</p>
             <p className="mt-0.5 text-sm text-navy-600 dark:text-navy-300">
-              {deuda.length > 0
-                ? estaSemana.length === 1 ? 'Empezá por esta:' : estaSemana.length === 2 ? 'Empezá por estas dos:' : 'Empezá por estas tres:'
-                : <>Vas al día. Lo que sigue en la Fase {datos.faseActual}:</>}
+              {aMedias > CUPO_ESTA_SEMANA
+                // Describe, no reprocha. Sin rojo: es el mismo tono de siempre.
+                ? `Tenés ${aMedias} acciones a medias. Cerrá algunas antes de arrancar otra.`
+                : deuda.length > 0
+                  ? estaSemana.length === 1 ? 'Empezá por esta:' : estaSemana.length === 2 ? 'Empezá por estas dos:' : 'Empezá por estas tres:'
+                  : <>Vas al día. Lo que sigue en la Fase {datos.faseActual}:</>}
             </p>
             <div className="mt-2 space-y-1">
               {estaSemana.map((a) => (
-                <CasillaAccion key={a.id} accion={a} onTildar={tildar} />
+                <CasillaAccion key={a.id} accion={a} onTildar={tildar} onDetalle={setDetalle} />
               ))}
             </div>
           </Card>
+        )}
+
+        {/* ── Tus números (9D): las métricas con valor, sin juicio ── */}
+        {datos.metricas.length > 0 && (
+          <TusNumeros token={token} metricas={datos.metricas} onCargada={(krId, valor) => {
+            setDatos((d) => d && { ...d, metricas: d.metricas.map((m) => (m.krId === krId ? { ...m, valorActual: valor } : m)) });
+            confirmarGuardado();
+          }} onError={fallo} />
         )}
 
         {datos.fases.map((f) => {
@@ -213,7 +284,7 @@ export function VistaSeguimiento({ token }: { token: string }) {
                         )}
                         <div className="space-y-1">
                           {grupo.acciones.map((a) => (
-                            <CasillaAccion key={a.id} accion={a} onTildar={tildar} />
+                            <CasillaAccion key={a.id} accion={a} onTildar={tildar} onDetalle={setDetalle} />
                           ))}
                         </div>
                       </div>
@@ -243,9 +314,19 @@ export function VistaSeguimiento({ token }: { token: string }) {
         <p className="pt-2 text-center text-xs text-navy-400">Guardá este link: es tuyo y dura todo el trimestre.</p>
       </div>
 
+      {/* El detalle de la acción (9D): estado explícito y nota, sin promesas
+          de respuesta — el canal de consultas es del ticket 10, completo. */}
+      {detalle && (
+        <DetalleAccion
+          accion={detalle}
+          onGuardar={guardarDetalle}
+          onCerrar={() => setDetalle(null)}
+        />
+      )}
+
       {/* La confirmación de guardado: visible ~1,5 s tras el OK del server. */}
       {guardado && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-navy-900 px-4 py-2 text-sm font-600 text-gold-400 shadow-lg dark:bg-navy-50 dark:text-navy-900">
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-navy-900 px-4 py-2 text-sm font-600 text-gold-400 shadow-lg dark:bg-navy-50 dark:text-navy-900">
           <span className="flex items-center gap-1.5"><Check size={15} /> Guardado</span>
         </div>
       )}
@@ -254,29 +335,211 @@ export function VistaSeguimiento({ token }: { token: string }) {
 }
 
 /**
- * Una casilla del checklist, compartida por "Esta semana" y las fases: marcar
- * en un lado actualiza el otro (el estado vive en `datos`). Área táctil de
- * 44px como mínimo, texto incluido — esto se usa desde WhatsApp, en el
- * teléfono. Siempre marcable: ni el día 90 ni la pausa la congelan.
+ * Una fila del checklist, compartida por "Esta semana" y las fases. Un solo
+ * gesto por elemento (9D §8.2): el CÍRCULO marca ejecutado — un toque, área
+ * táctil propia de 44px —; el TEXTO abre el detalle. Tres estados, dos
+ * tratamientos: ejecutado tachado con check; en curso dorado suave con su
+ * etiqueta; pendiente sin tratamiento. Siempre marcable: ni el día 90 ni la
+ * pausa la congelan.
  */
 function CasillaAccion({
   accion: a,
   onTildar,
+  onDetalle,
 }: {
-  accion: { id: string; texto: string; hecha: boolean };
-  onTildar: (id: string, hecha: boolean) => Promise<void>;
+  accion: AccionSeguimientoUI;
+  onTildar: (accion: AccionSeguimientoUI, hecha: boolean) => Promise<void>;
+  onDetalle: (accion: AccionSeguimientoUI) => void;
 }) {
+  const enCurso = a.estado === 'en_curso';
   return (
-    <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg p-2 transition hover:bg-navy-50 dark:hover:bg-navy-800">
-      <input
-        type="checkbox"
-        className="h-5 w-5 shrink-0 rounded border-navy-300 accent-gold-400"
-        checked={a.hecha}
-        onChange={(e) => void onTildar(a.id, e.target.checked)}
-      />
-      <span className={`text-sm ${a.hecha ? 'text-navy-400 line-through' : 'text-navy-800 dark:text-navy-100'}`}>
-        {a.texto}
-      </span>
-    </label>
+    <div className="flex items-center rounded-lg transition hover:bg-navy-50 dark:hover:bg-navy-800">
+      <button
+        type="button"
+        aria-label={a.hecha ? `Desmarcar «${a.texto}»` : `Marcar «${a.texto}» como hecha`}
+        className="flex h-11 w-11 shrink-0 items-center justify-center"
+        onClick={() => void onTildar(a, !a.hecha)}
+      >
+        <span
+          className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition ${
+            a.hecha
+              ? 'border-gold-400 bg-gold-400 text-navy-900'
+              : enCurso
+                ? 'border-gold-400'
+                : 'border-navy-300 dark:border-navy-600'
+          }`}
+        >
+          {a.hecha && <Check size={13} strokeWidth={3} />}
+        </span>
+      </button>
+      <button
+        type="button"
+        className="min-h-[44px] flex-1 py-2 pr-2 text-left"
+        onClick={() => onDetalle(a)}
+      >
+        <span className={`text-sm ${a.hecha ? 'text-navy-400 line-through' : 'text-navy-800 dark:text-navy-100'}`}>
+          {a.texto}
+        </span>
+        {enCurso && !a.hecha && (
+          <span className="mt-0.5 block text-xs font-600 text-gold-500">En curso</span>
+        )}
+      </button>
+    </div>
+  );
+}
+
+const OPCIONES_ESTADO: { valor: EstadoAccionUI; etiqueta: string }[] = [
+  { valor: 'pendiente', etiqueta: 'Pendiente' },
+  { valor: 'en_curso', etiqueta: 'En curso' },
+  { valor: 'ejecutado', etiqueta: 'Ejecutado' },
+];
+
+/** El detalle: selector de estado + nota opcional. Cada guardado es una fila nueva. */
+function DetalleAccion({
+  accion,
+  onGuardar,
+  onCerrar,
+}: {
+  accion: AccionSeguimientoUI;
+  onGuardar: (accion: AccionSeguimientoUI, estado: EstadoAccionUI, nota: string) => Promise<void>;
+  onCerrar: () => void;
+}) {
+  const [estado, setEstado] = useState<EstadoAccionUI>(accion.estado);
+  const [nota, setNota] = useState('');
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-navy-950/40" onClick={onCerrar}>
+      <div
+        className="w-full max-w-lg rounded-t-2xl bg-white p-4 pb-6 shadow-xl dark:bg-navy-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-sm font-600 text-navy-900 dark:text-navy-50">{accion.texto}</p>
+        <div className="mt-3 flex gap-2">
+          {OPCIONES_ESTADO.map((o) => (
+            <button
+              key={o.valor}
+              type="button"
+              className={`min-h-[44px] flex-1 rounded-lg border px-2 text-sm font-600 transition ${
+                estado === o.valor
+                  ? 'border-gold-400 bg-gold-400/15 text-navy-900 dark:text-navy-50'
+                  : 'border-navy-200 text-navy-600 dark:border-navy-700 dark:text-navy-300'
+              }`}
+              onClick={() => setEstado(o.valor)}
+            >
+              {o.etiqueta}
+            </button>
+          ))}
+        </div>
+        <textarea
+          className="mt-3 w-full rounded-lg border border-navy-200 bg-transparent p-2 text-sm text-navy-800 placeholder:text-navy-400 dark:border-navy-700 dark:text-navy-100"
+          rows={2}
+          placeholder="¿Qué pasó con esta acción? (opcional)"
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+        />
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            className="min-h-[44px] flex-1 rounded-lg bg-gold-400 text-sm font-700 text-navy-900 transition hover:bg-gold-500"
+            onClick={() => void onGuardar(accion, estado, nota)}
+          >
+            Guardar
+          </button>
+          <button
+            type="button"
+            className="min-h-[44px] rounded-lg border border-navy-200 px-4 text-sm font-600 text-navy-600 dark:border-navy-700 dark:text-navy-300"
+            onClick={onCerrar}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Tus números" (9D §8.6): inicial → actual → meta, y si el valor se movió
+ * en la dirección correcta, lo dice — si no, el número solo, sin comentario.
+ * Nunca rojo, nunca "no llegaste". El alumno carga el valor del mes acá: es
+ * un dato que necesita para su negocio, no un reporte que le pedimos.
+ */
+function TusNumeros({
+  token,
+  metricas,
+  onCargada,
+  onError,
+}: {
+  token: string;
+  metricas: MetricaSeguimientoUI[];
+  onCargada: (krId: string, valor: number) => void;
+  onError: (err: unknown) => void;
+}) {
+  const [borradores, setBorradores] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState<string | null>(null);
+
+  const cargar = async (m: MetricaSeguimientoUI) => {
+    const crudo = (borradores[m.krId] ?? '').replace(',', '.').trim();
+    const valor = Number(crudo);
+    if (crudo === '' || !Number.isFinite(valor)) return;
+    setGuardando(m.krId);
+    try {
+      await seguimientoApi.cargarMedicion(token, m.krId, valor);
+      onCargada(m.krId, valor);
+      setBorradores((b) => ({ ...b, [m.krId]: '' }));
+    } catch (err) {
+      onError(err);
+    } finally {
+      setGuardando(null);
+    }
+  };
+
+  const conUnidad = (v: number, unidad: string) => (unidad === '%' ? `${fmt(v)} %` : `${fmt(v)} ${unidad}`);
+
+  return (
+    <Card className="p-4">
+      <p className="font-display text-base font-700 text-navy-900 dark:text-navy-50">Tus números</p>
+      <div className="mt-2 space-y-4">
+        {metricas.map((m) => {
+          const p = progresoMetrica(m.direccion, m.valorInicial, m.valorActual);
+          const palabra = m.unidad === '%' ? (p.delta === 1 ? 'punto' : 'puntos') : m.unidad;
+          return (
+            <div key={m.krId}>
+              <p className="text-sm font-600 text-navy-800 dark:text-navy-100">{m.texto}</p>
+              <p className="mt-0.5 text-sm text-navy-600 dark:text-navy-300">
+                {conUnidad(m.valorInicial, m.unidad)}
+                <span className="mx-1.5 text-navy-400">→</span>
+                <span className="font-700 text-navy-900 dark:text-navy-50">{conUnidad(m.valorActual, m.unidad)}</span>
+                <span className="mx-1.5 text-navy-400">→</span>
+                meta {conUnidad(m.meta90, m.unidad)}
+              </p>
+              {/* Solo si mejoró; si no, el número solo — sin comentario. */}
+              {p.mejoro && p.delta > 0 && (
+                <p className="mt-0.5 text-xs font-600 text-gold-500">
+                  {m.direccion === 'baja' ? 'bajó' : 'subió'} {fmt(p.delta)} {palabra} desde que arrancaste
+                </p>
+              )}
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="min-h-[40px] w-28 rounded-lg border border-navy-200 bg-transparent px-2 text-sm text-navy-800 placeholder:text-navy-400 dark:border-navy-700 dark:text-navy-100"
+                  placeholder="Valor de hoy"
+                  value={borradores[m.krId] ?? ''}
+                  onChange={(e) => setBorradores((b) => ({ ...b, [m.krId]: e.target.value }))}
+                />
+                <button
+                  type="button"
+                  disabled={guardando === m.krId}
+                  className="min-h-[40px] rounded-lg border border-gold-400 px-3 text-sm font-600 text-gold-500 transition hover:bg-gold-400/10 disabled:opacity-50"
+                  onClick={() => void cargar(m)}
+                >
+                  Actualizar
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }

@@ -60,12 +60,27 @@ export const formularioApi = {
 
 // ───────────────────── Link de seguimiento (también público) ─────────────────────
 
+export type EstadoAccionUI = 'pendiente' | 'en_curso' | 'ejecutado';
+
 export interface AccionSeguimientoUI {
   id: string;
   texto: string;
   hecha: boolean;
   /** KR al que aporta (ticket 8). Null = "Otras acciones". */
   krId: string | null;
+  /** Los tres estados (ticket 9D): el círculo marca ejecutado; en_curso va dorado. */
+  estado: EstadoAccionUI;
+}
+
+/** Una métrica de "Tus números" (9D): números pelados, el copy lo arma la vista. */
+export interface MetricaSeguimientoUI {
+  krId: string;
+  texto: string;
+  unidad: string;
+  direccion: 'sube' | 'baja';
+  valorInicial: number;
+  meta90: number;
+  valorActual: number;
 }
 
 export interface SeguimientoAbiertoUI {
@@ -81,6 +96,8 @@ export interface SeguimientoAbiertoUI {
   fases: { fase: 1 | 2 | 3; acciones: AccionSeguimientoUI[] }[];
   /** Los KRs del plan en orden, para el subtítulo de cada grupo. */
   krs: { id: string; texto: string }[];
+  /** "Tus números" (9D): solo las métricas con valor cargado. */
+  metricas: MetricaSeguimientoUI[];
 }
 
 async function reqSeguimiento<T>(path: string, init?: RequestInit): Promise<T> {
@@ -97,9 +114,22 @@ async function reqSeguimiento<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const seguimientoApi = {
   abrir: (token: string) => reqSeguimiento<SeguimientoAbiertoUI>(token),
+  /** El círculo: binario, como siempre. */
   marcar: (token: string, accionId: string, marcado: boolean) =>
-    reqSeguimiento<{ hecha: boolean }>(`${token}/acciones/${accionId}`, {
+    reqSeguimiento<{ hecha: boolean; estado: EstadoAccionUI }>(`${token}/acciones/${accionId}`, {
       method: 'POST',
       body: JSON.stringify({ marcado }),
+    }),
+  /** El detalle (9D): estado explícito y nota opcional — cada guardado es una fila. */
+  marcarEstado: (token: string, accionId: string, estado: EstadoAccionUI, nota?: string) =>
+    reqSeguimiento<{ hecha: boolean; estado: EstadoAccionUI }>(`${token}/acciones/${accionId}`, {
+      method: 'POST',
+      body: JSON.stringify({ estado, ...(nota && nota.trim() !== '' ? { nota: nota.trim() } : {}) }),
+    }),
+  /** "Tus números" (9D): el alumno carga el valor del mes de una métrica. */
+  cargarMedicion: (token: string, krId: string, valor: number) =>
+    reqSeguimiento<{ valor: number; cargadoEn: string }>(`${token}/krs/${krId}/mediciones`, {
+      method: 'POST',
+      body: JSON.stringify({ valor }),
     }),
 };
