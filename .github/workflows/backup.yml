@@ -66,13 +66,28 @@ jobs:
       # poner su bin PRIMERO en el PATH, porque /usr/bin/pg_dump sigue
       # resolviendo al viejo (así falló el primer run: server 18.4 con
       # pg_dump 16.14).
+      # Con reintentos: bajar la clave y los paquetes son las dos únicas
+      # dependencias de red del job aparte de la base, y un corte de un
+      # segundo no puede costar el backup de la noche (pasó: «curl (35)
+      # Recv failure» contra postgresql.org).
       - name: Instalar cliente PostgreSQL 18
         run: |
+          reintentar() {
+            for intento in 1 2 3 4 5; do
+              "$@" && return 0
+              echo "::warning::Falló '$*' (intento $intento/5); reintento en ${intento}0s"
+              sleep "${intento}0"
+            done
+            echo "::error::'$*' falló 5 veces seguidas."
+            return 1
+          }
           sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -sSf -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          reintentar sudo curl -sSf --connect-timeout 15 --max-time 60 \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-18
+          reintentar sudo apt-get update -qq
+          reintentar sudo apt-get install -y -qq postgresql-client-18
           echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
 
       - name: Verificar que pg_dump sea el 18
