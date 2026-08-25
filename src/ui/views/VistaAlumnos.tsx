@@ -528,6 +528,10 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
   const eliminar = useEliminarAlumno();
   const puedeEliminar = usePuede('eliminar_alumnos');
   const [diagnosticoAbierto, setDiagnosticoAbierto] = useState<string | null>(null);
+  // ⚠ ANTES del return temprano: los hooks corren en todos los renders o en
+  // ninguno. Ponerlo después rompió la ficha en producción (pantalla blanca):
+  // al cargar los datos aparecía un hook de más y React corta el render.
+  const { data: avanceFicha } = useAvancePlan(planes?.[0]?.plan.id ?? null);
 
   if (isLoading || !alumno) {
     return <div className="flex justify-center py-16"><Spinner className="h-8 w-8" /></div>;
@@ -539,7 +543,6 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
   // El KR que pregunta el mensaje de WhatsApp: el pendiente de vencimiento
   // más cercano (misma regla que el panel). "Pendiente" es el cierre DERIVADO
   // (9B), del avance que la ficha ya pide — cumplido_en no se lee más acá.
-  const { data: avanceFicha } = useAvancePlan(vigente?.plan.id ?? null);
   const krs = vigente?.okrs.flatMap((o) => o.krs) ?? [];
   const cumplidas = new Set((avanceFicha?.estadoKrs ?? []).filter((k) => k.cumplida).map((k) => k.krId));
   const pendientes = krs.filter((k) => !cumplidas.has(k.id));
