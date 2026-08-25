@@ -14,7 +14,8 @@ import type { Alumno, Contacto, Diagnostico, TokenDiagnostico } from '@domain/al
 import type { CambioFechaPlan, EstadoAccion, Fase, Kr, Medicion, PlanCompleto, PlanDocumento, TokenSeguimiento } from '@domain/alumnos/plan';
 import type { EstadoKr } from '@domain/alumnos/medicion';
 import { MIME_DOCX, MIME_PDF } from '@domain/alumnos/plan';
-import type { AlertaInactividad, ChipFase, EstadoAlumno, Salud, SaludCalculada } from '@domain/alumnos/panel';
+import type { AlertaInactividad, ChipFase, EstadoAlumno, Salud } from '@domain/alumnos/panel';
+import type { SaludPorAcciones } from '@domain/alumnos/saludAcciones';
 
 // ───────────────────── Auth / sesión ─────────────────────
 
@@ -413,7 +414,7 @@ export interface FilaPanelUI {
   consultorNombre: string | null;
   plan: { id: string; fechaInicio: string; fechaCierreEstimada: string; dias: number; chip: ChipFase } | null;
   krs: { totales: number; cumplidos: number };
-  salud: SaludCalculada;
+  salud: SaludPorAcciones;
   ultimaActividad: string | null;
   alerta: AlertaInactividad;
   ultimoContacto: string | null;

@@ -57,12 +57,12 @@ import {
   type EstadoAlumno,
   type MotivoNeutro,
   type Salud,
-  type SaludCalculada,
 } from '../../domain/alumnos/panel';
 import {
   accionesPorFase,
   calcularSaludPorAcciones,
   type MotivoNeutroAcciones,
+  type SaludPorAcciones,
 } from '../../domain/alumnos/saludAcciones';
 import { parsearTelefono } from '../../domain/alumnos/telefono';
 import { diaDelPlan } from '../../domain/alumnos/vistaAlumno';
@@ -900,7 +900,7 @@ export interface AvancePlan {
   /**
    * Estado DERIVADO de cada KR (ticket 9B): entregables por sus acciones,
    * métricas por su valor, tilde legado honrado. Contador de resultado, sin
-   * color — NO alimenta el semáforo (ese sigue sobre cumplido_en hasta 9C).
+   * color — el semáforo (9C) mide acciones contra la agenda, no KRs.
    */
   estadoKrs: EstadoKr[];
   /** Todas las mediciones del plan, la más reciente primero (la ficha las agrupa por KR). */
@@ -1149,7 +1149,13 @@ export interface FilaPanel {
   /** Plan vigente (el de fecha_inicio más reciente), si hay. */
   plan: { id: string; fechaInicio: string; fechaCierreEstimada: string; dias: number; chip: ChipFase } | null;
   krs: { totales: number; cumplidos: number };
-  salud: SaludCalculada;
+  /**
+   * El semáforo (ticket 9C · switch): mide ACCIONES ejecutadas contra la
+   * agenda del plan. Antes leía `krs.cumplido_en` (el tilde del consultor);
+   * la columna sigue existiendo pero ya no alimenta ningún color — se borra
+   * un ticket después, con rodaje del cálculo nuevo.
+   */
+  salud: SaludPorAcciones;
   /** Último tilde del ALUMNO vía su link (la señal de ritmo). */
   ultimaActividad: string | null;
   /** Más de 8 días sin señales (ticket 7C). Un contacto reciente la apaga. */
@@ -1189,9 +1195,6 @@ export async function panelAlumnos(
   for (const alumno of alumnos) {
     const vigente = (await repos.planes.listarPorAlumno(alumno.id))[0] ?? null;
     const todosLosKrs = vigente ? vigente.okrs.flatMap((o) => o.krs) : [];
-    // ⚠ ENTRADA DEL SEMÁFORO: sigue siendo el tilde manual (cumplido_en),
-    // exactamente como en producción — no se toca hasta el switch de 9C.
-    const entradaSemaforo = avanceKrs(todosLosKrs);
     const checkinsVigente = vigente ? await repos.checkins.listarPorPlan(vigente.plan.id) : [];
     // Lo que se MUESTRA como contador de resultado (ticket 9B): el estado
     // derivado — entregables por acciones, métricas por valor, tilde legado
@@ -1200,12 +1203,14 @@ export async function panelAlumnos(
       ? estadosDeKrs(vigente, checkinsVigente, await repos.mediciones.listarPorPlan(vigente.plan.id))
       : [];
     const krs = { totales: derivados.length, cumplidos: derivados.filter((k) => k.cumplida).length };
-    const salud = calcularSalud(
+    // ⚠ ENTRADA DEL SEMÁFORO (ticket 9C · switch): acciones ejecutadas contra
+    // la agenda del plan. El tilde del consultor (cumplido_en) ya NO se lee
+    // acá; el contador de KRs de arriba es resultado, no color.
+    const salud = calcularSaludPorAcciones(
       {
         estado: alumno.estado,
         fechaInicio: vigente?.plan.fechaInicio ?? null,
-        krsTotales: entradaSemaforo.totales,
-        krsCumplidos: entradaSemaforo.cumplidos,
+        porFase: accionesPorFase(vigente?.acciones ?? [], checkinsVigente),
       },
       ahora,
     );
@@ -1221,8 +1226,11 @@ export async function panelAlumnos(
       ahora,
     );
     // El KR pendiente que pregunta el mensaje de WhatsApp: el del vencimiento
-    // más cercano; sin fechas, el primero en orden de plan.
-    const pendientes = todosLosKrs.filter((k) => k.cumplidoEn === null);
+    // más cercano; sin fechas, el primero en orden de plan. "Pendiente" es el
+    // cierre DERIVADO (9B) — cumplido_en ya no se lee fuera de la comparación,
+    // así el ticket que borra la columna no encuentra lectores.
+    const cumplidas = new Set(derivados.filter((k) => k.cumplida).map((k) => k.krId));
+    const pendientes = todosLosKrs.filter((k) => !cumplidas.has(k.id));
     const krPendiente =
       pendientes.filter((k) => k.vencimiento !== null).sort((a, b) => a.vencimiento!.localeCompare(b.vencimiento!))[0] ??
       pendientes[0] ??

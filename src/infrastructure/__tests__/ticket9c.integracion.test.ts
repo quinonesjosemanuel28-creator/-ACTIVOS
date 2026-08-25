@@ -78,19 +78,23 @@ describe('Ticket 9C · comparación en paralelo', () => {
     expect(cmp.divergencias).toBe(0);
   });
 
-  it('el valor nuevo NO viaja en el panel: la respuesta que ven los consultores no cambia', async () => {
+  it('tras el switch, el panel muestra EL MISMO color que el lado nuevo del export', async () => {
     const { infra, admin, alcance, alumno, plan } = await armar(46);
-    // Divergencia armada a propósito…
     for (const a of plan.acciones) {
       await ua.corregirAccion(infra.reposAlumnos, alcance, admin.id, a.id, { estado: 'ejecutado' });
     }
     const filas = await ua.panelAlumnos(infra.reposAlumnos, infra.reposAuth.usuarios, alcance);
+    const fila = filas.find((f) => f.alumno.id === alumno.id)!;
+    const cmp = await ua.comparacionSemaforo(infra.reposAlumnos);
+    const comparado = cmp.alumnos.find((c) => c.alumnoId === alumno.id)!;
+    // Una sola verdad en pantalla: el panel y el lado nuevo del export coinciden.
+    expect(fila.salud.salud).toBe('VERDE'); // 9/9 ejecutadas al día 46
+    expect(fila.salud.salud).toBe(comparado.nuevo.salud);
+    expect(fila.salud.brecha).toBeCloseTo(comparado.nuevo.brecha!, 12);
+    // La COMPARACIÓN sigue sin viajar al panel: ni el lado viejo ni el veredicto.
     const crudo = JSON.stringify(filas);
-    // …y aún así el panel no trae ni el color candidato ni sus números.
+    expect(crudo).not.toContain('"viejo"');
     expect(crudo).not.toContain('"nuevo"');
-    expect(crudo).not.toContain('"tiempo"');
-    expect(crudo).not.toContain('"avance"');
     expect(crudo).not.toContain('"coinciden"');
-    expect(filas.find((f) => f.alumno.id === alumno.id)!.salud.salud).toBe('ROJO'); // el viejo, intacto
   });
 });

@@ -13,7 +13,8 @@ import { AlertTriangle, ArrowLeft, CalendarDays, Check, ClipboardPaste, Copy, Do
 import type { Alumno, Diagnostico } from '@domain/alumnos/tipos';
 import type { EstadoAccion, Kr, Medicion, PlanCompleto } from '@domain/alumnos/plan';
 import type { EstadoKr } from '@domain/alumnos/medicion';
-import { avanceKrs, calcularSalud, diasDelPlan, ESTADOS_ALUMNO, type AlertaInactividad, type EstadoAlumno, type SaludCalculada } from '@domain/alumnos/panel';
+import { diasDelPlan, ESTADOS_ALUMNO, type AlertaInactividad, type EstadoAlumno } from '@domain/alumnos/panel';
+import { calcularSaludPorAcciones, type SaludPorAcciones } from '@domain/alumnos/saludAcciones';
 import { fechaCierreEstimada } from '@domain/alumnos/plan';
 import { linkWhatsapp, mensajeSeguimiento } from '@domain/alumnos/telefono';
 import { BLOQUES, PREGUNTA_POR_CAMPO } from '@domain/alumnos/formulario';
@@ -144,10 +145,10 @@ function EstadoBadge({ estado }: { estado: EstadoAlumno }) {
   );
 }
 
-const NEUTRO_LABEL = { sin_plan: 'sin plan', sin_krs: 'sin KRs', primeros_dias: 'arrancando', estado: '—' } as const;
+const NEUTRO_LABEL = { sin_plan: 'sin plan', sin_acciones: 'sin acciones', primeros_dias: 'arrancando', estado: '—' } as const;
 
 /** El semáforo. Neutro dice su motivo — un gris mudo no explica nada. */
-function SaludBadge({ salud }: { salud: SaludCalculada }) {
+function SaludBadge({ salud }: { salud: SaludPorAcciones }) {
   if (salud.salud === 'ROJO') return <Badge tone="red">Trabado</Badge>;
   if (salud.salud === 'NARANJA') return <Badge tone="amber">Atrasado</Badge>;
   if (salud.salud === 'VERDE') return <Badge tone="green">Al día</Badge>;
@@ -536,9 +537,12 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
   const vigente = planes?.[0] ?? null;
 
   // El KR que pregunta el mensaje de WhatsApp: el pendiente de vencimiento
-  // más cercano (misma regla que el panel, resuelta acá con el plan cargado).
+  // más cercano (misma regla que el panel). "Pendiente" es el cierre DERIVADO
+  // (9B), del avance que la ficha ya pide — cumplido_en no se lee más acá.
+  const { data: avanceFicha } = useAvancePlan(vigente?.plan.id ?? null);
   const krs = vigente?.okrs.flatMap((o) => o.krs) ?? [];
-  const pendientes = krs.filter((k) => k.cumplidoEn === null);
+  const cumplidas = new Set((avanceFicha?.estadoKrs ?? []).filter((k) => k.cumplida).map((k) => k.krId));
+  const pendientes = krs.filter((k) => !cumplidas.has(k.id));
   const krPendiente =
     (pendientes.filter((k) => k.vencimiento !== null).sort((a, b) => a.vencimiento!.localeCompare(b.vencimiento!))[0] ??
       pendientes[0])?.texto ?? null;
@@ -663,11 +667,25 @@ function BarraProgreso({ alumno, vigente }: { alumno: Alumno; vigente: PlanCompl
 
   const hoy = new Date().toISOString();
   const krs = vigente.okrs.flatMap((o) => o.krs);
-  const { totales, cumplidos } = avanceKrs(krs);
-  const salud = calcularSalud(
-    { estado: alumno.estado, fechaInicio: vigente.plan.fechaInicio, krsTotales: totales, krsCumplidos: cumplidos },
+  // Ticket 9C · switch: la ficha calcula EL MISMO semáforo que el panel —
+  // acciones ejecutadas contra la agenda—, sobre el avance que ya trajo.
+  // Si mostrara otra cosa, el consultor vería dos colores del mismo alumno.
+  const salud: SaludPorAcciones = calcularSaludPorAcciones(
+    {
+      estado: alumno.estado,
+      fechaInicio: vigente.plan.fechaInicio,
+      porFase: (avance?.fases ?? []).map((f) => ({
+        fase: f.fase,
+        totales: f.acciones.length,
+        ejecutadas: f.acciones.filter((a) => a.estado === 'ejecutado').length,
+      })),
+    },
     hoy,
   );
+  // El contador de KRs es el DERIVADO (9B): entregables por sus acciones,
+  // métricas por valor. Contador de resultado, sin color.
+  const totales = avance?.estadoKrs.length ?? 0;
+  const cumplidos = avance?.estadoKrs.filter((k) => k.cumplida).length ?? 0;
   const dias = diasDelPlan(vigente.plan.fechaInicio, hoy);
   const conVencimiento = krs.filter((k) => k.vencimiento !== null).length;
 
@@ -689,7 +707,7 @@ function BarraProgreso({ alumno, vigente }: { alumno: Alumno; vigente: PlanCompl
         <span className="text-sm text-navy-600 dark:text-navy-200">
           Día <strong>{dias + 1}</strong> de 90 · cierre estimado {fechaCierreEstimada(vigente.plan.fechaInicio)}
         </span>
-        <SaludBadge salud={salud} />
+        {avance && <SaludBadge salud={salud} />}
         {totales > 0 && <span className="text-xs text-navy-400">{cumplidos}/{totales} KRs cumplidos</span>}
         {/* Dos señales, dos mensajes (ticket 8): "no abre el link" = se
             despegó del proceso; "abre y no marca" = trabado en algo concreto. */}

@@ -124,26 +124,29 @@ describe('Ticket 9B · mediciones', () => {
   });
 });
 
-describe('Ticket 9B · el semáforo NO se toca', () => {
-  it('sigue leyendo cumplido_en: cerrar acciones no lo mueve; el tilde legado sí', async () => {
+describe('Ticket 9C (switch) · el semáforo mide acciones', () => {
+  it('ejecutar las acciones lo mueve; el tilde legado de KRs ya NO', async () => {
     const { infra, admin, alcance, alumno, plan } = await armar(45); // día 46
-    // Ejecutar TODAS las acciones del plan (cerraría todo en el cálculo nuevo).
-    for (const a of plan.acciones) {
-      await ua.corregirAccion(infra.reposAlumnos, alcance, admin.id, a.id, { estado: 'ejecutado' });
-    }
+    // Día 46 sin nada ejecutado: brecha −0.51 → ROJO (el tiempo es la agenda,
+    // que con reparto parejo 3/3/3 es idéntico a días/90 — propiedad fijada).
     let filas = await ua.panelAlumnos(infra.reposAlumnos, infra.reposAuth.usuarios, alcance);
     let fila = filas.find((f) => f.alumno.id === alumno.id)!;
-    // Entrada del semáforo: 0/2 KRs TILDADOS → brecha −0.51 → ROJO, aunque el
-    // contador visible (derivado) diga otra cosa. Ese desfase es la foto de la
-    // transición, y se resuelve en el switch de 9C.
     expect(fila.salud.salud).toBe('ROJO');
 
-    // El tilde legado (deprecado pero vivo hasta el switch) sí lo mueve.
+    // El tilde legado (cumplido_en) ya no alimenta ningún color: sigue ROJO.
     for (const k of plan.okrs[0]!.krs) {
       await ua.editarKr(infra.reposAlumnos, alcance, k.id, { cumplido: true });
     }
     filas = await ua.panelAlumnos(infra.reposAlumnos, infra.reposAuth.usuarios, alcance);
     fila = filas.find((f) => f.alumno.id === alumno.id)!;
-    expect(fila.salud.salud).toBe('VERDE'); // 2/2 tildados, día 46 → brecha +0.49
+    expect(fila.salud.salud).toBe('ROJO');
+
+    // Ejecutar TODAS las acciones: avance 1 contra tiempo 0.51 → VERDE.
+    for (const a of plan.acciones) {
+      await ua.corregirAccion(infra.reposAlumnos, alcance, admin.id, a.id, { estado: 'ejecutado' });
+    }
+    filas = await ua.panelAlumnos(infra.reposAlumnos, infra.reposAuth.usuarios, alcance);
+    fila = filas.find((f) => f.alumno.id === alumno.id)!;
+    expect(fila.salud.salud).toBe('VERDE'); // 9/9 ejecutadas, día 46 → brecha +0.49
   });
 });

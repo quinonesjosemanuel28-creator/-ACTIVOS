@@ -111,7 +111,7 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 | 6 | Plan de 90 días: carga por bloque + seguimiento del alumno | hecho |
 | 7 | Panel de control: estado y salud (7A) · documento del plan (7B) · seguimiento activo (7C) | hecho |
 | 8 | El link del alumno: bloque "Esta semana" · copy sin castigo · último acceso · agrupado por KR | hecho |
-| 9 | Cierre por acciones: modelo (9A) · cierre automático y métricas (9B) · contrato v3 de la skill · paralelo de semáforos (9C tiempo uno) · vista del alumno con 3 estados y "Tus números" (9D) | hecho — **falta el switch de 9C**, que espera la semana de observación con cartera real (TICKET-9.md §7.2) |
+| 9 | Cierre por acciones: modelo (9A) · cierre automático y métricas (9B) · contrato v3 de la skill · paralelo de semáforos (9C tiempo uno) · vista del alumno (9D) · **switch (9C tiempo dos, 25/08)** | hecho — queda el ticket de limpieza: borrar `krs.cumplido_en`, `checkins.marcado` y el campo `cumplido` del patch, con semanas de rodaje |
 | — | Asistente IA sobre el módulo | **descartado** (decisión de José, agosto 2026) |
 
 Quedó anotado para después (fuera del ticket 7): snapshot de cierre a los 90

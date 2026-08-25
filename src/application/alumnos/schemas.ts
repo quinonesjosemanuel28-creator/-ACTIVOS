@@ -189,11 +189,11 @@ export const fechaInicioInputSchema = z.object({
  * Edición de seguimiento de un KR: cumplimiento y/o vencimiento. Ausente = no
  * tocar (mismo criterio que el patch del diagnóstico); null = limpiar.
  *
- * ⚠ `cumplido` está DEPRECADO desde el ticket 9B: la UI ya no tiene casilla
- * de KR (el cierre es derivado de las acciones) y el campo se elimina en el
- * commit del switch de 9C. Se sigue aceptando SOLO porque el semáforo viejo
- * — que se muestra hasta el switch — lee cumplido_en, y los tests del ticket
- * 7 que fijan sus valores son la garantía de "ningún color cambia".
+ * ⚠ `cumplido` está DEPRECADO y ya no alimenta NINGÚN color: desde el switch
+ * de 9C el semáforo mide acciones contra la agenda. Solo lo lee el lado
+ * "viejo" del export de comparación (rodaje del cálculo nuevo). El campo se
+ * elimina en el ticket de limpieza, junto con krs.cumplido_en y
+ * checkins.marcado — que un revert del switch tenga de dónde volver a leer.
  */
 export const krPatchSchema = z
   .object({

@@ -92,6 +92,7 @@ async function crearAlumno(cookie: string, nombre: string): Promise<string> {
 interface PlanCargado {
   plan: { id: string };
   okrs: { krs: { id: string }[] }[];
+  acciones: { id: string }[];
 }
 
 /** Carga un plan con 2 KRs que arrancó hace `diasAtras` días. */
@@ -217,15 +218,17 @@ describe('HTTP · KRs y fecha de inicio', () => {
 
 describe('HTTP · el panel (orden por riesgo)', () => {
   it('los trabados gritan arriba y el ámbito manda: cada consultor ve SU panel', async () => {
-    // Del otro consultor: un alumno verde (día 45, 100% de KRs cumplidos)…
+    // Del otro consultor: un alumno verde (día 45, todas las acciones
+    // ejecutadas — desde el switch de 9C el semáforo mide ACCIONES contra la
+    // agenda del plan, no KRs tildados)…
     const verdeId = await crearAlumno(ctx.cookies.otroConsultor, 'Verde');
     const planVerde = await cargarPlan(ctx.cookies.otroConsultor, verdeId, 'Verde', 45);
-    for (const k of planVerde.okrs[0]!.krs) {
-      await fetch(`${ctx.base}/api/krs/${k.id}`, {
-        method: 'PUT', headers: { ...json, cookie: ctx.cookies.otroConsultor }, body: JSON.stringify({ cumplido: true }),
+    for (const a of planVerde.acciones) {
+      await fetch(`${ctx.base}/api/acciones/${a.id}/estado`, {
+        method: 'PUT', headers: { ...json, cookie: ctx.cookies.otroConsultor }, body: JSON.stringify({ estado: 'ejecutado' }),
       });
     }
-    // …y uno trabado (día 45, 0% de KRs).
+    // …y uno trabado (día 45, 0 acciones ejecutadas).
     const rojoId = await crearAlumno(ctx.cookies.otroConsultor, 'Rojo');
     await cargarPlan(ctx.cookies.otroConsultor, rojoId, 'Rojo', 45);
 
