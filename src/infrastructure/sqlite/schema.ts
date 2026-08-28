@@ -382,6 +382,23 @@ CREATE TABLE IF NOT EXISTS mediciones (
 
 CREATE INDEX IF NOT EXISTS idx_mediciones_kr ON mediciones(kr_id);
 
+-- Resoluciones de nota (ticket 10A), APPEND-ONLY: el "estado actual" de una
+-- nota se DERIVA — gana la resolución más nueva de su checkin; sin filas, la
+-- nota está abierta. Corregir una devolución = agregar otra resolución, nunca
+-- editar. estado y area SIN CHECK: opciones de negocio, se validan en Zod
+-- (misma convención que contactos.canal).
+CREATE TABLE IF NOT EXISTS nota_resoluciones (
+  id          TEXT PRIMARY KEY,
+  checkin_id  TEXT NOT NULL REFERENCES checkins(id) ON DELETE CASCADE,
+  estado      TEXT NOT NULL,
+  area        TEXT,
+  devolucion  TEXT,
+  usuario_id  TEXT NOT NULL REFERENCES usuarios(id),
+  creada_en   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_nota_res_checkin ON nota_resoluciones(checkin_id);
+
 CREATE INDEX IF NOT EXISTS idx_planes_alumno   ON planes(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_okrs_plan       ON okrs(plan_id);
 CREATE INDEX IF NOT EXISTS idx_krs_okr         ON krs(okr_id);

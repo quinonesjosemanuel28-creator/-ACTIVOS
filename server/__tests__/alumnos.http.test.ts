@@ -528,3 +528,14 @@ describe('HTTP · comparación de semáforos (ticket 9C · solo ámbito total)',
     expect(res.status).toBe(403);
   });
 });
+
+describe('HTTP · resolución de notas (ticket 10A)', () => {
+  it('la ruta exige editar_alumnos: LECTOR 403; sin sesión 401', async () => {
+    expect((await fetch(`${ctx.base}/api/checkins/x/resolucion`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.lector }, body: JSON.stringify({ estado: 'archivada' }),
+    })).status).toBe(403);
+    expect((await fetch(`${ctx.base}/api/checkins/x/resolucion`, {
+      method: 'POST', headers: json, body: JSON.stringify({ estado: 'archivada' }),
+    })).status).toBe(401);
+  });
+});

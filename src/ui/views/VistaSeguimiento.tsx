@@ -413,6 +413,20 @@ function DetalleAccion({
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-sm font-600 text-navy-900 dark:text-navy-50">{accion.texto}</p>
+        {/* 10A: su nota y, debajo, la respuesta. Sin estados intermedios, sin
+            "en revisión" — nada que parezca un ticket de soporte. */}
+        {accion.nota && (
+          <div className="mt-2 rounded-lg bg-navy-50 p-2.5 dark:bg-navy-800">
+            <p className="text-xs text-navy-400">Tu nota</p>
+            <p className="text-sm text-navy-700 dark:text-navy-200">{accion.nota}</p>
+            {accion.devolucion && (
+              <>
+                <p className="mt-1.5 text-xs font-600 text-gold-500">Tu consultor te respondió</p>
+                <p className="text-sm text-navy-800 dark:text-navy-100">{accion.devolucion}</p>
+              </>
+            )}
+          </div>
+        )}
         <div className="mt-3 flex gap-2">
           {OPCIONES_ESTADO.map((o) => (
             <button

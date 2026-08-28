@@ -11,6 +11,7 @@
  * mismo tipo de columna en los dos motores y SQLite no tiene JSONB.
  */
 import type Database from 'better-sqlite3';
+import type { NotaResolucion } from '../../domain/alumnos/notas';
 import { METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/claridad';
 import {
   CAMPOS_RESPUESTA,
@@ -35,6 +36,7 @@ import type {
   SeguimientoTokensRepo,
   TokensRepo,
   TramoHistorial,
+NotaResolucionesRepo,
 } from '../../application/alumnos/ports';
 
 /** Columnas de respuesta: las 45 preguntas + las 19 casillas. */
@@ -673,5 +675,41 @@ export function crearCheckinsRepo(db: Database.Database): CheckinsRepo {
         .all(planId) as CheckinRow[];
       return rows.map(toCheckin);
     },
+    async buscarCheckin(checkinId) {
+      const row = db.prepare(
+        `SELECT ch.*, a.plan_id AS ctx_plan, p.alumno_id AS ctx_alumno FROM checkins ch
+         JOIN acciones a ON a.id = ch.accion_id
+         JOIN planes p ON p.id = a.plan_id WHERE ch.id = ?`,
+      ).get(checkinId) as (CheckinRow & { ctx_plan: string; ctx_alumno: string }) | undefined;
+      if (!row) return null;
+      return { checkin: toCheckin(row), planId: row.ctx_plan, alumnoId: row.ctx_alumno };
+    },
   };
 }
+
+export function crearNotaResolucionesRepo(db: Database.Database): NotaResolucionesRepo {
+  return {
+    async crear(r) {
+      // Solo INSERT: corregir una resolución es agregar otra (la última gana).
+      db.prepare('INSERT INTO nota_resoluciones (id, checkin_id, estado, area, devolucion, usuario_id, creada_en) VALUES (?,?,?,?,?,?,?)').run(
+        r.id, r.checkinId, r.estado, r.area, r.devolucion, r.usuarioId, r.creadaEn,
+      );
+    },
+    async listarPorPlan(planId) {
+      const rows = db
+        .prepare(
+          `SELECT nr.* FROM nota_resoluciones nr JOIN checkins ch ON ch.id = nr.checkin_id
+           JOIN acciones a ON a.id = ch.accion_id WHERE a.plan_id = ? ORDER BY nr.creada_en DESC`,
+        )
+        .all(planId) as NotaResolucionRow[];
+      return rows.map(toNotaResolucion);
+    },
+  };
+}
+
+interface NotaResolucionRow { id: string; checkin_id: string; estado: string; area: string | null; devolucion: string | null; usuario_id: string; creada_en: string }
+
+const toNotaResolucion = (r: NotaResolucionRow): NotaResolucion => ({
+  id: r.id, checkinId: r.checkin_id, estado: r.estado as NotaResolucion['estado'],
+  area: r.area, devolucion: r.devolucion, usuarioId: r.usuario_id, creadaEn: r.creada_en,
+});

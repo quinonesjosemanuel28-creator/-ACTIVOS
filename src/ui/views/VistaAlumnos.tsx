@@ -16,12 +16,14 @@ import type { EstadoKr } from '@domain/alumnos/medicion';
 import { diasDelPlan, ESTADOS_ALUMNO, type AlertaInactividad, type EstadoAlumno } from '@domain/alumnos/panel';
 import { calcularSaludPorAcciones, type SaludPorAcciones } from '@domain/alumnos/saludAcciones';
 import { fechaCierreEstimada } from '@domain/alumnos/plan';
-import { linkWhatsapp, mensajeSeguimiento } from '@domain/alumnos/telefono';
+import { linkWhatsapp, mensajeNota, mensajeSeguimiento } from '@domain/alumnos/telefono';
+import { AREAS_NOTA } from '@domain/alumnos/notas';
 import { BLOQUES, PREGUNTA_POR_CAMPO } from '@domain/alumnos/formulario';
 import { calcularClaridad, nivelClaridad, type NivelClaridad } from '@domain/alumnos/claridad';
 import {
   useAlumno,
   useAvancePlan,
+  useResolverNota,
   useCambiarEstadoAlumno,
   useCambiarFechaInicio,
   useCargarMedicion,
@@ -49,7 +51,7 @@ import {
   useSubirDocumento,
 } from '../hooks';
 import { usePuede } from '../store';
-import { api, type AvancePlanUI, type FilaPanelUI, type PreviaPlanUI } from '../lib/api';
+import { api, type AvancePlanUI, type FilaPanelUI, type NotaUI, type PreviaPlanUI } from '../lib/api';
 import { Textarea } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
 import { Badge, Button, Card, Input, Select, Spinner } from '../components/ui/primitives';
@@ -357,7 +359,16 @@ function FilaPanel({ fila: f, onAbrir }: { fila: FilaPanelUI; onAbrir: (id: stri
       className="cursor-pointer border-b border-navy-50 transition last:border-0 hover:bg-navy-50/60 dark:border-navy-800 dark:hover:bg-navy-800/40"
     >
       <td className="px-4 py-3">
-        <p className="font-600 text-navy-900 dark:text-navy-50">{f.alumno.nombre}</p>
+        <p className="font-600 text-navy-900 dark:text-navy-50">
+          {f.alumno.nombre}
+          {/* 10A: sin notificaciones, este chip es la única forma de descubrir
+              una nota nueva sin abrir cada ficha. */}
+          {f.notasAbiertas > 0 && (
+            <span className="ml-2 rounded-full bg-gold-400/20 px-2 py-0.5 text-xs font-600 text-gold-500">
+              {f.notasAbiertas === 1 ? '1 nota' : `${f.notasAbiertas} notas`}
+            </span>
+          )}
+        </p>
         <p className="text-xs text-navy-400">{f.alumno.programa}</p>
       </td>
       <td className="px-3 py-3"><EstadoBadge estado={f.alumno.estado} /></td>
@@ -586,6 +597,7 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
       />
 
       {vigente && <BarraProgreso alumno={alumno} vigente={vigente} />}
+      {vigente && <NotasDelAlumno alumno={alumno} planId={vigente.plan.id} />}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <DatosFicha alumno={alumno} />
@@ -901,6 +913,142 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
  * y las anteriores en una lista colapsada. El contenido vive en la base:
  * sobrevive a los reinicios del contenedor y viaja con el backup.
  */
+
+/**
+ * Las notas del alumno con su ciclo de vida (ticket 10A). Abiertas arriba y
+ * accionables; resueltas/archivadas colapsadas. Dos audiencias en la misma
+ * pantalla: la DEVOLUCIÓN la ve el alumno en su link (la UI lo grita en el
+ * punto de escritura); todo lo demás es interno. El flujo real: WhatsApp,
+ * resolver la conversación ahí, volver y dejar la devolución en dos líneas.
+ */
+function NotasDelAlumno({ alumno, planId }: { alumno: Alumno; planId: string }) {
+  const { data: avance } = useAvancePlan(planId);
+  const resolver = useResolverNota();
+  const [editando, setEditando] = useState<{ checkinId: string; modo: 'resolver' | 'archivar' } | null>(null);
+  const [devolucion, setDevolucion] = useState('');
+  const [area, setArea] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  if (!avance || avance.notas.length === 0) return null;
+  const abiertas = avance.notas.filter((n) => n.estado === 'abierta');
+  const cerradas = avance.notas.filter((n) => n.estado !== 'abierta');
+  const textoAccion = (accionId: string) =>
+    avance.fases.flatMap((f) => f.acciones).find((a) => a.id === accionId)?.texto ?? '';
+
+  const abrirEditor = (checkinId: string, modo: 'resolver' | 'archivar') => {
+    setEditando({ checkinId, modo });
+    setDevolucion('');
+    setArea('');
+    setError(null);
+  };
+
+  const confirmar = async (n: NotaUI) => {
+    if (!editando) return;
+    setError(null);
+    try {
+      await resolver.mutateAsync({
+        checkinId: n.checkinId,
+        cuerpo: editando.modo === 'resolver'
+          ? { estado: 'resuelta', area: area || null, devolucion }
+          : { estado: 'archivada', area: area || null },
+      });
+      setEditando(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar.');
+    }
+  };
+
+  return (
+    <Card className="p-5">
+      <h3 className="mb-1 font-display text-lg font-700 text-navy-900 dark:text-navy-50">
+        Notas del alumno
+        {abiertas.length > 0 && (
+          <span className="ml-2 rounded-full bg-gold-400/20 px-2 py-0.5 text-xs font-600 text-gold-500">{abiertas.length} sin resolver</span>
+        )}
+      </h3>
+      <p className="mb-3 text-xs text-navy-400">
+        Lo que escribió desde su link, atado a la acción donde se trabó. Respondé o archivá; la etiqueta de área es la que después dice qué le falta a la Academy.
+      </p>
+
+      {abiertas.length === 0 && <p className="text-sm text-navy-500 dark:text-navy-300">Sin notas abiertas. ✔</p>}
+
+      <div className="space-y-3">
+        {abiertas.map((n) => (
+          <div key={n.checkinId} className="rounded-xl border border-gold-400/40 bg-gold-400/5 p-3">
+            <p className="text-xs text-navy-400">
+              {textoAccion(n.accionId)} · {new Date(n.creadaEn).toLocaleDateString('es-AR')}
+            </p>
+            <p className="mt-1 text-sm text-navy-800 dark:text-navy-100">{n.texto}</p>
+
+            {editando?.checkinId !== n.checkinId ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {alumno.telefonoPais && alumno.telefonoNumero && (
+                  <a
+                    href={linkWhatsapp(alumno.telefonoPais, alumno.telefonoNumero, mensajeNota(alumno.nombre, n.texto))}
+                    target="_blank" rel="noreferrer"
+                    className="rounded-lg border border-navy-200 px-3 py-1.5 text-xs font-600 text-navy-600 transition hover:bg-navy-50 dark:border-navy-700 dark:text-navy-300 dark:hover:bg-navy-800"
+                  >
+                    WhatsApp
+                  </a>
+                )}
+                <Button size="sm" onClick={() => abrirEditor(n.checkinId, 'resolver')}>Responder</Button>
+                <Button size="sm" variant="ghost" onClick={() => abrirEditor(n.checkinId, 'archivar')}>Archivar</Button>
+              </div>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {editando.modo === 'resolver' ? (
+                  <>
+                    <p className="text-xs font-700 text-gold-500">⚠ Esto lo ve el alumno en su link — escribile a él.</p>
+                    <textarea
+                      className="w-full rounded-lg border border-navy-200 bg-transparent p-2 text-sm text-navy-800 placeholder:text-navy-400 dark:border-navy-700 dark:text-navy-100"
+                      rows={2}
+                      placeholder="La devolución, en dos líneas"
+                      value={devolucion}
+                      onChange={(e) => setDevolucion(e.target.value)}
+                    />
+                  </>
+                ) : (
+                  <p className="text-xs text-navy-400">Archivar cierra la nota sin respuesta: el alumno no ve nada nuevo.</p>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    className="rounded-lg border border-navy-200 bg-transparent px-2 py-1.5 text-xs text-navy-600 dark:border-navy-700 dark:text-navy-300"
+                    value={area}
+                    onChange={(e) => setArea(e.target.value)}
+                  >
+                    <option value="">Área (opcional)</option>
+                    {AREAS_NOTA.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <Button size="sm" onClick={() => void confirmar(n)} disabled={resolver.isPending || (editando.modo === 'resolver' && devolucion.trim() === '')}>
+                    {editando.modo === 'resolver' ? 'Enviar devolución' : 'Archivar'}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditando(null)}>Cancelar</Button>
+                </div>
+                {error && <p className="text-xs font-600 text-navy-700 dark:text-navy-200">{error}</p>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {cerradas.length > 0 && (
+        <details className="mt-3 text-xs text-navy-500 dark:text-navy-300">
+          <summary className="cursor-pointer font-600">Resueltas y archivadas ({cerradas.length})</summary>
+          <ul className="mt-1.5 space-y-1.5">
+            {cerradas.map((n) => (
+              <li key={n.checkinId}>
+                <span className="font-600">{n.estado === 'resuelta' ? '✓' : '▣'} {n.texto}</span>
+                {n.area && <span className="text-navy-400"> · {n.area}</span>}
+                {n.devolucion && <span className="text-navy-400"> — «{n.devolucion}»</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </Card>
+  );
+}
+
 function DocumentoPlan({ planId }: { planId: string }) {
   const { data: docs } = useDocumentosPlan(planId);
   const subir = useSubirDocumento();

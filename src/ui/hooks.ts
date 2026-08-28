@@ -428,6 +428,19 @@ export function useCargarMedicion() {
     onSuccess: inval,
   });
 }
+
+/** Resolver o archivar una nota (10A): refresca la ficha y el panel. */
+export function useResolverNota() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ checkinId, cuerpo }: { checkinId: string; cuerpo: { estado: 'resuelta' | 'archivada'; area?: string | null; devolucion?: string | null } }) =>
+      api.resolverNota(checkinId, cuerpo),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['alumnos', 'avance'] });
+      void qc.invalidateQueries({ queryKey: ['alumnos', 'panel'] });
+    },
+  });
+}
 export function useEditarKr() {
   const inval = useInvalidarAlumnos();
   return useMutation({

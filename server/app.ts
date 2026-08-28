@@ -524,6 +524,11 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
     ual.corregirAccion(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
   ));
   // Carga de una medición (ticket 9B): append-only, solo KRs de tipo métrica.
+  // Ciclo de vida de la nota del alumno (10A): resolver (con devolución que
+  // ve el alumno) o archivar. Fila nueva, append-only: corregir = re-resolver.
+  app.post('/api/checkins/:id/resolucion', requiere('editar_alumnos'), h((req, res) =>
+    ual.resolverNota(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
+  ));
   app.post('/api/krs/:id/mediciones', requiere('editar_alumnos'), h((req, res) =>
     ual.cargarMedicion(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
   ));

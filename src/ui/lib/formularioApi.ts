@@ -70,6 +70,9 @@ export interface AccionSeguimientoUI {
   krId: string | null;
   /** Los tres estados (ticket 9D): el círculo marca ejecutado; en_curso va dorado. */
   estado: EstadoAccionUI;
+  /** La última nota propia (ticket 10A) y la devolución del consultor si la respondió. */
+  nota: string | null;
+  devolucion: string | null;
 }
 
 /** Una métrica de "Tus números" (9D): números pelados, el copy lo arma la vista. */

@@ -64,6 +64,7 @@ import {
   type MotivoNeutroAcciones,
   type SaludPorAcciones,
 } from '../../domain/alumnos/saludAcciones';
+import { notaParaElLink, notasAbiertas, notasDelPlan, type NotaConEstado, type NotaResolucion } from '../../domain/alumnos/notas';
 import { parsearTelefono } from '../../domain/alumnos/telefono';
 import { diaDelPlan } from '../../domain/alumnos/vistaAlumno';
 import {
@@ -93,6 +94,7 @@ import {
   fichaPublicaSchema,
   krPatchSchema,
   type FichaPublica,
+  notaResolucionInputSchema,
 } from './schemas';
 import type { UsuariosRepo } from '../auth/ports';
 import type { FiltrosAlumnos, ReposAlumnos } from './ports';
@@ -666,6 +668,10 @@ export interface AccionSeguimiento {
   krId: string | null;
   /** Estado efectivo (ticket 9D): el círculo marca ejecutado; en_curso se ve dorado. */
   estado: EstadoAccion;
+  /** La ÚLTIMA nota propia sobre esta acción (ticket 10A). Sin historial. */
+  nota: string | null;
+  /** La devolución del consultor, SOLO si la nota está resuelta. Archivada = null. */
+  devolucion: string | null;
 }
 
 /**
@@ -724,7 +730,9 @@ async function planDeToken(repos: ReposAlumnos, token: string, ahora: string): P
 export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora = ahoraIso()): Promise<SeguimientoAbierto> {
   const pc = await planDeToken(repos, token, ahora);
   const alumno = await repos.alumnos.obtener(pc.plan.alumnoId);
-  const estado = estadoAcciones(await repos.checkins.listarPorPlan(pc.plan.id));
+  const checkinsPlan = await repos.checkins.listarPorPlan(pc.plan.id);
+  const estado = estadoAcciones(checkinsPlan);
+  const resolucionesPlan = await repos.notaResoluciones.listarPorPlan(pc.plan.id);
   const pausado = alumno?.estado === 'PAUSADO';
 
   // La APERTURA es una señal en sí (ticket 8): junto al último check-in, el
@@ -740,7 +748,10 @@ export async function abrirSeguimiento(repos: ReposAlumnos, token: string, ahora
         // estadoDe honra el checkin legado (marcado sin estado, 9A).
         const ultimo = estado.get(a.id);
         const e = ultimo ? estadoDe(ultimo) : 'pendiente';
-        return { id: a.id, texto: a.texto, hecha: e === 'ejecutado', krId: a.krId, estado: e };
+        // La última nota propia y su devolución (10A): lo único del ciclo de
+        // vida que baja al link. Una archivada no muestra nada distinto.
+        const nota = notaParaElLink(a.id, checkinsPlan, resolucionesPlan);
+        return { id: a.id, texto: a.texto, hecha: e === 'ejecutado', krId: a.krId, estado: e, nota: nota?.nota ?? null, devolucion: nota?.devolucion ?? null };
       }),
   }));
 
@@ -873,7 +884,18 @@ export async function cargarMedicionDesdeLink(
 
 // ───────────────────────── El avance (panel del consultor) ─────────────────────────
 
-export interface AvanceAccion extends AccionSeguimiento {
+/**
+ * Una acción en la ficha del CONSULTOR. Deliberadamente NO extiende
+ * AccionSeguimiento (el payload público del link): son audiencias distintas
+ * y evolucionan por separado — el ciclo de vida de las notas (10A) viaja en
+ * `AvancePlan.notas`, no acá.
+ */
+export interface AvanceAccion {
+  id: string;
+  texto: string;
+  hecha: boolean;
+  /** KR al que aporta (ticket 8). Null = "Otras acciones". */
+  krId: string | null;
   fase: Fase;
   /** Orden del OKR al que aporta, si tiene. */
   okrOrden: number | null;
@@ -905,6 +927,11 @@ export interface AvancePlan {
   estadoKrs: EstadoKr[];
   /** Todas las mediciones del plan, la más reciente primero (la ficha las agrupa por KR). */
   mediciones: Medicion[];
+  /**
+   * Las notas del ALUMNO con su estado derivado (ticket 10A), de la más
+   * nueva a la más vieja. La ficha muestra las abiertas por defecto.
+   */
+  notas: NotaConEstado[];
 }
 
 /** El tablero de seguimiento del consultor. Lo tildado es lo que el alumno DECLARA. */
@@ -918,6 +945,7 @@ export async function avancePlan(
   const checkins = await repos.checkins.listarPorPlan(planId);
   const estado = estadoAcciones(checkins);
   const medicionesPlan = await repos.mediciones.listarPorPlan(planId);
+  const resoluciones = await repos.notaResoluciones.listarPorPlan(planId);
   const okrOrdenPorId = new Map(pc.okrs.map((o) => [o.id, o.orden]));
   // La nota más reciente por acción (puede venir de un checkin viejo: la nota
   // no se pierde cuando un cambio posterior llega sin nota).
@@ -960,6 +988,7 @@ export async function avancePlan(
     cambiosFecha: await repos.planes.listarCambiosFecha(planId),
     estadoKrs: estadosDeKrs(pc, checkins, medicionesPlan),
     mediciones: medicionesPlan,
+    notas: notasDelPlan(checkins, resoluciones),
   };
 }
 
@@ -1149,6 +1178,8 @@ export interface FilaPanel {
   /** Plan vigente (el de fecha_inicio más reciente), si hay. */
   plan: { id: string; fechaInicio: string; fechaCierreEstimada: string; dias: number; chip: ChipFase } | null;
   krs: { totales: number; cumplidos: number };
+  /** Notas del alumno sin resolver (ticket 10A): sin esto, nadie las descubre. */
+  notasAbiertas: number;
   /**
    * El semáforo (ticket 9C · switch): mide ACCIONES ejecutadas contra la
    * agenda del plan. Antes leía `krs.cumplido_en` (el tilde del consultor);
@@ -1196,6 +1227,7 @@ export async function panelAlumnos(
     const vigente = (await repos.planes.listarPorAlumno(alumno.id))[0] ?? null;
     const todosLosKrs = vigente ? vigente.okrs.flatMap((o) => o.krs) : [];
     const checkinsVigente = vigente ? await repos.checkins.listarPorPlan(vigente.plan.id) : [];
+    const resolucionesVigente = vigente ? await repos.notaResoluciones.listarPorPlan(vigente.plan.id) : [];
     // Lo que se MUESTRA como contador de resultado (ticket 9B): el estado
     // derivado — entregables por acciones, métricas por valor, tilde legado
     // honrado. Solo puede ser ≥ que el contador viejo (derivado ∪ legado).
@@ -1237,6 +1269,7 @@ export async function panelAlumnos(
       null;
     filas.push({
       alumno,
+      notasAbiertas: notasAbiertas(checkinsVigente, resolucionesVigente),
       consultorNombre: nombrePorId.get(alumno.consultorId) ?? null,
       plan: vigente
         ? {
@@ -1270,6 +1303,46 @@ export async function panelAlumnos(
       (a.salud.brecha ?? 0) - (b.salud.brecha ?? 0) ||
       a.alumno.nombre.localeCompare(b.alumno.nombre),
   );
+}
+
+// ───── Ciclo de vida de las notas (ticket 10A) ─────
+
+/**
+ * Resuelve o archiva una nota del alumno: una fila NUEVA en
+ * nota_resoluciones — la más nueva gana, corregir es volver a resolver. La
+ * devolución la ve el alumno en su link (el schema la exige al resolver y la
+ * prohíbe al archivar). Solo notas del ALUMNO: la anotación del consultor
+ * (9B) es suya y no tiene ciclo de vida.
+ */
+export async function resolverNota(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  usuarioId: string,
+  checkinId: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<NotaResolucion> {
+  const input = notaResolucionInputSchema.parse(entrada ?? {});
+  const contexto = await repos.checkins.buscarCheckin(checkinId);
+  const alumno = contexto ? await repos.alumnos.obtener(contexto.alumnoId) : null;
+  // La nota ajena no existe para este consultor (ámbito hasta la fila).
+  if (!contexto || !alumno || !alcanzaFila(alcance, alumno.consultorId)) {
+    throw new ErrorAlumnos('NO_ENCONTRADO', 'Nota inexistente.');
+  }
+  if (contexto.checkin.origen !== 'alumno' || contexto.checkin.nota === null || contexto.checkin.nota.trim() === '') {
+    throw new ErrorAlumnos('VALIDACION', 'Este checkin no tiene una nota del alumno para resolver.');
+  }
+  const resolucion: NotaResolucion = {
+    id: randomUUID(),
+    checkinId,
+    estado: input.estado,
+    area: input.area ?? null,
+    devolucion: input.devolucion ?? null,
+    usuarioId,
+    creadaEn: ahora,
+  };
+  await repos.notaResoluciones.crear(resolucion);
+  return resolucion;
 }
 
 // ───── Comparación de semáforos (ticket 9C · paralelo on-read) ─────

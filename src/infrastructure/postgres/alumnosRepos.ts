@@ -7,6 +7,7 @@
  * lugar en vez de callarse.
  */
 import type { Pool } from 'pg';
+import type { NotaResolucion } from '../../domain/alumnos/notas';
 import { METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/claridad';
 import {
   CAMPOS_RESPUESTA,
@@ -31,6 +32,7 @@ import type {
   SeguimientoTokensRepo,
   TokensRepo,
   TramoHistorial,
+NotaResolucionesRepo,
 } from '../../application/alumnos/ports';
 
 const COLUMNAS_RESPUESTA: readonly string[] = [
@@ -669,5 +671,42 @@ export function crearCheckinsRepoPg(pool: Pool): CheckinsRepo {
       );
       return (r.rows as CheckinRow[]).map(toCheckin);
     },
+    async buscarCheckin(checkinId) {
+      const r = await pool.query(
+        `SELECT ch.*, a.plan_id AS ctx_plan, p.alumno_id AS ctx_alumno FROM checkins ch
+         JOIN acciones a ON a.id = ch.accion_id
+         JOIN planes p ON p.id = a.plan_id WHERE ch.id = $1`,
+        [checkinId],
+      );
+      const row = r.rows[0] as (CheckinRow & { ctx_plan: string; ctx_alumno: string }) | undefined;
+      if (!row) return null;
+      return { checkin: toCheckin(row), planId: row.ctx_plan, alumnoId: row.ctx_alumno };
+    },
   };
 }
+
+export function crearNotaResolucionesRepoPg(pool: Pool): NotaResolucionesRepo {
+  return {
+    async crear(r) {
+      // Solo INSERT: corregir una resolución es agregar otra (la última gana).
+      await pool.query('INSERT INTO nota_resoluciones (id, checkin_id, estado, area, devolucion, usuario_id, creada_en) VALUES ($1,$2,$3,$4,$5,$6,$7)', [
+        r.id, r.checkinId, r.estado, r.area, r.devolucion, r.usuarioId, r.creadaEn,
+      ]);
+    },
+    async listarPorPlan(planId) {
+      const r = await pool.query(
+        `SELECT nr.* FROM nota_resoluciones nr JOIN checkins ch ON ch.id = nr.checkin_id
+         JOIN acciones a ON a.id = ch.accion_id WHERE a.plan_id = $1 ORDER BY nr.creada_en DESC`,
+        [planId],
+      );
+      return (r.rows as NotaResolucionRow[]).map(toNotaResolucion);
+    },
+  };
+}
+
+interface NotaResolucionRow { id: string; checkin_id: string; estado: string; area: string | null; devolucion: string | null; usuario_id: string; creada_en: string }
+
+const toNotaResolucion = (r: NotaResolucionRow): NotaResolucion => ({
+  id: r.id, checkinId: r.checkin_id, estado: r.estado as NotaResolucion['estado'],
+  area: r.area, devolucion: r.devolucion, usuarioId: r.usuario_id, creadaEn: r.creada_en,
+});

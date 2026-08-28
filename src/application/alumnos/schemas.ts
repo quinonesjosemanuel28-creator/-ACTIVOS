@@ -21,6 +21,7 @@
  *    desconocer.
  */
 import { z } from 'zod';
+import { AREAS_NOTA } from '../../domain/alumnos/notas';
 import {
   CAMPOS_RESPUESTA,
   esCampoMulti,
@@ -210,6 +211,29 @@ export const accionEstadoInputSchema = z.object({
   estado: z.enum(['pendiente', 'en_curso', 'ejecutado']),
   nota: z.string().trim().transform((s) => (s === '' ? null : s)).nullable().optional(),
 });
+
+/**
+ * Resolución de una nota (ticket 10A). La DEVOLUCIÓN la ve el alumno en su
+ * link: obligatoria al resolver (responder sin texto no es responder) y
+ * prohibida al archivar (archivar es cerrar sin respuesta — si hay algo para
+ * decirle, es una resolución). El área es opción de negocio: enum en Zod,
+ * sin CHECK en la base, como contactos.canal.
+ */
+export const notaResolucionInputSchema = z
+  .object({
+    estado: z.enum(['resuelta', 'archivada']),
+    area: z.enum(AREAS_NOTA).nullable().optional(),
+    devolucion: z.string().trim().max(2000, 'Hasta 2000 caracteres.').transform((s) => (s === '' ? null : s)).nullable().optional(),
+  })
+  .superRefine((v, ctx) => {
+    const dev = v.devolucion ?? null;
+    if (v.estado === 'resuelta' && dev === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['devolucion'], message: 'Responder lleva devolución: es lo que va a ver el alumno.' });
+    }
+    if (v.estado === 'archivada' && dev !== null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['devolucion'], message: 'Archivar es cerrar sin respuesta. Si hay devolución, es una nota resuelta.' });
+    }
+  });
 
 /** Carga de una medición (ticket 9B): un número finito, nada más. */
 export const medicionInputSchema = z.object({

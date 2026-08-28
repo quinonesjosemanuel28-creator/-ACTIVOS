@@ -78,6 +78,17 @@ export function mensajeSeguimiento(nombre: string, krPendiente: string | null): 
     : `Hola ${nombrePila}, ¿cómo venís con el plan? Quería ver si te trabaste en algo.`;
 }
 
+/**
+ * El mensaje para una NOTA abierta (ticket 10A): el flujo real es resolver la
+ * conversación por WhatsApp y volver a escribir la devolución en dos líneas.
+ * La nota va citada para que el alumno sepa de qué le hablan.
+ */
+export function mensajeNota(nombre: string, nota: string): string {
+  const nombrePila = nombre.trim().split(/\s+/)[0] ?? nombre;
+  const recorte = nota.length > 160 ? `${nota.slice(0, 157)}…` : nota;
+  return `Hola ${nombrePila}, vi tu nota: «${recorte}». Contame un poco más así lo resolvemos.`;
+}
+
 /** El link listo para abrir: wa.me con el mensaje precargado. */
 export function linkWhatsapp(pais: string, numero: string, mensaje: string): string {
   return `https://wa.me/${numeroWhatsapp(pais, numero)}?text=${encodeURIComponent(mensaje)}`;

@@ -53,4 +53,5 @@ export const TABLAS_NO_COPIADAS = [
   'plan_documentos',
   'contactos',
   'mediciones',
+  'nota_resoluciones',
 ] as const;

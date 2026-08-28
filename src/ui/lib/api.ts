@@ -335,6 +335,8 @@ export const api = {
     req<{ estado: EstadoAccion }>(`/acciones/${accionId}/estado`, { method: 'PUT', body: JSON.stringify({ estado, nota }) }),
   cargarMedicion: (krId: string, valor: number) =>
     req<Medicion>(`/krs/${krId}/mediciones`, { method: 'POST', body: JSON.stringify({ valor }) }),
+  resolverNota: (checkinId: string, cuerpo: { estado: 'resuelta' | 'archivada'; area?: string | null; devolucion?: string | null }) =>
+    req<NotaUI>(`/checkins/${checkinId}/resolucion`, { method: 'POST', body: JSON.stringify(cuerpo) }),
 
   // El documento del plan (ticket 7B): el binario viaja crudo, el nombre en la query.
   documentosPlan: (planId: string) => req<PlanDocumento[]>(`/planes/${planId}/documentos`),
@@ -395,6 +397,20 @@ export interface AvancePlanUI {
   /** Ticket 9B: estado derivado por KR (contador de resultado, sin color). */
   estadoKrs: EstadoKr[];
   mediciones: Medicion[];
+  /** Ticket 10A: notas del alumno con estado derivado, la más nueva primero. */
+  notas: NotaUI[];
+}
+
+export interface NotaUI {
+  checkinId: string;
+  accionId: string;
+  texto: string;
+  creadaEn: string;
+  estado: 'abierta' | 'resuelta' | 'archivada';
+  area: string | null;
+  devolucion: string | null;
+  resueltaPor: string | null;
+  resueltaEn: string | null;
 }
 
 // ───── Panel de control (ticket 7) ─────
@@ -414,6 +430,8 @@ export interface FilaPanelUI {
   consultorNombre: string | null;
   plan: { id: string; fechaInicio: string; fechaCierreEstimada: string; dias: number; chip: ChipFase } | null;
   krs: { totales: number; cumplidos: number };
+  /** Notas del alumno sin resolver (ticket 10A). */
+  notasAbiertas: number;
   salud: SaludPorAcciones;
   ultimaActividad: string | null;
   alerta: AlertaInactividad;

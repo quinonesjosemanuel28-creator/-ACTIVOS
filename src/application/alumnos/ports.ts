@@ -11,6 +11,7 @@
  */
 import type { Alumno, Contacto, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
 import type { Accion, CambioFechaPlan, Checkin, Kr, Medicion, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
+import type { NotaResolucion } from '../../domain/alumnos/notas';
 import type { EstadoAlumno } from '../../domain/alumnos/panel';
 
 export interface FiltrosAlumnos {
@@ -130,6 +131,18 @@ export interface CheckinsRepo {
   crear(c: Checkin): Promise<void>;
   /** Todos los checkins de las acciones del plan. */
   listarPorPlan(planId: string): Promise<Checkin[]>;
+  /** Un checkin con su contexto (ticket 10A): para el ámbito hasta la fila. */
+  buscarCheckin(checkinId: string): Promise<{ checkin: Checkin; planId: string; alumnoId: string } | null>;
+}
+
+/**
+ * Resoluciones de nota (ticket 10A). APPEND-ONLY: el estado de la nota se
+ * deriva de la resolución más nueva — corregir es agregar, nunca editar.
+ */
+export interface NotaResolucionesRepo {
+  crear(r: NotaResolucion): Promise<void>;
+  /** Todas las resoluciones de los checkins del plan. */
+  listarPorPlan(planId: string): Promise<NotaResolucion[]>;
 }
 
 /**
@@ -180,4 +193,5 @@ export interface ReposAlumnos {
   documentos: DocumentosRepo;
   contactos: ContactosRepo;
   mediciones: MedicionesRepo;
+  notaResoluciones: NotaResolucionesRepo;
 }
