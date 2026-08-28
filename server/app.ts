@@ -524,6 +524,15 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
     ual.corregirAccion(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
   ));
   // Carga de una medición (ticket 9B): append-only, solo KRs de tipo métrica.
+  // Bitácora del consultor (10B): la historia del alumno. El alumno NUNCA la
+  // ve (ninguna ruta pública la consulta); cargar registra también el
+  // contacto — la alerta de inactividad se apaga sola.
+  app.get('/api/alumnos/:id/bitacora', requiere('ver_alumnos'), h((req, res) =>
+    ual.bitacoraDeAlumno(reposAlumnos, reposAuth.usuarios, alcanceDe(res), param(req, 'id')),
+  ));
+  app.post('/api/alumnos/:id/bitacora', requiere('editar_alumnos'), h((req, res) =>
+    ual.cargarBitacora(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
+  ));
   // Ciclo de vida de la nota del alumno (10A): resolver (con devolución que
   // ve el alumno) o archivar. Fila nueva, append-only: corregir = re-resolver.
   app.post('/api/checkins/:id/resolucion', requiere('editar_alumnos'), h((req, res) =>

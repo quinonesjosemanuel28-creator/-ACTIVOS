@@ -18,12 +18,15 @@ import { calcularSaludPorAcciones, type SaludPorAcciones } from '@domain/alumnos
 import { fechaCierreEstimada } from '@domain/alumnos/plan';
 import { linkWhatsapp, mensajeNota, mensajeSeguimiento } from '@domain/alumnos/telefono';
 import { AREAS_NOTA } from '@domain/alumnos/notas';
+import { TIPOS_CONTACTO } from '@domain/alumnos/bitacora';
 import { BLOQUES, PREGUNTA_POR_CAMPO } from '@domain/alumnos/formulario';
 import { calcularClaridad, nivelClaridad, type NivelClaridad } from '@domain/alumnos/claridad';
 import {
   useAlumno,
   useAvancePlan,
   useResolverNota,
+  useBitacora,
+  useCargarBitacora,
   useCambiarEstadoAlumno,
   useCambiarFechaInicio,
   useCargarMedicion,
@@ -597,12 +600,15 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
       />
 
       {vigente && <BarraProgreso alumno={alumno} vigente={vigente} />}
+      <TrabaActualBanner alumnoId={alumno.id} />
       {vigente && <NotasDelAlumno alumno={alumno} planId={vigente.plan.id} />}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <DatosFicha alumno={alumno} />
         <LinkDiagnostico alumno={alumno} />
       </div>
+
+      <Bitacora alumnoId={alumno.id} />
 
       <Card className="p-5">
         <h3 className="mb-3 font-display text-lg font-700 text-navy-900 dark:text-navy-50">Diagnósticos</h3>
@@ -1044,6 +1050,110 @@ function NotasDelAlumno({ alumno, planId }: { alumno: Alumno; planId: string }) 
             ))}
           </ul>
         </details>
+      )}
+    </Card>
+  );
+}
+
+
+const TIPO_CONTACTO_LABEL: Record<string, string> = {
+  consultoria_1a1: 'Consultoría 1 a 1',
+  llamada_seguimiento: 'Llamada de seguimiento',
+  whatsapp: 'WhatsApp',
+  otro: 'Otro',
+};
+
+/**
+ * La traba vigente, destacada en la cabecera de la ficha (ticket 10B §6.4):
+ * el semáforo dice QUE está en rojo; esto dice POR QUÉ, en cinco segundos.
+ */
+function TrabaActualBanner({ alumnoId }: { alumnoId: string }) {
+  const { data } = useBitacora(alumnoId);
+  if (!data?.traba) return null;
+  return (
+    <Card className="border-gold-400/40 bg-gold-400/5 p-3">
+      <p className="text-xs font-600 uppercase tracking-wide text-gold-500">
+        Traba actual · {new Date(data.traba.fecha).toLocaleDateString('es-AR')}{data.traba.autorNombre && <> · {data.traba.autorNombre}</>}
+      </p>
+      <p className="mt-0.5 text-sm text-navy-800 dark:text-navy-100">{data.traba.texto}</p>
+    </Card>
+  );
+}
+
+/**
+ * La bitácora (ticket 10B): la historia del alumno, append-only, INTERNA —
+ * el alumno jamás la ve (ninguna ruta pública la consulta). Cargar una
+ * entrada registra también el contacto: la alerta de inactividad se apaga.
+ */
+function Bitacora({ alumnoId }: { alumnoId: string }) {
+  const { data } = useBitacora(alumnoId);
+  const cargar = useCargarBitacora();
+  const [texto, setTexto] = useState('');
+  const [tipo, setTipo] = useState<string>('consultoria_1a1');
+  const [traba, setTraba] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const guardar = async () => {
+    setError(null);
+    try {
+      await cargar.mutateAsync({ alumnoId, cuerpo: { texto, tipoContacto: tipo, trabaActual: traba || null } });
+      setTexto(''); setTraba('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar.');
+    }
+  };
+
+  return (
+    <Card className="p-5">
+      <h3 className="mb-1 font-display text-lg font-700 text-navy-900 dark:text-navy-50">Bitácora</h3>
+      <p className="mb-3 text-xs text-navy-400">
+        Interna — el alumno nunca la ve. Lo que pasó en cada llamada, para que cualquiera que abra la ficha sepa dónde está parado. Cargar registra el contacto: la alerta se apaga sola.
+      </p>
+
+      <div className="space-y-2 rounded-xl border border-navy-100 p-3 dark:border-navy-700">
+        <textarea
+          className="w-full rounded-lg border border-navy-200 bg-transparent p-2 text-sm text-navy-800 placeholder:text-navy-400 dark:border-navy-700 dark:text-navy-100"
+          rows={3}
+          placeholder="¿Qué pasó en la llamada? Texto libre, cuatro líneas alcanzan."
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="rounded-lg border border-navy-200 bg-transparent px-2 py-1.5 text-xs text-navy-600 dark:border-navy-700 dark:text-navy-300"
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+          >
+            {TIPOS_CONTACTO.map((tc) => <option key={tc} value={tc}>{TIPO_CONTACTO_LABEL[tc]}</option>)}
+          </select>
+          <Input
+            value={traba}
+            onChange={(e) => setTraba(e.target.value)}
+            placeholder="Traba actual (opcional — reemplaza a la anterior)"
+            className="max-w-md flex-1 text-xs"
+          />
+          <Button size="sm" onClick={() => void guardar()} disabled={cargar.isPending || texto.trim() === ''}>
+            Guardar entrada
+          </Button>
+        </div>
+        {error && <p className="text-xs font-600 text-navy-700 dark:text-navy-200">{error}</p>}
+      </div>
+
+      {!data?.entradas.length ? (
+        <p className="mt-3 text-sm text-navy-500 dark:text-navy-300">Sin entradas todavía. La primera llamada que registres arranca la historia.</p>
+      ) : (
+        <ul className="mt-3 space-y-3">
+          {data.entradas.map((e) => (
+            <li key={e.id} className="border-l-2 border-navy-100 pl-3 dark:border-navy-700">
+              <p className="text-xs text-navy-400">
+                {new Date(e.creadaEn).toLocaleDateString('es-AR')} · {TIPO_CONTACTO_LABEL[e.tipoContacto] ?? e.tipoContacto}
+                {e.autorNombre && <> · {e.autorNombre}</>}
+              </p>
+              <p className="mt-0.5 whitespace-pre-wrap text-sm text-navy-800 dark:text-navy-100">{e.texto}</p>
+              {e.trabaActual && <p className="mt-0.5 text-xs font-600 text-gold-500">Traba: {e.trabaActual}</p>}
+            </li>
+          ))}
+        </ul>
       )}
     </Card>
   );

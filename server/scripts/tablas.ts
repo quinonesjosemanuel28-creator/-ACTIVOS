@@ -54,4 +54,5 @@ export const TABLAS_NO_COPIADAS = [
   'contactos',
   'mediciones',
   'nota_resoluciones',
+  'bitacora',
 ] as const;

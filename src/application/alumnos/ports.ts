@@ -12,6 +12,7 @@
 import type { Alumno, Contacto, Diagnostico, TokenDiagnostico } from '../../domain/alumnos/tipos';
 import type { Accion, CambioFechaPlan, Checkin, Kr, Medicion, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type { NotaResolucion } from '../../domain/alumnos/notas';
+import type { EntradaBitacora } from '../../domain/alumnos/bitacora';
 import type { EstadoAlumno } from '../../domain/alumnos/panel';
 
 export interface FiltrosAlumnos {
@@ -146,6 +147,16 @@ export interface NotaResolucionesRepo {
 }
 
 /**
+ * Bitácora del consultor (ticket 10B). APPEND-ONLY: sin update ni delete —
+ * la historia del alumno no se corrige, se amplía.
+ */
+export interface BitacoraRepo {
+  crear(e: EntradaBitacora): Promise<void>;
+  /** Del más nuevo al más viejo. */
+  listarPorAlumno(alumnoId: string): Promise<EntradaBitacora[]>;
+}
+
+/**
  * Documentos del plan (ticket 7B). Los LISTADOS devuelven solo metadatos: el
  * contenido (hasta 10 MB por doc) viaja únicamente cuando se pide UN
  * documento. Sin update ni delete: las versiones se acumulan, el vigente es
@@ -194,4 +205,5 @@ export interface ReposAlumnos {
   contactos: ContactosRepo;
   mediciones: MedicionesRepo;
   notaResoluciones: NotaResolucionesRepo;
+  bitacora: BitacoraRepo;
 }

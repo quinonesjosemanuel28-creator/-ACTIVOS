@@ -8,6 +8,7 @@
  */
 import type { Pool } from 'pg';
 import type { NotaResolucion } from '../../domain/alumnos/notas';
+import type { EntradaBitacora } from '../../domain/alumnos/bitacora';
 import { METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/claridad';
 import {
   CAMPOS_RESPUESTA,
@@ -32,7 +33,8 @@ import type {
   SeguimientoTokensRepo,
   TokensRepo,
   TramoHistorial,
-NotaResolucionesRepo,
+BitacoraRepo,
+  NotaResolucionesRepo,
 } from '../../application/alumnos/ports';
 
 const COLUMNAS_RESPUESTA: readonly string[] = [
@@ -709,4 +711,26 @@ interface NotaResolucionRow { id: string; checkin_id: string; estado: string; ar
 const toNotaResolucion = (r: NotaResolucionRow): NotaResolucion => ({
   id: r.id, checkinId: r.checkin_id, estado: r.estado as NotaResolucion['estado'],
   area: r.area, devolucion: r.devolucion, usuarioId: r.usuario_id, creadaEn: r.creada_en,
+});
+
+export function crearBitacoraRepoPg(pool: Pool): BitacoraRepo {
+  return {
+    async crear(e) {
+      // Solo INSERT: la bitácora es historia y no se corrige, se amplía.
+      await pool.query('INSERT INTO bitacora (id, alumno_id, texto, tipo_contacto, traba_actual, usuario_id, creada_en) VALUES ($1,$2,$3,$4,$5,$6,$7)', [
+        e.id, e.alumnoId, e.texto, e.tipoContacto, e.trabaActual, e.usuarioId, e.creadaEn,
+      ]);
+    },
+    async listarPorAlumno(alumnoId) {
+      const r = await pool.query('SELECT * FROM bitacora WHERE alumno_id = $1 ORDER BY creada_en DESC', [alumnoId]);
+      return (r.rows as BitacoraRow[]).map(toBitacora);
+    },
+  };
+}
+
+interface BitacoraRow { id: string; alumno_id: string; texto: string; tipo_contacto: string; traba_actual: string | null; usuario_id: string; creada_en: string }
+
+const toBitacora = (r: BitacoraRow): EntradaBitacora => ({
+  id: r.id, alumnoId: r.alumno_id, texto: r.texto, tipoContacto: r.tipo_contacto,
+  trabaActual: r.traba_actual, usuarioId: r.usuario_id, creadaEn: r.creada_en,
 });

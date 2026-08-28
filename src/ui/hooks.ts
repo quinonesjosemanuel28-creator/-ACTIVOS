@@ -441,6 +441,25 @@ export function useResolverNota() {
     },
   });
 }
+
+/** La bitácora del alumno (10B): historia + traba vigente. */
+export function useBitacora(alumnoId: string) {
+  return useQuery({ queryKey: ['alumnos', 'bitacora', alumnoId], queryFn: () => api.bitacora(alumnoId) });
+}
+
+/** Cargar una entrada (10B): refresca bitácora Y panel (registró un contacto). */
+export function useCargarBitacora() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ alumnoId, cuerpo }: { alumnoId: string; cuerpo: { texto: string; tipoContacto: string; trabaActual?: string | null } }) =>
+      api.cargarBitacora(alumnoId, cuerpo),
+    onSuccess: (_d, v) => {
+      void qc.invalidateQueries({ queryKey: ['alumnos', 'bitacora', v.alumnoId] });
+      void qc.invalidateQueries({ queryKey: ['alumnos', 'panel'] });
+      void qc.invalidateQueries({ queryKey: ['alumnos', 'detalle', v.alumnoId] });
+    },
+  });
+}
 export function useEditarKr() {
   const inval = useInvalidarAlumnos();
   return useMutation({

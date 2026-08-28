@@ -22,6 +22,7 @@
  */
 import { z } from 'zod';
 import { AREAS_NOTA } from '../../domain/alumnos/notas';
+import { TIPOS_CONTACTO } from '../../domain/alumnos/bitacora';
 import {
   CAMPOS_RESPUESTA,
   esCampoMulti,
@@ -234,6 +235,17 @@ export const notaResolucionInputSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['devolucion'], message: 'Archivar es cerrar sin respuesta. Si hay devolución, es una nota resuelta.' });
     }
   });
+
+/**
+ * Entrada de bitácora (ticket 10B): texto libre — un coach que sale de una
+ * llamada de una hora escribe cuatro líneas, no completa campos. Solo dos
+ * cosas más: el tipo de contacto (un clic) y la traba actual, opcional.
+ */
+export const bitacoraInputSchema = z.object({
+  texto: z.string().trim().min(1, 'La entrada no puede estar vacía.').max(5000, 'Hasta 5000 caracteres.'),
+  tipoContacto: z.enum(TIPOS_CONTACTO),
+  trabaActual: z.string().trim().max(300, 'La traba es un titular, no un informe: hasta 300 caracteres.').transform((s) => (s === '' ? null : s)).nullable().optional(),
+});
 
 /** Carga de una medición (ticket 9B): un número finito, nada más. */
 export const medicionInputSchema = z.object({

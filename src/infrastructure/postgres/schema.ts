@@ -441,6 +441,23 @@ CREATE TABLE IF NOT EXISTS nota_resoluciones (
 
 CREATE INDEX IF NOT EXISTS idx_nota_res_checkin ON nota_resoluciones(checkin_id);
 
+-- Bitácora del consultor (ticket 10B), APPEND-ONLY: la historia del alumno
+-- no se edita ni se borra — si algo cambia, se agrega una entrada. NUNCA se
+-- consulta desde el endpoint público del link: acá vive lenguaje interno.
+-- tipo_contacto sin CHECK: opción de negocio, se valida en Zod. El CASCADE
+-- es lo que deja funcionar la purga definitiva de la papelera.
+CREATE TABLE IF NOT EXISTS bitacora (
+  id             TEXT PRIMARY KEY,
+  alumno_id      TEXT NOT NULL REFERENCES alumnos(id) ON DELETE CASCADE,
+  texto          TEXT NOT NULL,
+  tipo_contacto  TEXT NOT NULL,
+  traba_actual   TEXT,
+  usuario_id     TEXT NOT NULL REFERENCES usuarios(id),
+  creada_en      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bitacora_alumno ON bitacora(alumno_id);
+
 CREATE INDEX IF NOT EXISTS idx_planes_alumno   ON planes(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_okrs_plan       ON okrs(plan_id);
 CREATE INDEX IF NOT EXISTS idx_krs_okr         ON krs(okr_id);

@@ -65,6 +65,7 @@ import {
   type SaludPorAcciones,
 } from '../../domain/alumnos/saludAcciones';
 import { notaParaElLink, notasAbiertas, notasDelPlan, type NotaConEstado, type NotaResolucion } from '../../domain/alumnos/notas';
+import { CANAL_POR_TIPO, trabaActual, type EntradaBitacora } from '../../domain/alumnos/bitacora';
 import { parsearTelefono } from '../../domain/alumnos/telefono';
 import { diaDelPlan } from '../../domain/alumnos/vistaAlumno';
 import {
@@ -95,6 +96,7 @@ import {
   krPatchSchema,
   type FichaPublica,
   notaResolucionInputSchema,
+  bitacoraInputSchema,
 } from './schemas';
 import type { UsuariosRepo } from '../auth/ports';
 import type { FiltrosAlumnos, ReposAlumnos } from './ports';
@@ -1343,6 +1345,72 @@ export async function resolverNota(
   };
   await repos.notaResoluciones.crear(resolucion);
   return resolucion;
+}
+
+// ───── Bitácora del consultor (ticket 10B) ─────
+
+export interface BitacoraDeAlumno {
+  entradas: (EntradaBitacora & { autorNombre: string | null })[];
+  /** La traba vigente, para la cabecera de la ficha. */
+  traba: { texto: string; fecha: string; autorNombre: string | null } | null;
+}
+
+/**
+ * Carga una entrada — y REGISTRA EL CONTACTO en la misma operación: sin eso,
+ * la alerta de inactividad seguiría gritando por un alumno que tuvo su
+ * consultoría ayer (o habría que cargar dos veces). Un gesto, dos efectos.
+ * Append-only: la bitácora no se edita — si algo cambia, otra entrada.
+ */
+export async function cargarBitacora(
+  repos: ReposAlumnos,
+  alcance: Alcance,
+  usuarioId: string,
+  alumnoId: string,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<EntradaBitacora> {
+  const alumno = await obtenerAlumno(repos, alcance, alumnoId);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+  const input = bitacoraInputSchema.parse(entrada ?? {});
+  const fila: EntradaBitacora = {
+    id: randomUUID(),
+    alumnoId,
+    texto: input.texto,
+    tipoContacto: input.tipoContacto,
+    trabaActual: input.trabaActual ?? null,
+    usuarioId,
+    creadaEn: ahora,
+  };
+  await repos.bitacora.crear(fila);
+  await repos.contactos.crear({
+    id: randomUUID(),
+    alumnoId,
+    consultorId: usuarioId,
+    canal: CANAL_POR_TIPO[input.tipoContacto],
+    contactadoEn: ahora,
+    nota: null,
+  });
+  return fila;
+}
+
+/** La bitácora completa del alumno (ámbito por fila) + la traba vigente. */
+export async function bitacoraDeAlumno(
+  repos: ReposAlumnos,
+  usuarios: UsuariosRepo,
+  alcance: Alcance,
+  alumnoId: string,
+): Promise<BitacoraDeAlumno> {
+  const alumno = await obtenerAlumno(repos, alcance, alumnoId);
+  if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+  const entradas = await repos.bitacora.listarPorAlumno(alumnoId);
+  const nombrePorId = new Map((await usuarios.listar()).map((u) => [u.id, u.nombre]));
+  const vigente = trabaActual(entradas);
+  return {
+    entradas: entradas.map((e) => ({ ...e, autorNombre: nombrePorId.get(e.usuarioId) ?? null })),
+    traba: vigente
+      ? { texto: vigente.trabaActual!, fecha: vigente.creadaEn, autorNombre: nombrePorId.get(vigente.usuarioId) ?? null }
+      : null,
+  };
 }
 
 // ───── Comparación de semáforos (ticket 9C · paralelo on-read) ─────

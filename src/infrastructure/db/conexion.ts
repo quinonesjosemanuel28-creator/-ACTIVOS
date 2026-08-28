@@ -26,6 +26,7 @@ import {
   crearContactosRepo,
   crearMedicionesRepo,
   crearNotaResolucionesRepo,
+  crearBitacoraRepo,
   crearDiagnosticosRepo,
   crearDocumentosRepo,
   crearHistorialRepo,
@@ -46,6 +47,7 @@ import {
   crearContactosRepoPg,
   crearMedicionesRepoPg,
   crearNotaResolucionesRepoPg,
+  crearBitacoraRepoPg,
   crearDiagnosticosRepoPg,
   crearDocumentosRepoPg,
   crearHistorialRepoPg,
@@ -100,6 +102,7 @@ export async function crearInfraestructura(): Promise<Infraestructura> {
         contactos: crearContactosRepoPg(pool),
         mediciones: crearMedicionesRepoPg(pool),
         notaResoluciones: crearNotaResolucionesRepoPg(pool),
+        bitacora: crearBitacoraRepoPg(pool),
       },
     };
   }
@@ -138,6 +141,7 @@ export function infraestructuraDesdeDb(
       contactos: crearContactosRepo(db),
       mediciones: crearMedicionesRepo(db),
       notaResoluciones: crearNotaResolucionesRepo(db),
+      bitacora: crearBitacoraRepo(db),
     },
   };
 }

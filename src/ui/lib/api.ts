@@ -337,6 +337,9 @@ export const api = {
     req<Medicion>(`/krs/${krId}/mediciones`, { method: 'POST', body: JSON.stringify({ valor }) }),
   resolverNota: (checkinId: string, cuerpo: { estado: 'resuelta' | 'archivada'; area?: string | null; devolucion?: string | null }) =>
     req<NotaUI>(`/checkins/${checkinId}/resolucion`, { method: 'POST', body: JSON.stringify(cuerpo) }),
+  bitacora: (alumnoId: string) => req<BitacoraUI>(`/alumnos/${alumnoId}/bitacora`),
+  cargarBitacora: (alumnoId: string, cuerpo: { texto: string; tipoContacto: string; trabaActual?: string | null }) =>
+    req<unknown>(`/alumnos/${alumnoId}/bitacora`, { method: 'POST', body: JSON.stringify(cuerpo) }),
 
   // El documento del plan (ticket 7B): el binario viaja crudo, el nombre en la query.
   documentosPlan: (planId: string) => req<PlanDocumento[]>(`/planes/${planId}/documentos`),
@@ -399,6 +402,11 @@ export interface AvancePlanUI {
   mediciones: Medicion[];
   /** Ticket 10A: notas del alumno con estado derivado, la más nueva primero. */
   notas: NotaUI[];
+}
+
+export interface BitacoraUI {
+  entradas: { id: string; texto: string; tipoContacto: string; trabaActual: string | null; usuarioId: string; creadaEn: string; autorNombre: string | null }[];
+  traba: { texto: string; fecha: string; autorNombre: string | null } | null;
 }
 
 export interface NotaUI {
