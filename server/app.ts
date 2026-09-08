@@ -431,8 +431,10 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   app.get('/api/alumnos/papelera', requiere('eliminar_alumnos'), h(() =>
     ual.listarPapelera(reposAlumnos, reposAuth.usuarios),
   ));
+  // Alta (ticket 11B): el usuario de la sesión entero — el caso de uso decide
+  // por rol si puede elegir otro consultor, y valida el destino contra usuarios.
   app.post('/api/alumnos', requiere('editar_alumnos'), h((req, res) =>
-    ual.crearAlumno(reposAlumnos, usuarioDe(res).id, req.body),
+    ual.crearAlumno(reposAlumnos, usuarioDe(res), req.body, reposAuth.usuarios),
   ));
   app.get('/api/alumnos/:id', requiere('ver_alumnos'), h(async (req, res) => {
     const alumno = await ual.obtenerAlumno(reposAlumnos, alcanceDe(res), param(req, 'id'));

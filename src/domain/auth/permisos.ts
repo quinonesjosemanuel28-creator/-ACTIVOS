@@ -95,6 +95,15 @@ export function accionesDe(rol: Rol): Accion[] {
   return ACCIONES.filter((a) => puede(rol, a));
 }
 
+/**
+ * ¿El rol puede ser responsable de una cartera (`alumnos.consultor_id`)?
+ * Lista explícita a propósito: cuando exista un rol de solo lectura sobre la
+ * cartera (ticket 11A), NO debe poder recibir alumnos asignados.
+ */
+export function puedeSerResponsable(rol: Rol): boolean {
+  return rol === 'CONSULTOR' || rol === 'ADMIN';
+}
+
 // ───────────────────────── Eje 2: ámbito por fila ─────────────────────────
 
 /**

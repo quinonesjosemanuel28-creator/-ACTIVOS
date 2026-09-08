@@ -52,8 +52,11 @@ export function useCambiarPassword() {
 
 // ───────────────────────── Usuarios (ADMIN) ─────────────────────────
 
-export function useUsuarios() {
-  return useQuery({ queryKey: ['usuarios'], queryFn: api.usuarios });
+export function useUsuarios(habilitado = true) {
+  // `habilitado` (ticket 11B): el FormAlta lo apaga cuando el usuario no tiene
+  // 'gestionar_usuarios' — sin esto, cada alta de un CONSULTOR dispararía un
+  // GET /api/usuarios condenado al 403.
+  return useQuery({ queryKey: ['usuarios'], queryFn: api.usuarios, enabled: habilitado });
 }
 export function useCrearUsuario() {
   const qc = useQueryClient();

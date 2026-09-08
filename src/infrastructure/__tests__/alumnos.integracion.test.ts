@@ -95,6 +95,8 @@ async function setup() {
   });
   return {
     repos: infra.reposAlumnos as ReposAlumnos,
+    reposAuth: infra.reposAuth,
+    admin: admin!,
     consu,
     otro,
     alcanceConsu: alcanceDeUsuario({ id: consu.id, rol: 'CONSULTOR' }),
@@ -108,7 +110,7 @@ const FICHA = { nombre: 'Gonzalo', programa: 'Prestamista a Empresario', moneda:
 describe('Alumnos · alta de ficha', () => {
   it('crea el alumno y abre el primer tramo de historial', async () => {
     const { repos, consu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
 
     expect(alumno.nombre).toBe('Gonzalo');
     expect(alumno.consultorId).toBe(consu.id);
@@ -124,21 +126,87 @@ describe('Alumnos · alta de ficha', () => {
 
   it('normaliza la moneda a ISO de 3 letras en mayúscula', async () => {
     const { repos, consu } = await setup();
-    const a = await ua.crearAlumno(repos, consu.id, { ...FICHA, moneda: 'cop' });
+    const a = await ua.crearAlumno(repos, consu, { ...FICHA, moneda: 'cop' });
     expect(a.moneda).toBe('COP');
   });
 
   it('rechaza un programa que no está en la lista', async () => {
     const { repos, consu } = await setup();
-    await expect(ua.crearAlumno(repos, consu.id, { ...FICHA, programa: 'Curso pirata' })).rejects.toThrow();
+    await expect(ua.crearAlumno(repos, consu, { ...FICHA, programa: 'Curso pirata' })).rejects.toThrow();
+  });
+});
+
+// ───────── Ticket 11B: selector de consultor en el alta ─────────
+describe('Alumnos · alta con consultorId elegido (11B)', () => {
+  it('el propio id es válido y equivale a no mandarlo', async () => {
+    const { repos, consu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu, { ...FICHA, consultorId: consu.id });
+    expect(alumno.consultorId).toBe(consu.id);
+    const tramos = await repos.historial.listarPorAlumno(alumno.id);
+    expect(tramos).toHaveLength(1);
+    expect(tramos[0]!.consultorId).toBe(consu.id);
+  });
+
+  it('un ADMIN elige otro consultor: el alumno Y el primer tramo quedan con el elegido', async () => {
+    const { repos, reposAuth, admin, consu } = await setup();
+    const alumno = await ua.crearAlumno(repos, admin, { ...FICHA, consultorId: consu.id }, reposAuth.usuarios);
+    expect(alumno.consultorId).toBe(consu.id);
+    // El punto donde el historial puede empezar a mentir: el tramo se abre con
+    // el consultor ELEGIDO, no con el creador (el ADMIN).
+    const tramos = await repos.historial.listarPorAlumno(alumno.id);
+    expect(tramos).toHaveLength(1);
+    expect(tramos[0]!.consultorId).toBe(consu.id);
+    expect(tramos[0]!.hasta).toBeNull();
+  });
+
+  it('un CONSULTOR que manda un consultorId ajeno recibe rechazo explícito', async () => {
+    const { repos, reposAuth, consu, otro } = await setup();
+    await expect(
+      ua.crearAlumno(repos, consu, { ...FICHA, consultorId: otro.id }, reposAuth.usuarios),
+    ).rejects.toThrow(/ADMIN/);
+  });
+
+  it('un consultorId inexistente se rechaza', async () => {
+    const { repos, reposAuth, admin } = await setup();
+    await expect(
+      ua.crearAlumno(repos, admin, { ...FICHA, consultorId: 'usr-fantasma' }, reposAuth.usuarios),
+    ).rejects.toThrow(/no existe|habilitado/);
+  });
+
+  it('un destino con rol sin cartera (LECTOR) se rechaza', async () => {
+    const { repos, reposAuth, admin } = await setup();
+    const { usuario: lector } = await uauth.crearUsuario(reposAuth, {
+      email: 'lector@activos.com', nombre: 'Lector', rol: 'LECTOR', password: 'Clave1234',
+    });
+    await expect(
+      ua.crearAlumno(repos, admin, { ...FICHA, consultorId: lector.id }, reposAuth.usuarios),
+    ).rejects.toThrow(/habilitado/);
+  });
+
+  it('un destino dado de baja se rechaza aunque su rol sea CONSULTOR', async () => {
+    const { repos, reposAuth, admin, otro } = await setup();
+    await uauth.darDeBaja(reposAuth, otro.id);
+    await expect(
+      ua.crearAlumno(repos, admin, { ...FICHA, consultorId: otro.id }, reposAuth.usuarios),
+    ).rejects.toThrow(/habilitado/);
+  });
+
+  it('el patch de edición NO acepta consultorId: reasignar es otra acción (11C)', async () => {
+    const { repos, consu, otro, alcanceConsu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
+    // Zod lo descarta en silencio: el campo no viaja a la base y el titular no cambia.
+    await ua.editarAlumno(repos, alcanceConsu, alumno.id, { nombre: 'Gonzalo R.', consultorId: otro.id });
+    const tras = await ua.obtenerAlumno(repos, alcanceConsu, alumno.id);
+    expect(tras!.consultorId).toBe(consu.id);
+    expect(tras!.nombre).toBe('Gonzalo R.');
   });
 });
 
 describe('Alumnos · ámbito por fila aplicado en la CONSULTA', () => {
   it('un consultor solo lista su cartera', async () => {
     const { repos, consu, otro, alcanceConsu, alcanceOtro } = await setup();
-    await ua.crearAlumno(repos, consu.id, FICHA);
-    await ua.crearAlumno(repos, otro.id, { ...FICHA, nombre: 'Ajeno' });
+    await ua.crearAlumno(repos, consu, FICHA);
+    await ua.crearAlumno(repos, otro, { ...FICHA, nombre: 'Ajeno' });
 
     const mios = await ua.listarAlumnos(repos, alcanceConsu);
     expect(mios.map((a) => a.nombre)).toEqual(['Gonzalo']);
@@ -149,8 +217,8 @@ describe('Alumnos · ámbito por fila aplicado en la CONSULTA', () => {
 
   it('pedir explícitamente la cartera de otro devuelve la propia, no la ajena', async () => {
     const { repos, consu, otro, alcanceConsu } = await setup();
-    await ua.crearAlumno(repos, consu.id, FICHA);
-    await ua.crearAlumno(repos, otro.id, { ...FICHA, nombre: 'Ajeno' });
+    await ua.crearAlumno(repos, consu, FICHA);
+    await ua.crearAlumno(repos, otro, { ...FICHA, nombre: 'Ajeno' });
 
     // El filtro del cliente puede achicar, jamás ensanchar.
     const forzado = await ua.listarAlumnos(repos, alcanceConsu, { consultorId: otro.id });
@@ -159,8 +227,8 @@ describe('Alumnos · ámbito por fila aplicado en la CONSULTA', () => {
 
   it('ADMIN ve todas las carteras', async () => {
     const { repos, consu, otro, alcanceAdmin } = await setup();
-    await ua.crearAlumno(repos, consu.id, FICHA);
-    await ua.crearAlumno(repos, otro.id, { ...FICHA, nombre: 'Ajeno' });
+    await ua.crearAlumno(repos, consu, FICHA);
+    await ua.crearAlumno(repos, otro, { ...FICHA, nombre: 'Ajeno' });
 
     const todos = await ua.listarAlumnos(repos, alcanceAdmin);
     expect(todos).toHaveLength(2);
@@ -168,19 +236,19 @@ describe('Alumnos · ámbito por fila aplicado en la CONSULTA', () => {
 
   it('la ficha ajena responde null, no un error: no revela que existe', async () => {
     const { repos, otro, alcanceConsu } = await setup();
-    const ajeno = await ua.crearAlumno(repos, otro.id, { ...FICHA, nombre: 'Ajeno' });
+    const ajeno = await ua.crearAlumno(repos, otro, { ...FICHA, nombre: 'Ajeno' });
     expect(await ua.obtenerAlumno(repos, alcanceConsu, ajeno.id)).toBeNull();
   });
 
   it('no se puede editar la ficha de otro consultor', async () => {
     const { repos, otro, alcanceConsu } = await setup();
-    const ajeno = await ua.crearAlumno(repos, otro.id, { ...FICHA, nombre: 'Ajeno' });
+    const ajeno = await ua.crearAlumno(repos, otro, { ...FICHA, nombre: 'Ajeno' });
     await expect(ua.editarAlumno(repos, alcanceConsu, ajeno.id, { nombre: 'Hackeado' })).rejects.toThrow(/inexistente/i);
   });
 
   it('no se puede emitir un link para el alumno de otro consultor', async () => {
     const { repos, otro, alcanceConsu } = await setup();
-    const ajeno = await ua.crearAlumno(repos, otro.id, { ...FICHA, nombre: 'Ajeno' });
+    const ajeno = await ua.crearAlumno(repos, otro, { ...FICHA, nombre: 'Ajeno' });
     await expect(ua.emitirToken(repos, alcanceConsu, ajeno.id)).rejects.toThrow(/inexistente/i);
   });
 });
@@ -188,7 +256,7 @@ describe('Alumnos · ámbito por fila aplicado en la CONSULTA', () => {
 describe('Alumnos · token del formulario público', () => {
   it('abre el formulario y devuelve SOLO lo mínimo (no filtra la ficha)', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, { ...FICHA, whatsapp: '+5491100000000' });
+    const alumno = await ua.crearAlumno(repos, consu, { ...FICHA, whatsapp: '+5491100000000' });
     const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
 
     const abierto = await ua.abrirFormulario(repos, t.token);
@@ -204,7 +272,7 @@ describe('Alumnos · token del formulario público', () => {
 
   it('el token es largo y aleatorio (no secuencial: es la credencial del alumno)', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const a = await ua.crearAlumno(repos, consu.id, FICHA);
+    const a = await ua.crearAlumno(repos, consu, FICHA);
     const t1 = await ua.emitirToken(repos, alcanceConsu, a.id);
     const t2 = await ua.emitirToken(repos, alcanceConsu, a.id);
     expect(t1.token.length).toBeGreaterThanOrEqual(40);
@@ -213,7 +281,7 @@ describe('Alumnos · token del formulario público', () => {
 
   it('un token vencido no abre', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const a = await ua.crearAlumno(repos, consu.id, FICHA);
+    const a = await ua.crearAlumno(repos, consu, FICHA);
     const t = await ua.emitirToken(repos, alcanceConsu, a.id, '2026-01-01T00:00:00.000Z');
     // 31 días después: venció (la vigencia es de 30).
     await expect(ua.abrirFormulario(repos, t.token, '2026-02-01T00:00:00.000Z')).rejects.toMatchObject({
@@ -223,7 +291,7 @@ describe('Alumnos · token del formulario público', () => {
 
   it('reenviar el link invalida el anterior: no quedan dos formularios vivos', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const a = await ua.crearAlumno(repos, consu.id, FICHA);
+    const a = await ua.crearAlumno(repos, consu, FICHA);
     const viejo = await ua.emitirToken(repos, alcanceConsu, a.id);
     await ua.emitirToken(repos, alcanceConsu, a.id); // reenvío
 
@@ -237,7 +305,7 @@ describe('Alumnos · token del formulario público', () => {
 
   it('el alumno dado de baja invalida su link', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const a = await ua.crearAlumno(repos, consu.id, FICHA);
+    const a = await ua.crearAlumno(repos, consu, FICHA);
     const t = await ua.emitirToken(repos, alcanceConsu, a.id);
     await repos.alumnos.guardar({ ...a, activo: false });
     await expect(ua.abrirFormulario(repos, t.token)).rejects.toThrow();
@@ -247,7 +315,7 @@ describe('Alumnos · token del formulario público', () => {
 describe('Alumnos · envío del diagnóstico', () => {
   async function conToken() {
     const ctx = await setup();
-    const alumno = await ua.crearAlumno(ctx.repos, ctx.consu.id, FICHA);
+    const alumno = await ua.crearAlumno(ctx.repos, ctx.consu, FICHA);
     const t = await ua.emitirToken(ctx.repos, ctx.alcanceConsu, alumno.id);
     return { ...ctx, alumno, token: t.token };
   }
@@ -288,7 +356,7 @@ describe('Alumnos · envío del diagnóstico', () => {
 
   it('NUNCA se sobrescribe: dos envíos son dos filas', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
 
     const t1 = await ua.emitirToken(repos, alcanceConsu, alumno.id, '2026-01-10T00:00:00.000Z');
     await ua.enviarDiagnostico(repos, t1.token, diagnosticoCompleto(), '2026-01-10T10:00:00.000Z');
@@ -356,7 +424,7 @@ describe('Alumnos · envío del diagnóstico', () => {
 describe('Alumnos · corrección del consultor sobre un diagnóstico', () => {
   async function conDiagnostico() {
     const ctx = await setup();
-    const alumno = await ua.crearAlumno(ctx.repos, ctx.consu.id, FICHA);
+    const alumno = await ua.crearAlumno(ctx.repos, ctx.consu, FICHA);
     const t = await ua.emitirToken(ctx.repos, ctx.alcanceConsu, alumno.id);
     // El alumno no supo la mora: entra con 18/19 = 95.
     const flojo = { ...diagnosticoCompleto(), mora_clientes: null, mora_clientes_sin_dato: true };
@@ -448,7 +516,7 @@ describe('Alumnos · carga del plan de 90 días', () => {
 
   it('crea el agregado entero y lo devuelve completo', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
 
     const cargado = await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE);
     expect(cargado.okrs).toHaveLength(2);
@@ -470,14 +538,14 @@ describe('Alumnos · carga del plan de 90 días', () => {
 
   it('el consultor corrige la fecha en la previa y la carga la respeta', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
     const cargado = await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE, '2026-09-01');
     expect(cargado.plan.fechaInicio).toBe('2026-09-01');
   });
 
   it('cargar otro plan NO borra el anterior, y el más nuevo queda primero', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
     await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE, '2026-05-01');
     await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE, '2026-08-18');
 
@@ -491,7 +559,7 @@ describe('Alumnos · carga del plan de 90 días', () => {
     const { repos, consu, alcanceConsu } = await setup();
     // La ficha dice "Gonzalo" y el bloque también: sin aviso de nombre. Pero le
     // metemos una clave fuera de contrato y un plan previo con la misma fecha.
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
     await ua.cargarPlan(repos, alcanceConsu, alumno.id, BLOQUE);
 
     const conExtra = JSON.stringify({ ...JSON.parse(BLOQUE), modelos_economicos: { escenario: 'x' } });
@@ -505,14 +573,14 @@ describe('Alumnos · carga del plan de 90 días', () => {
 
   it('el plan de un alumno ajeno ni se carga ni se lista', async () => {
     const { repos, otro, alcanceConsu } = await setup();
-    const ajeno = await ua.crearAlumno(repos, otro.id, { ...FICHA, nombre: 'Ajeno' });
+    const ajeno = await ua.crearAlumno(repos, otro, { ...FICHA, nombre: 'Ajeno' });
     await expect(ua.cargarPlan(repos, alcanceConsu, ajeno.id, BLOQUE)).rejects.toThrow(/inexistente/i);
     await expect(ua.listarPlanes(repos, alcanceConsu, ajeno.id)).rejects.toThrow(/inexistente/i);
   });
 
   it('un bloque roto no deja NADA en la base (o entra todo o no entra nada)', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
     const roto = JSON.stringify({ ...JSON.parse(BLOQUE), fases: JSON.parse(BLOQUE).fases.slice(0, 2) });
     await expect(ua.cargarPlan(repos, alcanceConsu, alumno.id, roto)).rejects.toThrow();
     expect(await ua.listarPlanes(repos, alcanceConsu, alumno.id)).toHaveLength(0);
@@ -536,7 +604,7 @@ describe('Alumnos · link de seguimiento y tildes', () => {
 
   async function conPlan() {
     const ctx = await setup();
-    const alumno = await ua.crearAlumno(ctx.repos, ctx.consu.id, FICHA);
+    const alumno = await ua.crearAlumno(ctx.repos, ctx.consu, FICHA);
     const plan = await ua.cargarPlan(ctx.repos, ctx.alcanceConsu, alumno.id, BLOQUE_SEG);
     return { ...ctx, alumno, plan };
   }
@@ -653,7 +721,7 @@ describe('Alumnos · link de seguimiento y tildes', () => {
 
   it('una acción de OTRO plan no se puede tildar con este token', async () => {
     const { repos, alcanceConsu, consu, plan } = await conPlan();
-    const otroAlumno = await ua.crearAlumno(repos, consu.id, { ...FICHA, nombre: 'Marta' });
+    const otroAlumno = await ua.crearAlumno(repos, consu, { ...FICHA, nombre: 'Marta' });
     const otroPlan = await ua.cargarPlan(repos, alcanceConsu, otroAlumno.id, BLOQUE_SEG);
     const { token } = await ua.emitirLinkSeguimiento(repos, alcanceConsu, plan.plan.id);
 
@@ -689,7 +757,7 @@ describe('Alumnos · link de seguimiento y tildes', () => {
 describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => {
   it('el envío llena los huecos de la ficha', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA); // sin zona/whatsapp/canal
+    const alumno = await ua.crearAlumno(repos, consu, FICHA); // sin zona/whatsapp/canal
     const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
 
     await ua.enviarDiagnostico(repos, t.token, diagnosticoCompleto());
@@ -702,7 +770,7 @@ describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => 
 
   it('lo que el consultor ya cargó NO se pisa desde el link', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, { ...FICHA, zona: 'Salta', whatsapp: '+5490000000000' });
+    const alumno = await ua.crearAlumno(repos, consu, { ...FICHA, zona: 'Salta', whatsapp: '+5490000000000' });
     const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
 
     await ua.enviarDiagnostico(repos, t.token, diagnosticoCompleto()); // trae otra zona y otro whatsapp
@@ -715,7 +783,7 @@ describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => 
 
   it('nombre y programa son intocables desde la ruta pública', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA);
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
     const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
 
     await ua.enviarDiagnostico(repos, t.token, {
@@ -733,7 +801,7 @@ describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => 
 
   it('una obligatoria del bloque 0 que falta en ficha Y en envío → rechazo sin consumir nada', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, FICHA); // sin zona
+    const alumno = await ua.crearAlumno(repos, consu, FICHA); // sin zona
     const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);
 
     const { zona: _, ...sinZona } = diagnosticoCompleto();
@@ -745,7 +813,7 @@ describe('Alumnos · bloque 0 por el link público (completar-si-falta)', () => 
 
   it('si la ficha YA tiene la obligatoria, el envío no necesita traerla', async () => {
     const { repos, consu, alcanceConsu } = await setup();
-    const alumno = await ua.crearAlumno(repos, consu.id, {
+    const alumno = await ua.crearAlumno(repos, consu, {
       ...FICHA, zona: 'Salta', whatsapp: '+5490000000000', canalOrigen: 'TikTok',
     });
     const t = await ua.emitirToken(repos, alcanceConsu, alumno.id);

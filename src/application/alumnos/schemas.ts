@@ -142,7 +142,7 @@ export type DiagnosticoPatch = z.infer<typeof diagnosticoPatchSchema>;
 
 // ───────────────────────── Bloque 0 · ficha del alumno ─────────────────────────
 
-export const alumnoInputSchema = z.object({
+const fichaAlumnoSchema = z.object({
   nombre: z.string().trim().min(1, 'El nombre es obligatorio'),
   edad: z.number().int().min(16, 'Edad inválida').max(100, 'Edad inválida').nullable().optional(),
   zona: z.string().trim().min(1).nullable().optional(),
@@ -161,10 +161,20 @@ export const alumnoInputSchema = z.object({
   telefonoNumero: z.string().trim().regex(/^\d{6,12}$/, 'Número: solo dígitos, con código de área y sin el 15').nullable().optional(),
   idCierreVinculado: z.string().trim().nullable().optional(),
 });
+
+/**
+ * Alta (ticket 11B): `consultorId` opcional — sin él se asigna el creador,
+ * como siempre. Va SOLO en el alta: el patch de edición no lo admite a
+ * propósito, porque reasignar es otra acción con otro permiso (ticket 11C) y
+ * si viajara por el PUT un consultor podría regalarse un alumno ajeno.
+ */
+export const alumnoInputSchema = fichaAlumnoSchema.extend({
+  consultorId: z.string().trim().min(1).optional(),
+});
 export type AlumnoInput = z.infer<typeof alumnoInputSchema>;
 
-/** Edición de la ficha: los mismos campos, todos opcionales. */
-export const alumnoPatchSchema = alumnoInputSchema.partial();
+/** Edición de la ficha: los mismos campos, todos opcionales — sin consultorId. */
+export const alumnoPatchSchema = fichaAlumnoSchema.partial();
 export type AlumnoPatch = z.infer<typeof alumnoPatchSchema>;
 
 // ───────────────────────── Panel de control (ticket 7) ─────────────────────────

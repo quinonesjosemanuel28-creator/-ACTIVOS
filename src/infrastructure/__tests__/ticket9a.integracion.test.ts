@@ -72,7 +72,7 @@ describe('Ticket 9A · aditivo puro: el semáforo no se mueve', () => {
     const infra = infraestructuraDesdeDb(getDbMemoria(), hasherFake);
     const admin = (await uauth.asegurarAdminInicial(infra.reposAuth, 'admin@activos.com', 'Clave1234'))!;
     const alcance = alcanceDeUsuario({ id: admin.id, rol: 'ADMIN' });
-    const alumno = await ua.crearAlumno(infra.reposAlumnos, admin.id, {
+    const alumno = await ua.crearAlumno(infra.reposAlumnos, admin, {
       nombre: 'Gonzalo', programa: 'Prestamista a Empresario', moneda: 'ARS',
     });
     const bloque = JSON.stringify({
@@ -133,7 +133,7 @@ describe('Ticket 9A · mediciones append-only', () => {
     const infra = infraestructuraDesdeDb(getDbMemoria(), hasherFake);
     const admin = (await uauth.asegurarAdminInicial(infra.reposAuth, 'admin@activos.com', 'Clave1234'))!;
     const alcance = alcanceDeUsuario({ id: admin.id, rol: 'ADMIN' });
-    const alumno = await ua.crearAlumno(infra.reposAlumnos, admin.id, {
+    const alumno = await ua.crearAlumno(infra.reposAlumnos, admin, {
       nombre: 'Marta', programa: 'Prestamista a Empresario', moneda: 'ARS',
     });
     const plan = await ua.cargarPlan(infra.reposAlumnos, alcance, alumno.id, JSON.stringify({

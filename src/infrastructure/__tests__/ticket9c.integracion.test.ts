@@ -22,7 +22,7 @@ async function armar(diasAtras = 46) {
   const infra = infraestructuraDesdeDb(db, hasherFake);
   const admin = (await uauth.asegurarAdminInicial(infra.reposAuth, 'admin@activos.com', 'Clave1234'))!;
   const alcance = alcanceDeUsuario({ id: admin.id, rol: 'ADMIN' });
-  const alumno = await ua.crearAlumno(infra.reposAlumnos, admin.id, {
+  const alumno = await ua.crearAlumno(infra.reposAlumnos, admin, {
     nombre: 'Gonzalo', programa: 'Prestamista a Empresario', moneda: 'ARS',
   });
   const inicio = new Date(Date.now() - diasAtras * 86_400_000).toISOString().slice(0, 10);

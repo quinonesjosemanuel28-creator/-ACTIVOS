@@ -21,6 +21,7 @@ import { AREAS_NOTA } from '@domain/alumnos/notas';
 import { TIPOS_CONTACTO } from '@domain/alumnos/bitacora';
 import { BLOQUES, PREGUNTA_POR_CAMPO } from '@domain/alumnos/formulario';
 import { calcularClaridad, nivelClaridad, type NivelClaridad } from '@domain/alumnos/claridad';
+import { puedeSerResponsable } from '@domain/auth/permisos';
 import {
   useAlumno,
   useAvancePlan,
@@ -52,8 +53,9 @@ import {
   useRestaurarAlumno,
   useRevocarLinkSeguimiento,
   useSubirDocumento,
+  useUsuarios,
 } from '../hooks';
-import { usePuede } from '../store';
+import { usePuede, useUI } from '../store';
 import { api, type AvancePlanUI, type FilaPanelUI, type NotaUI, type PreviaPlanUI } from '../lib/api';
 import { Textarea } from '../components/ui/primitives';
 import { SectionHeader } from '../components/SectionHeader';
@@ -482,17 +484,31 @@ function Papelera({ onVolver }: { onVolver: () => void }) {
 
 function FormAlta({ onCreado }: { onCreado: (id: string) => void }) {
   const crear = useCrearAlumno();
+  // Selector de consultor (ticket 11B): solo para quien puede listar usuarios
+  // (ADMIN). Para un CONSULTOR el alta queda exactamente como siempre — el
+  // server además rechaza un consultorId ajeno, esto es solo la ventana.
+  const puedeElegirConsultor = usePuede('gestionar_usuarios');
+  const yo = useUI((s) => s.usuario);
+  const { data: usuarios } = useUsuarios(puedeElegirConsultor);
+  const responsables = (usuarios ?? []).filter((u) => u.activo && puedeSerResponsable(u.rol));
   const [nombre, setNombre] = useState('');
   const [programa, setPrograma] = useState(PROGRAMAS[1]!);
   const [moneda, setMoneda] = useState('ARS');
   const [whatsapp, setWhatsapp] = useState('');
+  const [consultorId, setConsultorId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const alta = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
-      const alumno = await crear.mutateAsync({ nombre, programa, moneda, whatsapp: whatsapp || undefined });
+      const alumno = await crear.mutateAsync({
+        nombre,
+        programa,
+        moneda,
+        whatsapp: whatsapp || undefined,
+        consultorId: (puedeElegirConsultor && consultorId) || undefined,
+      });
       onCreado(alumno.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo crear el alumno.');
@@ -520,6 +536,14 @@ function FormAlta({ onCreado }: { onCreado: (id: string) => void }) {
           <label className="mb-1 block text-xs font-600 text-navy-500 dark:text-navy-300">WhatsApp</label>
           <Input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="Lo puede completar el alumno" />
         </div>
+        {puedeElegirConsultor && responsables.length > 0 && (
+          <div className="lg:col-span-2">
+            <label className="mb-1 block text-xs font-600 text-navy-500 dark:text-navy-300">Consultor asignado</label>
+            <Select value={consultorId || yo?.id || ''} onChange={(e) => setConsultorId(e.target.value)} className="w-full">
+              {responsables.map((u) => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+            </Select>
+          </div>
+        )}
         <div className="flex items-end lg:col-span-2">
           <Button type="submit" disabled={crear.isPending}>
             {crear.isPending ? <Spinner className="h-4 w-4" /> : <Plus size={16} />}

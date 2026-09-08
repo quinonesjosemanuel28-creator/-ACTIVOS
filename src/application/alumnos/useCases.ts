@@ -12,7 +12,7 @@
  *     aleatorio de 256 bits, de un solo uso y con vencimiento.
  */
 import { randomBytes, randomUUID } from 'node:crypto';
-import { alcanzaFila, titularSegunAlcance, type Alcance } from '../../domain/auth/permisos';
+import { alcanzaFila, puedeSerResponsable, titularSegunAlcance, type Alcance, type Rol } from '../../domain/auth/permisos';
 import { calcularClaridad, METRICAS_CLARIDAD, SUFIJO_SIN_DATO } from '../../domain/alumnos/claridad';
 import { esCampoMulti } from '../../domain/alumnos/tipos';
 import { exportarDiagnostico } from '../../domain/alumnos/exportacion';
@@ -127,11 +127,26 @@ const nuevoToken = () => randomBytes(32).toString('base64url');
 
 export async function crearAlumno(
   repos: ReposAlumnos,
-  consultorId: string,
+  creador: { id: string; rol: Rol },
   entrada: unknown,
+  usuarios?: UsuariosRepo,
   ahora = ahoraIso(),
 ): Promise<Alumno> {
   const input = alumnoInputSchema.parse(entrada);
+  // Ticket 11B: sin `consultorId` (o con el propio) se asigna el creador, como
+  // siempre. Elegir a OTRO es privilegio de ADMIN — un consultor que lo mande
+  // recibe rechazo explícito, no un silencioso "se asignó a otro".
+  let consultorId = creador.id;
+  if (input.consultorId && input.consultorId !== creador.id) {
+    if (creador.rol !== 'ADMIN') {
+      throw new ErrorAlumnos('VALIDACION', 'Solo un ADMIN puede asignar el alumno a otro consultor.');
+    }
+    const destino = usuarios ? await usuarios.obtenerPorId(input.consultorId) : null;
+    if (!destino || !destino.activo || !puedeSerResponsable(destino.rol)) {
+      throw new ErrorAlumnos('VALIDACION', 'El consultor elegido no existe o no tiene un rol habilitado.');
+    }
+    consultorId = destino.id;
+  }
   const alumno: Alumno = {
     id: randomUUID(),
     consultorId,

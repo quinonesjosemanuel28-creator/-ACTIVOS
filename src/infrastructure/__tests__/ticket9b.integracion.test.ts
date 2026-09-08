@@ -24,7 +24,7 @@ async function armar(diasAtras = 15) {
   });
   const alcance = alcanceDeUsuario({ id: admin.id, rol: 'ADMIN' });
   const alcanceOtro = alcanceDeUsuario({ id: otro.id, rol: 'CONSULTOR' });
-  const alumno = await ua.crearAlumno(infra.reposAlumnos, admin.id, {
+  const alumno = await ua.crearAlumno(infra.reposAlumnos, admin, {
     nombre: 'Gonzalo', programa: 'Prestamista a Empresario', moneda: 'ARS',
   });
   const inicio = new Date(Date.now() - diasAtras * 86_400_000).toISOString().slice(0, 10);

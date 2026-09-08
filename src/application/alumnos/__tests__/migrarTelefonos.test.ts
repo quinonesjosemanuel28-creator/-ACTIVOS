@@ -20,7 +20,7 @@ async function armar() {
   const admin = (await uauth.asegurarAdminInicial(infra.reposAuth, 'admin@activos.com', 'Clave1234'))!;
   const alcance = alcanceDeUsuario({ id: admin.id, rol: 'ADMIN' });
   const alta = (nombre: string, whatsapp?: string) =>
-    crearAlumno(infra.reposAlumnos, admin.id, {
+    crearAlumno(infra.reposAlumnos, admin, {
       nombre, programa: 'Prestamista a Empresario', moneda: 'ARS', whatsapp,
     });
   return { infra, alcance, alta };

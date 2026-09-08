@@ -173,7 +173,7 @@ describe('HTTP · formulario público (sin sesión)', () => {
   it('un token vencido → 410 con motivo (el link existió, ya no sirve)', async () => {
     // El vencimiento se fabrica por casos de uso (no hay HTTP que viaje en el tiempo).
     const alcance = alcanceDeUsuario({ id: ctx.ids.consultor, rol: 'CONSULTOR' });
-    const alumno = await ual.crearAlumno(ctx.infra.reposAlumnos, ctx.ids.consultor, FICHA);
+    const alumno = await ual.crearAlumno(ctx.infra.reposAlumnos, { id: ctx.ids.consultor, rol: 'CONSULTOR' }, FICHA);
     const viejo = await ual.emitirToken(ctx.infra.reposAlumnos, alcance, alumno.id, '2026-01-01T00:00:00.000Z');
 
     const res = await fetch(`${ctx.base}/api/formulario/${viejo.token}`);
@@ -238,7 +238,7 @@ describe('HTTP · limitador del formulario público', () => {
     const { usuario: consu } = await uauth.crearUsuario(infra.reposAuth, {
       email: 'c@activos.com', nombre: 'C', rol: 'CONSULTOR', password: 'Clave1234',
     });
-    const alumno = await ual.crearAlumno(infra.reposAlumnos, consu.id, FICHA);
+    const alumno = await ual.crearAlumno(infra.reposAlumnos, consu, FICHA);
     const valido = await ual.emitirToken(infra.reposAlumnos, alcanceDeUsuario({ id: consu.id, rol: 'CONSULTOR' }), alumno.id);
 
     const app = crearApp(infra, { cookieSegura: false, limitadorFormulario: crearLimitadorLogin({ max: 3 }) });
@@ -289,6 +289,26 @@ describe('HTTP · rutas privadas: acción por rol', () => {
     expect(alta.status).toBe(200);
     const alumno = (await alta.json()) as { consultorId: string };
     expect(alumno.consultorId).toBe(ctx.ids.consultor);
+  });
+
+  // Ticket 11B: el selector de consultor en el alta, de punta a punta.
+  it('ADMIN elige consultor en el alta: el alumno queda asignado al elegido', async () => {
+    const alta = await fetch(`${ctx.base}/api/alumnos`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.admin },
+      body: JSON.stringify({ ...FICHA, nombre: 'Asignado', consultorId: ctx.ids.consultor }),
+    });
+    expect(alta.status).toBe(200);
+    const alumno = (await alta.json()) as { consultorId: string };
+    expect(alumno.consultorId).toBe(ctx.ids.consultor);
+  });
+
+  it('CONSULTOR con consultorId ajeno en el alta → 400 explícito', async () => {
+    const alta = await fetch(`${ctx.base}/api/alumnos`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.consultor },
+      body: JSON.stringify({ ...FICHA, nombre: 'Regalado', consultorId: ctx.ids.otroConsultor }),
+    });
+    expect(alta.status).toBe(400);
+    expect(((await alta.json()) as { error: string }).error).toMatch(/ADMIN/);
   });
 });
 
