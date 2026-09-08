@@ -57,7 +57,8 @@ export type Accion =
   | 'gestionar_usuarios'
   | 'ver_alumnos'
   | 'editar_alumnos'
-  | 'eliminar_alumnos';
+  | 'eliminar_alumnos'
+  | 'reasignar_alumnos';
 
 export const ACCIONES: readonly Accion[] = [
   'ver',
@@ -67,6 +68,7 @@ export const ACCIONES: readonly Accion[] = [
   'ver_alumnos',
   'editar_alumnos',
   'eliminar_alumnos',
+  'reasignar_alumnos',
 ] as const;
 
 /**
@@ -79,9 +81,11 @@ export const ACCIONES: readonly Accion[] = [
 const PERMISOS: Record<Rol, ReadonlySet<Accion>> = {
   LECTOR: new Set<Accion>(['ver']),
   EDITOR: new Set<Accion>(['ver', 'editar']),
-  ADMIN: new Set<Accion>(['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos']),
+  ADMIN: new Set<Accion>(['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos', 'reasignar_alumnos']),
   // Sin 'eliminar_alumnos' a propósito: un consultor gestiona su cartera pero
-  // no la borra — ni lógica ni definitivamente.
+  // no la borra — ni lógica ni definitivamente. Sin 'reasignar_alumnos'
+  // (ticket 11C): si pudiera, podría regalarse un alumno ajeno o desprenderse
+  // de uno propio.
   CONSULTOR: new Set<Accion>(['ver_alumnos', 'editar_alumnos']),
 };
 

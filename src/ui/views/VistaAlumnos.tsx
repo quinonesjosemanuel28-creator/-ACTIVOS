@@ -49,6 +49,7 @@ import {
   usePapelera,
   usePlanes,
   usePreviaPlan,
+  useReasignarAlumnos,
   useRegistrarContacto,
   useRestaurarAlumno,
   useRevocarLinkSeguimiento,
@@ -239,6 +240,25 @@ function WhatsAppBtn({ alumno, krPendiente }: { alumno: Alumno; krPendiente: str
 
 // ───────────────────── Cartera: el panel de control ─────────────────────
 
+/**
+ * Carga por consultor para la vista de reasignación (ticket 11C §7.3):
+ * cuántos alumnos tiene cada uno y cuántos en rojo. Asignar a ciegas es cómo
+ * se sobrecarga a alguien sin querer. Es un reduce sobre el panel que ya
+ * viajó — sin endpoint propio.
+ */
+export function cargaPorConsultor(
+  filas: readonly Pick<FilaPanelUI, 'alumno' | 'salud'>[],
+): Map<string, { total: number; rojos: number }> {
+  const carga = new Map<string, { total: number; rojos: number }>();
+  for (const f of filas) {
+    const c = carga.get(f.alumno.consultorId) ?? { total: 0, rojos: 0 };
+    c.total += 1;
+    if (f.salud.salud === 'ROJO') c.rojos += 1;
+    carga.set(f.alumno.consultorId, c);
+  }
+  return carga;
+}
+
 function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
   const [q, setQ] = useState('');
   const [estado, setEstado] = useState('');
@@ -248,6 +268,15 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
   const [creando, setCreando] = useState(false);
   const [verPapelera, setVerPapelera] = useState(false);
   const puedeEliminar = usePuede('eliminar_alumnos');
+  // Reasignación (ticket 11C): modo de selección, solo para quien tiene la
+  // acción (ADMIN). El candado real está en la ruta; esto es la ventana.
+  const puedeReasignar = usePuede('reasignar_alumnos');
+  const [reasignando, setReasignando] = useState(false);
+  const [seleccion, setSeleccion] = useState<ReadonlySet<string>>(new Set());
+  const [destino, setDestino] = useState('');
+  const [avisoReasignar, setAvisoReasignar] = useState<string | null>(null);
+  const reasignar = useReasignarAlumnos();
+  const { data: usuariosReasignar } = useUsuarios(puedeReasignar && reasignando);
   const { data: filas, isLoading } = usePanelAlumnos({
     q: q || undefined,
     estado: (estado || undefined) as EstadoAlumno | undefined,
@@ -267,6 +296,31 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
   const trabados = filas?.filter((f) => f.alerta.activa || f.salud.salud === 'ROJO').length ?? 0;
   const naranjas = filas?.filter((f) => f.salud.salud === 'NARANJA').length ?? 0;
 
+  const carga = useMemo(() => cargaPorConsultor(filas ?? []), [filas]);
+  const responsablesDestino = (usuariosReasignar ?? []).filter((u) => u.activo && puedeSerResponsable(u.rol));
+
+  const toggleSeleccion = (id: string) => {
+    setSeleccion((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
+  const confirmarReasignacion = async () => {
+    setAvisoReasignar(null);
+    try {
+      const r = await reasignar.mutateAsync({ alumnoIds: [...seleccion], consultorId: destino });
+      setAvisoReasignar(
+        `${r.reasignados} reasignado${r.reasignados === 1 ? '' : 's'}` +
+        (r.sinCambio ? ` · ${r.sinCambio} ya estaba${r.sinCambio === 1 ? '' : 'n'} con ese consultor` : ''),
+      );
+      setSeleccion(new Set());
+    } catch (err) {
+      setAvisoReasignar(err instanceof Error ? err.message : 'No se pudo reasignar.');
+    }
+  };
+
   if (verPapelera) return <Papelera onVolver={() => setVerPapelera(false)} />;
 
   return (
@@ -276,6 +330,11 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
         descripcion="El panel de la cartera: los trabados gritan arriba; los que van bien no hacen ruido."
         accion={
           <div className="flex items-center gap-2">
+            {puedeReasignar && (
+              <Button variant="ghost" onClick={() => { setReasignando((v) => !v); setSeleccion(new Set()); setAvisoReasignar(null); }}>
+                <UserRound size={14} /><span className="ml-1.5">{reasignando ? 'Salir de reasignar' : 'Reasignar'}</span>
+              </Button>
+            )}
             {puedeEliminar && (
               <Button variant="ghost" onClick={() => setVerPapelera(true)}>
                 <Trash2 size={14} /><span className="ml-1.5">Papelera</span>
@@ -290,6 +349,30 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
       />
 
       {creando && <FormAlta onCreado={(id) => { setCreando(false); onAbrir(id); }} />}
+
+      {reasignando && (
+        <Card className="flex flex-wrap items-center gap-3 p-4">
+          <span className="text-sm font-600 text-navy-600 dark:text-navy-200">
+            {seleccion.size} alumno{seleccion.size === 1 ? '' : 's'} seleccionado{seleccion.size === 1 ? '' : 's'} →
+          </span>
+          <Select value={destino} onChange={(e) => setDestino(e.target.value)}>
+            <option value="">Consultor destino…</option>
+            {responsablesDestino.map((u) => {
+              const c = carga.get(u.id);
+              return (
+                <option key={u.id} value={u.id}>
+                  {u.nombre} — {c?.total ?? 0} alumno{(c?.total ?? 0) === 1 ? '' : 's'}{c?.rojos ? ` · ${c.rojos} en rojo` : ''}
+                </option>
+              );
+            })}
+          </Select>
+          <Button onClick={() => void confirmarReasignacion()} disabled={seleccion.size === 0 || !destino || reasignar.isPending}>
+            {reasignar.isPending ? <Spinner className="h-4 w-4" /> : <Check size={14} />}
+            <span className="ml-1.5">Reasignar</span>
+          </Button>
+          {avisoReasignar && <span className="text-sm text-navy-500 dark:text-navy-300">{avisoReasignar}</span>}
+        </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Input placeholder="Buscar por nombre o marca…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
@@ -337,6 +420,7 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-navy-100 text-left text-xs uppercase tracking-wide text-navy-400 dark:border-navy-700">
+                {reasignando && <th className="px-3 py-3" aria-label="Seleccionar" />}
                 <th className="px-4 py-3 font-600">Alumno</th>
                 <th className="px-3 py-3 font-600">Estado</th>
                 <th className="px-3 py-3 font-600">Fase</th>
@@ -348,7 +432,15 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
               </tr>
             </thead>
             <tbody>
-              {filas.map((f) => <FilaPanel key={f.alumno.id} fila={f} onAbrir={onAbrir} />)}
+              {filas.map((f) => (
+                <FilaPanel
+                  key={f.alumno.id}
+                  fila={f}
+                  onAbrir={onAbrir}
+                  seleccionado={reasignando ? seleccion.has(f.alumno.id) : undefined}
+                  onSeleccionar={reasignando ? toggleSeleccion : undefined}
+                />
+              ))}
             </tbody>
           </table>
         </Card>
@@ -357,12 +449,29 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
   );
 }
 
-function FilaPanel({ fila: f, onAbrir }: { fila: FilaPanelUI; onAbrir: (id: string) => void }) {
+function FilaPanel({ fila: f, onAbrir, seleccionado, onSeleccionar }: {
+  fila: FilaPanelUI;
+  onAbrir: (id: string) => void;
+  /** Modo reasignación (11C): con onSeleccionar la fila muestra su casilla. */
+  seleccionado?: boolean;
+  onSeleccionar?: (id: string) => void;
+}) {
   return (
     <tr
       onClick={() => onAbrir(f.alumno.id)}
       className="cursor-pointer border-b border-navy-50 transition last:border-0 hover:bg-navy-50/60 dark:border-navy-800 dark:hover:bg-navy-800/40"
     >
+      {onSeleccionar && (
+        <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            className="accent-gold-500"
+            checked={seleccionado ?? false}
+            onChange={() => onSeleccionar(f.alumno.id)}
+            aria-label={`Seleccionar a ${f.alumno.nombre}`}
+          />
+        </td>
+      )}
       <td className="px-4 py-3">
         <p className="font-600 text-navy-900 dark:text-navy-50">
           {f.alumno.nombre}

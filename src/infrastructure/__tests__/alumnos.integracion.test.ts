@@ -202,6 +202,129 @@ describe('Alumnos · alta con consultorId elegido (11B)', () => {
   });
 });
 
+// ───────── Ticket 11C: reasignación de cartera ─────────
+describe('Alumnos · reasignación (11C)', () => {
+  it('el nuevo lo ve al instante, el anterior deja de verlo, y el historial queda con dos tramos correctos', async () => {
+    const { repos, reposAuth, consu, otro, alcanceConsu, alcanceOtro } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
+
+    const r = await ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: otro.id });
+    expect(r).toEqual({ reasignados: 1, sinCambio: 0 });
+
+    // El ámbito derivado hace todo el trabajo: el nuevo entra, el anterior no.
+    expect(await ua.obtenerAlumno(repos, alcanceOtro, alumno.id)).not.toBeNull();
+    expect(await ua.obtenerAlumno(repos, alcanceConsu, alumno.id)).toBeNull();
+
+    const tramos = await repos.historial.listarPorAlumno(alumno.id);
+    expect(tramos).toHaveLength(2);
+    expect(tramos[0]!.consultorId).toBe(consu.id);
+    expect(tramos[0]!.hasta).not.toBeNull(); // cerrado
+    expect(tramos[1]!.consultorId).toBe(otro.id);
+    expect(tramos[1]!.hasta).toBeNull(); // vigente
+  });
+
+  it('nunca queda un tramo vigente duplicado, ni tras reasignar varias veces', async () => {
+    const { repos, reposAuth, admin, consu, otro } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
+    await ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: otro.id });
+    await ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: admin.id });
+    await ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: consu.id });
+
+    const tramos = await repos.historial.listarPorAlumno(alumno.id);
+    expect(tramos).toHaveLength(4);
+    expect(tramos.filter((t) => t.hasta === null)).toHaveLength(1);
+    expect(tramos.at(-1)!.consultorId).toBe(consu.id);
+  });
+
+  it('reasignar al mismo consultor: sin efecto, sin tramo nuevo, sin error', async () => {
+    const { repos, reposAuth, consu } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
+    const r = await ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: consu.id });
+    expect(r).toEqual({ reasignados: 0, sinCambio: 1 });
+    expect(await repos.historial.listarPorAlumno(alumno.id)).toHaveLength(1);
+  });
+
+  it('destino inexistente, con rol sin cartera o dado de baja → rechazo', async () => {
+    const { repos, reposAuth, consu, otro } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
+    await expect(
+      ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: 'usr-fantasma' }),
+    ).rejects.toThrow(/habilitado/);
+    const { usuario: lector } = await uauth.crearUsuario(reposAuth, {
+      email: 'lector2@activos.com', nombre: 'Lector', rol: 'LECTOR', password: 'Clave1234',
+    });
+    await expect(
+      ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: lector.id }),
+    ).rejects.toThrow(/habilitado/);
+    await uauth.darDeBaja(reposAuth, otro.id);
+    await expect(
+      ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: otro.id }),
+    ).rejects.toThrow(/habilitado/);
+    // Nada se movió: el alumno sigue con su consultor y un solo tramo.
+    expect((await repos.alumnos.obtener(alumno.id))!.consultorId).toBe(consu.id);
+    expect(await repos.historial.listarPorAlumno(alumno.id)).toHaveLength(1);
+  });
+
+  it('un alumno en la papelera frena el LOTE entero: no se mueve ninguno', async () => {
+    const { repos, reposAuth, admin, consu, otro } = await setup();
+    const vivo = await ua.crearAlumno(repos, consu, FICHA);
+    const borrado = await ua.crearAlumno(repos, consu, { ...FICHA, nombre: 'Marta' });
+    await ua.eliminarAlumno(repos, alcanceDeUsuario({ id: admin.id, rol: 'ADMIN' }), admin.id, borrado.id);
+
+    await expect(
+      ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [vivo.id, borrado.id], consultorId: otro.id }),
+    ).rejects.toThrow(/inexistente/i);
+    // Todo-o-nada: el vivo tampoco se movió.
+    expect((await repos.alumnos.obtener(vivo.id))!.consultorId).toBe(consu.id);
+    expect(await repos.historial.listarPorAlumno(vivo.id)).toHaveLength(1);
+  });
+
+  it('lote múltiple: cada alumno abre y cierra su propio tramo', async () => {
+    const { repos, reposAuth, consu, otro } = await setup();
+    const a1 = await ua.crearAlumno(repos, consu, FICHA);
+    const a2 = await ua.crearAlumno(repos, consu, { ...FICHA, nombre: 'Marta' });
+    const r = await ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [a1.id, a2.id], consultorId: otro.id });
+    expect(r).toEqual({ reasignados: 2, sinCambio: 0 });
+    for (const id of [a1.id, a2.id]) {
+      const tramos = await repos.historial.listarPorAlumno(id);
+      expect(tramos).toHaveLength(2);
+      expect(tramos.filter((t) => t.hasta === null)).toHaveLength(1);
+      expect(tramos.at(-1)!.consultorId).toBe(otro.id);
+    }
+  });
+
+  it('los registros históricos mantienen su autor: el nuevo lee la bitácora del anterior', async () => {
+    const { repos, reposAuth, consu, otro, alcanceConsu, alcanceOtro } = await setup();
+    const alumno = await ua.crearAlumno(repos, consu, FICHA);
+    await ua.cargarBitacora(repos, alcanceConsu, consu.id, alumno.id, {
+      texto: 'Sesión 1: revisamos la cobranza.', tipoContacto: 'consultoria_1a1',
+    });
+    await ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: [alumno.id], consultorId: otro.id });
+
+    // El conocimiento no se pierde (el punto del 10B): el nuevo lee la
+    // historia previa, y cada entrada conserva a su autor original.
+    const bitacora = await ua.bitacoraDeAlumno(repos, reposAuth.usuarios, alcanceOtro, alumno.id);
+    expect(bitacora.entradas).toHaveLength(1);
+    expect(bitacora.entradas[0]!.usuarioId).toBe(consu.id);
+  });
+
+  it('cambiarRol con cartera hacia un rol sin cartera se bloquea; tras reasignar, pasa', async () => {
+    const { repos, reposAuth, consu, otro } = await setup();
+    await ua.crearAlumno(repos, consu, FICHA);
+    const contar = async (usuarioId: string) => (await repos.alumnos.listar({ consultorId: usuarioId })).length;
+
+    // CONSULTOR → LECTOR con 1 alumno: los alumnos quedarían colgando.
+    await expect(uauth.cambiarRol(reposAuth, consu.id, 'LECTOR', contar)).rejects.toThrow(/reasign/i);
+    // CONSULTOR → ADMIN con cartera: ambos roles la pueden tener — no se bloquea.
+    await uauth.cambiarRol(reposAuth, consu.id, 'ADMIN', contar);
+    await uauth.cambiarRol(reposAuth, consu.id, 'CONSULTOR', contar);
+    // Con la cartera reasignada, el pase a LECTOR sale.
+    const alumnos = await repos.alumnos.listar({ consultorId: consu.id });
+    await ua.reasignarAlumnos(repos, reposAuth.usuarios, { alumnoIds: alumnos.map((a) => a.id), consultorId: otro.id });
+    await expect(uauth.cambiarRol(reposAuth, consu.id, 'LECTOR', contar)).resolves.toBeDefined();
+  });
+});
+
 describe('Alumnos · ámbito por fila aplicado en la CONSULTA', () => {
   it('un consultor solo lista su cartera', async () => {
     const { repos, consu, otro, alcanceConsu, alcanceOtro } = await setup();

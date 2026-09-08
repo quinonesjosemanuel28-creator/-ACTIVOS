@@ -312,6 +312,64 @@ describe('HTTP · rutas privadas: acción por rol', () => {
   });
 });
 
+// Ticket 11C: la reasignación es acción propia (solo ADMIN) con endpoint propio.
+describe('HTTP · reasignación de cartera (11C)', () => {
+  it('ADMIN reasigna: el nuevo lo ve, el anterior recibe 404', async () => {
+    const alta = await fetch(`${ctx.base}/api/alumnos`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.consultor },
+      body: JSON.stringify({ ...FICHA, nombre: 'Movido' }),
+    });
+    const alumno = (await alta.json()) as { id: string };
+
+    const res = await fetch(`${ctx.base}/api/alumnos/reasignar`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.admin },
+      body: JSON.stringify({ alumnoIds: [alumno.id], consultorId: ctx.ids.otroConsultor }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ reasignados: 1, sinCambio: 0 });
+
+    // El ámbito derivado, de punta a punta: 404 para el anterior (como si no
+    // existiera), 200 para el nuevo.
+    expect((await fetch(`${ctx.base}/api/alumnos/${alumno.id}`, { headers: { cookie: ctx.cookies.consultor } })).status).toBe(404);
+    expect((await fetch(`${ctx.base}/api/alumnos/${alumno.id}`, { headers: { cookie: ctx.cookies.otroConsultor } })).status).toBe(200);
+  });
+
+  it('CONSULTOR no puede reasignar: 403 en el endpoint, y el patch ignora consultorId', async () => {
+    const alta = await fetch(`${ctx.base}/api/alumnos`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.consultor },
+      body: JSON.stringify({ ...FICHA, nombre: 'Quieto' }),
+    });
+    const alumno = (await alta.json()) as { id: string };
+
+    const porEndpoint = await fetch(`${ctx.base}/api/alumnos/reasignar`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.consultor },
+      body: JSON.stringify({ alumnoIds: [alumno.id], consultorId: ctx.ids.otroConsultor }),
+    });
+    expect(porEndpoint.status).toBe(403);
+
+    const porPatch = await fetch(`${ctx.base}/api/alumnos/${alumno.id}`, {
+      method: 'PUT', headers: { ...json, cookie: ctx.cookies.consultor },
+      body: JSON.stringify({ consultorId: ctx.ids.otroConsultor }),
+    });
+    expect(porPatch.status).toBe(200); // Zod lo descarta: el PUT no reasigna
+    const tras = (await porPatch.json()) as { consultorId: string };
+    expect(tras.consultorId).toBe(ctx.ids.consultor);
+  });
+
+  it('cambiarle el rol a un consultor con cartera → 409 con el conteo', async () => {
+    await fetch(`${ctx.base}/api/alumnos`, {
+      method: 'POST', headers: { ...json, cookie: ctx.cookies.consultor },
+      body: JSON.stringify({ ...FICHA, nombre: 'Ancla' }),
+    });
+    const res = await fetch(`${ctx.base}/api/usuarios/${ctx.ids.consultor}/rol`, {
+      method: 'PUT', headers: { ...json, cookie: ctx.cookies.admin },
+      body: JSON.stringify({ rol: 'LECTOR' }),
+    });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toMatch(/reasign/i);
+  });
+});
+
 describe('HTTP · rutas privadas: ámbito por fila de punta a punta', () => {
   it('cada consultor lista SOLO su cartera, y ?consultor= ajeno no la ensancha', async () => {
     await crearAlumnoConToken(ctx.cookies.otroConsultor); // alumno del otro

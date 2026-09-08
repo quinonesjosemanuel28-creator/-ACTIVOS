@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Sidebar, MobileNav } from '../components/Sidebar';
-import { armarPatch, faltantesDe } from '../views/VistaAlumnos';
+import { armarPatch, cargaPorConsultor, faltantesDe } from '../views/VistaAlumnos';
 import { estadoDesdeRespuestas } from '../views/VistaFormulario';
 
 describe('Navegación · Alumnos', () => {
@@ -102,5 +102,27 @@ describe('Panel · faltantes con el texto de la pregunta (guion de la llamada)',
     expect(faltantes).toContain('¿Con cuánto capital estás trabajando actualmente?');
     expect(faltantes).not.toContain('¿Qué porcentaje de tus clientes está atrasado hoy?');
     expect(faltantes).toHaveLength(18);
+  });
+});
+
+describe('Panel · cargaPorConsultor (vista de reasignación, 11C)', () => {
+  const fila = (consultorId: string, salud: 'VERDE' | 'NARANJA' | 'ROJO' | 'NEUTRO') =>
+    ({ alumno: { consultorId }, salud: { salud } }) as Parameters<typeof cargaPorConsultor>[0][number];
+
+  it('cuenta alumnos y rojos por consultor, sobre los datos que ya viajan al panel', () => {
+    const carga = cargaPorConsultor([
+      fila('matias', 'VERDE'),
+      fila('matias', 'ROJO'),
+      fila('matias', 'NARANJA'),
+      fila('ale', 'ROJO'),
+      fila('ale', 'ROJO'),
+    ]);
+    expect(carga.get('matias')).toEqual({ total: 3, rojos: 1 });
+    expect(carga.get('ale')).toEqual({ total: 2, rojos: 2 });
+    expect(carga.get('nadie')).toBeUndefined();
+  });
+
+  it('con el panel vacío devuelve un mapa vacío (asignar a un consultor sin alumnos es válido)', () => {
+    expect(cargaPorConsultor([]).size).toBe(0);
   });
 });

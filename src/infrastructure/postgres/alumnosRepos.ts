@@ -179,6 +179,35 @@ export function crearAlumnosRepoPg(pool: Pool): AlumnosRepo {
       // El WHERE exige papelera: nunca se borra físico algo que sigue vivo.
       await pool.query('DELETE FROM alumnos WHERE id = $1 AND eliminado_en IS NOT NULL', [id]);
     },
+    async reasignar(cambios, ahora) {
+      // Cerrar tramo + abrir tramo + consultor_id, todo-o-nada (regla dura del
+      // ticket 11C). Mismo precedente que guardarCompleto: BEGIN/COMMIT/ROLLBACK.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const c of cambios) {
+          await client.query(
+            'UPDATE alumno_consultor_historial SET hasta = $1 WHERE alumno_id = $2 AND hasta IS NULL',
+            [ahora, c.alumnoId],
+          );
+          await client.query(
+            `INSERT INTO alumno_consultor_historial (id, alumno_id, consultor_id, desde, hasta, creado_en)
+             VALUES ($1,$2,$3,$4,NULL,$5)`,
+            [c.tramoId, c.alumnoId, c.consultorId, ahora, ahora],
+          );
+          await client.query(
+            'UPDATE alumnos SET consultor_id = $1 WHERE id = $2 AND eliminado_en IS NULL',
+            [c.consultorId, c.alumnoId],
+          );
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
   };
 }
 

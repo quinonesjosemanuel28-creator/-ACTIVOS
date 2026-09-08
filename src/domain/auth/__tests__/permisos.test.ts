@@ -43,11 +43,18 @@ describe('Auth · matriz de permisos (mínimo privilegio)', () => {
     expect(puede('EDITOR', 'eliminar_alumnos')).toBe(false);
   });
 
+  it('reasignar_alumnos es SOLO de ADMIN (11C): si un consultor pudiera, se regalaría alumnos ajenos', () => {
+    expect(puede('ADMIN', 'reasignar_alumnos')).toBe(true);
+    expect(puede('CONSULTOR', 'reasignar_alumnos')).toBe(false);
+    expect(puede('LECTOR', 'reasignar_alumnos')).toBe(false);
+    expect(puede('EDITOR', 'reasignar_alumnos')).toBe(false);
+  });
+
   it('la escalera del contable es acumulativa: LECTOR ⊂ EDITOR ⊂ ADMIN', () => {
     expect(accionesDe('LECTOR')).toEqual(['ver']);
     expect(accionesDe('EDITOR')).toEqual(['ver', 'editar']);
     expect(accionesDe('ADMIN')).toEqual([
-      'ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos',
+      'ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos', 'reasignar_alumnos',
     ]);
   });
 

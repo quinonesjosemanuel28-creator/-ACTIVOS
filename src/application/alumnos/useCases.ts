@@ -97,6 +97,7 @@ import {
   type FichaPublica,
   notaResolucionInputSchema,
   bitacoraInputSchema,
+  reasignacionInputSchema,
 } from './schemas';
 import type { UsuariosRepo } from '../auth/ports';
 import type { FiltrosAlumnos, ReposAlumnos } from './ports';
@@ -182,6 +183,43 @@ export async function crearAlumno(
     creadoEn: ahora,
   });
   return alumno;
+}
+
+/**
+ * Reasignación de cartera (ticket 11C). Solo llega por la ruta con
+ * 'reasignar_alumnos' (ADMIN): NO viaja por el patch de edición, porque con
+ * 'editar_alumnos' un consultor podría regalarse un alumno ajeno.
+ *
+ * Valida todo ANTES de escribir (destino habilitado, cada alumno vivo y fuera
+ * de la papelera) y aplica el lote entero en una transacción del repo: si un
+ * alumno del lote no pasa, no se mueve ninguno.
+ */
+export async function reasignarAlumnos(
+  repos: ReposAlumnos,
+  usuarios: UsuariosRepo,
+  entrada: unknown,
+  ahora = ahoraIso(),
+): Promise<{ reasignados: number; sinCambio: number }> {
+  const input = reasignacionInputSchema.parse(entrada);
+  const destino = await usuarios.obtenerPorId(input.consultorId);
+  if (!destino || !destino.activo || !puedeSerResponsable(destino.rol)) {
+    throw new ErrorAlumnos('VALIDACION', 'El consultor destino no existe o no tiene un rol habilitado.');
+  }
+  const cambios: { alumnoId: string; consultorId: string; tramoId: string }[] = [];
+  let sinCambio = 0;
+  for (const alumnoId of input.alumnoIds) {
+    // obtener() ya excluye la papelera: una ficha eliminada no admite operaciones.
+    const alumno = await repos.alumnos.obtener(alumnoId);
+    if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
+    // Mismo consultor: sin efecto, sin tramo nuevo, sin error (borde del ticket).
+    if (alumno.consultorId === destino.id) {
+      sinCambio += 1;
+      continue;
+    }
+    cambios.push({ alumnoId: alumno.id, consultorId: destino.id, tramoId: randomUUID() });
+  }
+  if (cambios.length > 0) await repos.alumnos.reasignar(cambios, ahora);
+  return { reasignados: cambios.length, sinCambio };
 }
 
 /** Listado de la cartera. El ámbito manda sobre lo que pida el cliente. */

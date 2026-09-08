@@ -337,6 +337,13 @@ export function useCrearAlumno() {
   const inval = useInvalidarAlumnos();
   return useMutation({ mutationFn: (a: unknown) => api.crearAlumno(a), onSuccess: inval });
 }
+export function useReasignarAlumnos() {
+  const inval = useInvalidarAlumnos();
+  return useMutation({
+    mutationFn: (v: { alumnoIds: string[]; consultorId: string }) => api.reasignarAlumnos(v.alumnoIds, v.consultorId),
+    onSuccess: inval,
+  });
+}
 export function useEditarAlumno() {
   const inval = useInvalidarAlumnos();
   return useMutation({ mutationFn: (v: { id: string; data: unknown }) => api.editarAlumno(v.id, v.data), onSuccess: inval });

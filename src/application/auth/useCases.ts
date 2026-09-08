@@ -16,6 +16,7 @@ import {
   aUsuarioPublico,
   esRol,
   normalizarEmail,
+  puedeSerResponsable,
   type Rol,
   type Sesion,
   type Usuario,
@@ -162,13 +163,32 @@ export async function listarUsuarios(repos: ReposAuth): Promise<UsuarioPublico[]
   return (await repos.usuarios.listar()).map(aUsuarioPublico);
 }
 
-/** Cambia el rol de un usuario. No permite quitar el último ADMIN activo. */
-export async function cambiarRol(repos: ReposAuth, idUsuario: string, rol: unknown): Promise<UsuarioPublico> {
+/**
+ * Cambia el rol de un usuario. No permite quitar el último ADMIN activo.
+ *
+ * `contarCartera` (ticket 11C): cuántos alumnos vivos tiene asignados — lo
+ * inyecta el server desde el módulo de alumnos. Si el rol NUEVO no puede
+ * tener cartera, el cambio se bloquea con cartera asignada: esos alumnos
+ * quedarían colgando de un responsable que ya no puede ni verlos. Un pase
+ * entre roles con cartera (CONSULTOR ↔ ADMIN) no se bloquea.
+ */
+export async function cambiarRol(
+  repos: ReposAuth,
+  idUsuario: string,
+  rol: unknown,
+  contarCartera?: (usuarioId: string) => Promise<number>,
+): Promise<UsuarioPublico> {
   if (!esRol(rol)) throw new ErrorAuth('VALIDACION', 'Rol inválido.');
   const usuario = await repos.usuarios.obtenerPorId(idUsuario);
   if (!usuario) throw new ErrorAuth('NO_ENCONTRADO', 'Usuario inexistente.');
   if (usuario.rol === 'ADMIN' && rol !== 'ADMIN' && usuario.activo) {
     await asegurarNoEsUltimoAdmin(repos);
+  }
+  if (contarCartera && !puedeSerResponsable(rol) && puedeSerResponsable(usuario.rol)) {
+    const n = await contarCartera(idUsuario);
+    if (n > 0) {
+      throw new ErrorAuth('CONFLICTO', `Tiene ${n} alumno${n === 1 ? '' : 's'} en su cartera: primero reasigná sus alumnos.`);
+    }
   }
   const actualizado: Usuario = { ...usuario, rol };
   await repos.usuarios.guardar(actualizado);

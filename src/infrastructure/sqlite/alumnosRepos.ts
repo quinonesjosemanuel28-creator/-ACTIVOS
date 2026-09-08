@@ -27,6 +27,7 @@ import { diasEntre } from '../../domain/alumnos/plan';
 import type { Accion, CambioFechaPlan, Checkin, Kr, Medicion, Okr, Plan, PlanCompleto, PlanDocumento, TokenSeguimiento } from '../../domain/alumnos/plan';
 import type {
   AlumnosRepo,
+  CambioAsignacion,
   CheckinsRepo,
   ContactosRepo,
   DiagnosticosRepo,
@@ -189,6 +190,23 @@ export function crearAlumnosRepo(db: Database.Database): AlumnosRepo {
     async eliminarDefinitivo(id) {
       // El WHERE exige papelera: nunca se borra físico algo que sigue vivo.
       db.prepare('DELETE FROM alumnos WHERE id = ? AND eliminado_en IS NOT NULL').run(id);
+    },
+    async reasignar(cambios, ahora) {
+      // Cerrar tramo + abrir tramo + consultor_id, todo-o-nada (regla dura del
+      // ticket 11C). Mismo precedente que cambiarFechaTx: db.transaction.
+      const tx = db.transaction((lote: readonly CambioAsignacion[]) => {
+        for (const c of lote) {
+          db.prepare('UPDATE alumno_consultor_historial SET hasta = ? WHERE alumno_id = ? AND hasta IS NULL')
+            .run(ahora, c.alumnoId);
+          db.prepare(
+            `INSERT INTO alumno_consultor_historial (id, alumno_id, consultor_id, desde, hasta, creado_en)
+             VALUES (?,?,?,?,NULL,?)`,
+          ).run(c.tramoId, c.alumnoId, c.consultorId, ahora, ahora);
+          db.prepare('UPDATE alumnos SET consultor_id = ? WHERE id = ? AND eliminado_en IS NULL')
+            .run(c.consultorId, c.alumnoId);
+        }
+      });
+      tx(cambios);
     },
   };
 }

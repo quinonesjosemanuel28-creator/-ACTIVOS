@@ -175,6 +175,16 @@ export type AlumnoInput = z.infer<typeof alumnoInputSchema>;
 
 /** Edición de la ficha: los mismos campos, todos opcionales — sin consultorId. */
 export const alumnoPatchSchema = fichaAlumnoSchema.partial();
+
+/**
+ * Reasignación (ticket 11C): uno o varios alumnos a un mismo consultor. El
+ * lote entero viaja junto porque se aplica en UNA transacción del repo.
+ */
+export const reasignacionInputSchema = z.object({
+  alumnoIds: z.array(z.string().trim().min(1)).min(1, 'Elegí al menos un alumno').max(100),
+  consultorId: z.string().trim().min(1, 'Falta el consultor destino'),
+});
+export type ReasignacionInput = z.infer<typeof reasignacionInputSchema>;
 export type AlumnoPatch = z.infer<typeof alumnoPatchSchema>;
 
 // ───────────────────────── Panel de control (ticket 7) ─────────────────────────

@@ -360,6 +360,10 @@ export const api = {
   urlDocumento: (id: string) => `/api/documentos/${id}`,
   alumno: (id: string) => req<Alumno>(`/alumnos/${id}`),
   crearAlumno: (a: unknown) => req<Alumno>('/alumnos', { method: 'POST', body: JSON.stringify(a) }),
+  reasignarAlumnos: (alumnoIds: string[], consultorId: string) =>
+    req<{ reasignados: number; sinCambio: number }>('/alumnos/reasignar', {
+      method: 'POST', body: JSON.stringify({ alumnoIds, consultorId }),
+    }),
   editarAlumno: (id: string, a: unknown) => req<Alumno>(`/alumnos/${id}`, { method: 'PUT', body: JSON.stringify(a) }),
   emitirLinkDiagnostico: (alumnoId: string) =>
     req<TokenDiagnostico>(`/alumnos/${alumnoId}/token`, { method: 'POST' }),

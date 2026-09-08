@@ -267,7 +267,13 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
 
   app.get('/api/usuarios', requiere('gestionar_usuarios'), h(() => uauth.listarUsuarios(reposAuth)));
   app.post('/api/usuarios', requiere('gestionar_usuarios'), h((req) => uauth.crearUsuario(reposAuth, req.body)));
-  app.put('/api/usuarios/:id/rol', requiere('gestionar_usuarios'), h((req) => uauth.cambiarRol(reposAuth, param(req, 'id'), req.body?.rol)));
+  // El contador de cartera (ticket 11C) cruza módulos a propósito: un rol sin
+  // cartera no puede quedarse con alumnos asignados, y el que lo sabe es el
+  // módulo de alumnos. listar() ya excluye la papelera.
+  app.put('/api/usuarios/:id/rol', requiere('gestionar_usuarios'), h((req) => uauth.cambiarRol(
+    reposAuth, param(req, 'id'), req.body?.rol,
+    async (usuarioId) => (await reposAlumnos.alumnos.listar({ consultorId: usuarioId })).length,
+  )));
   app.delete('/api/usuarios/:id', requiere('gestionar_usuarios'), h((req) => uauth.darDeBaja(reposAuth, param(req, 'id'))));
   app.post('/api/usuarios/:id/reactivar', requiere('gestionar_usuarios'), h((req) => uauth.reactivar(reposAuth, param(req, 'id'))));
   app.post('/api/usuarios/:id/reset-password', requiere('gestionar_usuarios'), h((req) => uauth.resetearPassword(reposAuth, param(req, 'id'))));
@@ -435,6 +441,12 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   // por rol si puede elegir otro consultor, y valida el destino contra usuarios.
   app.post('/api/alumnos', requiere('editar_alumnos'), h((req, res) =>
     ual.crearAlumno(reposAlumnos, usuarioDe(res), req.body, reposAuth.usuarios),
+  ));
+  // Reasignación (ticket 11C): acción propia, solo ADMIN. NO viaja por el PUT
+  // de la ficha: con 'editar_alumnos' un consultor podría regalarse un alumno
+  // ajeno o desprenderse de uno propio. Antes de /:id por el matcheo.
+  app.post('/api/alumnos/reasignar', requiere('reasignar_alumnos'), h((req) =>
+    ual.reasignarAlumnos(reposAlumnos, reposAuth.usuarios, req.body),
   ));
   app.get('/api/alumnos/:id', requiere('ver_alumnos'), h(async (req, res) => {
     const alumno = await ual.obtenerAlumno(reposAlumnos, alcanceDe(res), param(req, 'id'));

@@ -50,6 +50,23 @@ export interface AlumnosRepo {
   restaurar(id: string): Promise<void>;
   /** Borrado FÍSICO, con cascada por FK. Solo actúa sobre filas ya en papelera. */
   eliminarDefinitivo(id: string): Promise<void>;
+  /**
+   * Reasignación (ticket 11C): por cada cambio cierra el tramo vigente del
+   * historial, abre el nuevo y actualiza `consultor_id` — TODO en UNA
+   * transacción. Si un paso falla no se aplica ninguno: un historial a medias
+   * miente sobre quién atendió al alumno. El caso de uso valida antes
+   * (destino habilitado, alumno fuera de la papelera, no-op si ya lo tiene).
+   */
+  reasignar(cambios: readonly CambioAsignacion[], ahora: string): Promise<void>;
+}
+
+/** Un alumno que cambia de consultor responsable (ticket 11C). */
+export interface CambioAsignacion {
+  alumnoId: string;
+  /** Consultor destino, ya validado por el caso de uso. */
+  consultorId: string;
+  /** Id del tramo nuevo del historial (lo genera el caso de uso). */
+  tramoId: string;
 }
 
 export interface DiagnosticosRepo {
