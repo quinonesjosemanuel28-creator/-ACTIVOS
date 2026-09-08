@@ -8,6 +8,7 @@ import {
   esRol,
   normalizarEmail,
   puede,
+  puedeSerResponsable,
   ROLES,
   TABLAS_SENSIBLES,
   titularForzado,
@@ -54,12 +55,13 @@ describe('Auth · matriz de permisos (mínimo privilegio)', () => {
     expect(accionesDe('LECTOR')).toEqual(['ver']);
     expect(accionesDe('EDITOR')).toEqual(['ver', 'editar']);
     expect(accionesDe('ADMIN')).toEqual([
-      'ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos', 'reasignar_alumnos',
+      'ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos', 'reasignar_alumnos', 'registrar_seguimiento',
     ]);
   });
 
   it('esRol valida entradas', () => {
-    expect(ROLES).toEqual(['LECTOR', 'EDITOR', 'ADMIN', 'CONSULTOR']);
+    expect(ROLES).toEqual(['LECTOR', 'EDITOR', 'ADMIN', 'CONSULTOR', 'OBSERVADOR']);
+    expect(esRol('OBSERVADOR')).toBe(true);
     expect(esRol('ADMIN')).toBe(true);
     expect(esRol('CONSULTOR')).toBe(true);
     expect(esRol('root')).toBe(false);
@@ -78,7 +80,7 @@ describe('Auth · CONSULTOR (regla dura: cero contabilidad)', () => {
   it('puede ver y editar alumnos', () => {
     expect(puede('CONSULTOR', 'ver_alumnos')).toBe(true);
     expect(puede('CONSULTOR', 'editar_alumnos')).toBe(true);
-    expect(accionesDe('CONSULTOR')).toEqual(['ver_alumnos', 'editar_alumnos']);
+    expect(accionesDe('CONSULTOR')).toEqual(['ver_alumnos', 'editar_alumnos', 'registrar_seguimiento']);
   });
 
   it('NO es un escalón de la escalera del contable: no contiene a LECTOR', () => {
@@ -94,6 +96,45 @@ describe('Auth · CONSULTOR (regla dura: cero contabilidad)', () => {
       expect(puede(rol, 'ver_alumnos')).toBe(false);
       expect(puede(rol, 'editar_alumnos')).toBe(false);
     }
+  });
+});
+
+describe('Auth · OBSERVADOR (ticket 11A)', () => {
+  it('solo lectura sobre la cartera + registrar seguimiento — nada de escritura', () => {
+    expect(accionesDe('OBSERVADOR')).toEqual(['ver_alumnos', 'registrar_seguimiento']);
+    expect(puede('OBSERVADOR', 'editar_alumnos')).toBe(false);
+    expect(puede('OBSERVADOR', 'eliminar_alumnos')).toBe(false);
+    expect(puede('OBSERVADOR', 'reasignar_alumnos')).toBe(false);
+  });
+
+  it('NO puede nada del contable, ni siquiera ver (regla dura, como CONSULTOR)', () => {
+    expect(puede('OBSERVADOR', 'ver')).toBe(false);
+    expect(puede('OBSERVADOR', 'editar')).toBe(false);
+    expect(puede('OBSERVADOR', 'importar')).toBe(false);
+    expect(puede('OBSERVADOR', 'gestionar_usuarios')).toBe(false);
+  });
+
+  it('su ámbito es TODA la cartera: para eso existe', () => {
+    expect(ambitoDe('OBSERVADOR')).toBe('todos');
+  });
+
+  it('NO puede ser responsable de cartera: ni el alta (11B) ni la reasignación (11C) lo aceptan como destino', () => {
+    expect(puedeSerResponsable('OBSERVADOR')).toBe(false);
+    expect(puedeSerResponsable('CONSULTOR')).toBe(true);
+    expect(puedeSerResponsable('ADMIN')).toBe(true);
+    expect(puedeSerResponsable('LECTOR')).toBe(false);
+  });
+
+  it('regresión: la matriz COMPLETA, rol por rol y acción por acción', () => {
+    // La foto entera. Si un cambio de permisos mueve cualquier celda sin
+    // tocar este test, el test lo grita — esa es exactamente su función.
+    expect(Object.fromEntries(ROLES.map((rol) => [rol, accionesDe(rol)]))).toEqual({
+      LECTOR: ['ver'],
+      EDITOR: ['ver', 'editar'],
+      ADMIN: ['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos', 'reasignar_alumnos', 'registrar_seguimiento'],
+      CONSULTOR: ['ver_alumnos', 'editar_alumnos', 'registrar_seguimiento'],
+      OBSERVADOR: ['ver_alumnos', 'registrar_seguimiento'],
+    });
   });
 });
 

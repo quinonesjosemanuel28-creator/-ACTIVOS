@@ -16,6 +16,7 @@ const DESCRIPCION_ROL: Record<Rol, string> = {
   EDITOR: 'Ve todo y carga/edita el día a día',
   ADMIN: 'Todo + importar/resetear + usuarios',
   CONSULTOR: 'Solo su cartera de alumnos · NADA de contabilidad',
+  OBSERVADOR: 'Ve TODA la cartera en solo lectura + bitácora y WhatsApp · NADA de contabilidad',
 };
 
 export function VistaUsuarios() {

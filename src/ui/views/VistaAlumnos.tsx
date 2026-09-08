@@ -268,6 +268,7 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
   const [creando, setCreando] = useState(false);
   const [verPapelera, setVerPapelera] = useState(false);
   const puedeEliminar = usePuede('eliminar_alumnos');
+  const puedeCrear = usePuede('editar_alumnos'); // 11A: el alta es escritura
   // Reasignación (ticket 11C): modo de selección, solo para quien tiene la
   // acción (ADMIN). El candado real está en la ruta; esto es la ventana.
   const puedeReasignar = usePuede('reasignar_alumnos');
@@ -340,10 +341,12 @@ function ListaAlumnos({ onAbrir }: { onAbrir: (id: string) => void }) {
                 <Trash2 size={14} /><span className="ml-1.5">Papelera</span>
               </Button>
             )}
-            <Button onClick={() => setCreando((v) => !v)}>
-              {creando ? <X size={16} /> : <Plus size={16} />}
-              <span className="ml-1.5">{creando ? 'Cancelar' : 'Nuevo alumno'}</span>
-            </Button>
+            {puedeCrear && (
+              <Button onClick={() => setCreando((v) => !v)}>
+                {creando ? <X size={16} /> : <Plus size={16} />}
+                <span className="ml-1.5">{creando ? 'Cancelar' : 'Nuevo alumno'}</span>
+              </Button>
+            )}
           </div>
         }
       />
@@ -667,13 +670,18 @@ function FormAlta({ onCreado }: { onCreado: (id: string) => void }) {
 
 // ───────────────────── Ficha del alumno ─────────────────────
 
-function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
+// Exportada para el test de las diez superficies (11A): se renderiza estática
+// con la cache presembrada y se afirma qué controles existen por rol.
+export function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
   const { data: alumno, isLoading } = useAlumno(id);
   const { data: diagnosticos } = useDiagnosticos(id);
   const { data: planes } = usePlanes(id);
   const cambiarEstado = useCambiarEstadoAlumno();
   const eliminar = useEliminarAlumno();
   const puedeEliminar = usePuede('eliminar_alumnos');
+  // Ticket 11A: la ficha en solo lectura para quien no edita (OBSERVADOR).
+  // El candado real está en cada ruta; esto evita botones que fallan al click.
+  const puedeEditar = usePuede('editar_alumnos');
   const [diagnosticoAbierto, setDiagnosticoAbierto] = useState<string | null>(null);
   // ⚠ ANTES del return temprano: los hooks corren en todos los renders o en
   // ninguno. Ponerlo después rompió la ficha en producción (pantalla blanca):
@@ -715,14 +723,18 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
         accion={
           <div className="flex items-center gap-2">
             <WhatsAppBtn alumno={alumno} krPendiente={krPendiente} />
-            <Select
-              value={alumno.estado}
-              onChange={(e) => void cambiarEstado.mutateAsync({ id: alumno.id, estado: e.target.value as EstadoAlumno })}
-              disabled={cambiarEstado.isPending}
-              title="Estado del alumno: gobierna el semáforo y las alertas"
-            >
-              {ESTADOS_ALUMNO.map((s) => <option key={s} value={s}>{ESTADO_LABEL[s]}</option>)}
-            </Select>
+            {puedeEditar ? (
+              <Select
+                value={alumno.estado}
+                onChange={(e) => void cambiarEstado.mutateAsync({ id: alumno.id, estado: e.target.value as EstadoAlumno })}
+                disabled={cambiarEstado.isPending}
+                title="Estado del alumno: gobierna el semáforo y las alertas"
+              >
+                {ESTADOS_ALUMNO.map((s) => <option key={s} value={s}>{ESTADO_LABEL[s]}</option>)}
+              </Select>
+            ) : (
+              <EstadoBadge estado={alumno.estado} />
+            )}
             {puedeEliminar && (
               <Button variant="ghost" className="text-signal-red" onClick={() => void alPapelera()} disabled={eliminar.isPending} title="Mandar a la papelera (borrado lógico)">
                 <Trash2 size={14} />
@@ -738,7 +750,7 @@ function FichaAlumno({ id, onVolver }: { id: string; onVolver: () => void }) {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <DatosFicha alumno={alumno} />
-        <LinkDiagnostico alumno={alumno} />
+        {puedeEditar && <LinkDiagnostico alumno={alumno} />}
       </div>
 
       <Bitacora alumnoId={alumno.id} />
@@ -795,6 +807,9 @@ function HistorialContactos({ alumnoId }: { alumnoId: string }) {
           {contactos.map((c) => (
             <li key={c.id}>
               {c.contactadoEn.slice(0, 10)} · {c.canal.toLowerCase()}
+              {/* Autor SIEMPRE visible (11A §5.3): su contacto apaga la alerta
+                  del responsable — sin el nombre, se apaga sola y nadie sabe por qué. */}
+              {c.autorNombre && <span className="font-600"> · {c.autorNombre}</span>}
               {c.nota && <span className="text-navy-400"> — {c.nota}</span>}
             </li>
           ))}
@@ -814,6 +829,7 @@ function HistorialContactos({ alumnoId }: { alumnoId: string }) {
 function BarraProgreso({ alumno, vigente }: { alumno: Alumno; vigente: PlanCompleto }) {
   const { data: avance } = useAvancePlan(vigente.plan.id);
   const cambiarFecha = useCambiarFechaInicio();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A: la fecha es escritura
   const [editando, setEditando] = useState(false);
   const [fecha, setFecha] = useState(vigente.plan.fechaInicio);
   const [motivo, setMotivo] = useState('');
@@ -871,9 +887,11 @@ function BarraProgreso({ alumno, vigente }: { alumno: Alumno; vigente: PlanCompl
         </span>
         <span className="ml-auto flex items-center gap-1.5 text-xs text-navy-500 dark:text-navy-300">
           <CalendarDays size={14} /> Arrancó el {vigente.plan.fechaInicio}
-          <Button variant="ghost" size="sm" onClick={() => { setEditando((v) => !v); setFecha(vigente.plan.fechaInicio); setError(null); }}>
-            {editando ? <X size={12} /> : <Pencil size={12} />}
-          </Button>
+          {puedeEditar && (
+            <Button variant="ghost" size="sm" title="Mover la fecha de inicio" onClick={() => { setEditando((v) => !v); setFecha(vigente.plan.fechaInicio); setError(null); }}>
+              {editando ? <X size={12} /> : <Pencil size={12} />}
+            </Button>
+          )}
         </span>
       </div>
 
@@ -925,6 +943,7 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
   const { data: planes } = usePlanes(alumnoId);
   const previa = usePreviaPlan();
   const cargar = useCargarPlan();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A: cargar plan es escritura
 
   const [pegando, setPegando] = useState(false);
   const [texto, setTexto] = useState('');
@@ -964,10 +983,12 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
         <h3 className="flex items-center gap-2 font-display text-lg font-700 text-navy-900 dark:text-navy-50">
           <Target size={18} /> Plan de 90 días
         </h3>
-        <Button variant={vigente ? 'ghost' : 'gold'} onClick={() => { setPegando((v) => !v); setVistaPrevia(null); setError(null); }}>
-          {pegando ? <X size={14} /> : <ClipboardPaste size={14} />}
-          <span className="ml-1">{pegando ? 'Cancelar' : vigente ? 'Cargar otro plan' : 'Cargar plan'}</span>
-        </Button>
+        {puedeEditar && (
+          <Button variant={vigente ? 'ghost' : 'gold'} onClick={() => { setPegando((v) => !v); setVistaPrevia(null); setError(null); }}>
+            {pegando ? <X size={14} /> : <ClipboardPaste size={14} />}
+            <span className="ml-1">{pegando ? 'Cancelar' : vigente ? 'Cargar otro plan' : 'Cargar plan'}</span>
+          </Button>
+        )}
       </div>
 
       {pegando && (
@@ -1063,6 +1084,7 @@ function PlanAlumno({ alumnoId }: { alumnoId: string }) {
 function NotasDelAlumno({ alumno, planId }: { alumno: Alumno; planId: string }) {
   const { data: avance } = useAvancePlan(planId);
   const resolver = useResolverNota();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A: resolver/archivar es del consultor
   const [editando, setEditando] = useState<{ checkinId: string; modo: 'resolver' | 'archivar' } | null>(null);
   const [devolucion, setDevolucion] = useState('');
   const [area, setArea] = useState('');
@@ -1130,8 +1152,12 @@ function NotasDelAlumno({ alumno, planId }: { alumno: Alumno; planId: string }) 
                     WhatsApp
                   </a>
                 )}
-                <Button size="sm" onClick={() => abrirEditor(n.checkinId, 'resolver')}>Responder</Button>
-                <Button size="sm" variant="ghost" onClick={() => abrirEditor(n.checkinId, 'archivar')}>Archivar</Button>
+                {puedeEditar && (
+                  <>
+                    <Button size="sm" onClick={() => abrirEditor(n.checkinId, 'resolver')}>Responder</Button>
+                    <Button size="sm" variant="ghost" onClick={() => abrirEditor(n.checkinId, 'archivar')}>Archivar</Button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="mt-2 space-y-2">
@@ -1295,6 +1321,7 @@ function Bitacora({ alumnoId }: { alumnoId: string }) {
 function DocumentoPlan({ planId }: { planId: string }) {
   const { data: docs } = useDocumentosPlan(planId);
   const subir = useSubirDocumento();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A: subir versión es escritura
   const [error, setError] = useState<string | null>(null);
 
   const vigenteDoc = docs?.[0] ?? null;
@@ -1325,17 +1352,19 @@ function DocumentoPlan({ planId }: { planId: string }) {
     <div className="space-y-2 rounded-xl border border-navy-100 p-3 dark:border-navy-700">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-600 text-navy-900 dark:text-navy-50">Documento del plan</p>
-        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-sm font-600 text-navy-700 hover:bg-navy-50 dark:border-navy-600 dark:text-navy-200 dark:hover:bg-navy-800">
-          {subir.isPending ? <Spinner className="h-4 w-4" /> : <FileDown size={14} />}
-          {vigenteDoc ? 'Subir versión nueva' : 'Subir el .pdf o .docx'}
-          <input
-            type="file"
-            accept=".pdf,.docx"
-            className="hidden"
-            disabled={subir.isPending}
-            onChange={(e) => { void elegir(e.target.files?.[0]); e.target.value = ''; }}
-          />
-        </label>
+        {puedeEditar && (
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-navy-200 px-3 py-1.5 text-sm font-600 text-navy-700 hover:bg-navy-50 dark:border-navy-600 dark:text-navy-200 dark:hover:bg-navy-800">
+            {subir.isPending ? <Spinner className="h-4 w-4" /> : <FileDown size={14} />}
+            {vigenteDoc ? 'Subir versión nueva' : 'Subir el .pdf o .docx'}
+            <input
+              type="file"
+              accept=".pdf,.docx"
+              className="hidden"
+              disabled={subir.isPending}
+              onChange={(e) => { void elegir(e.target.files?.[0]); e.target.value = ''; }}
+            />
+          </label>
+        )}
       </div>
       {error && <p className="text-xs font-600 text-signal-red">{error}</p>}
 
@@ -1423,6 +1452,7 @@ function KrsDelPlan({ planId, okrs }: { planId: string; okrs: PlanCompleto['okrs
 function KrItem({ kr, estado, mediciones }: { kr: Kr; estado: EstadoKr | null; mediciones: Medicion[] }) {
   const editar = useEditarKr();
   const cargar = useCargarMedicion();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A: vencimiento y medición son escritura
   const [valorNuevo, setValorNuevo] = useState('');
   const vencido = !estado?.cumplida && kr.vencimiento !== null && kr.vencimiento < new Date().toISOString().slice(0, 10);
 
@@ -1439,14 +1469,18 @@ function KrItem({ kr, estado, mediciones }: { kr: Kr; estado: EstadoKr | null; m
         <span className={`flex-1 ${estado?.cumplida ? 'text-navy-400 line-through' : 'text-navy-600 dark:text-navy-300'}`}>
           {kr.texto}{kr.meta && <span className="text-navy-400"> — {kr.meta}</span>}
         </span>
-        <input
-          type="date"
-          className={`rounded border px-1 py-0.5 text-[11px] dark:bg-navy-800 ${vencido ? 'border-signal-red text-signal-red' : 'border-navy-200 text-navy-500 dark:border-navy-600 dark:text-navy-300'}`}
-          value={kr.vencimiento ?? ''}
-          disabled={editar.isPending}
-          onChange={(e) => void editar.mutateAsync({ krId: kr.id, patch: { vencimiento: e.target.value || null } })}
-          title="Vencimiento del KR (se desplaza si se mueve la fecha de inicio)"
-        />
+        {puedeEditar ? (
+          <input
+            type="date"
+            className={`rounded border px-1 py-0.5 text-[11px] dark:bg-navy-800 ${vencido ? 'border-signal-red text-signal-red' : 'border-navy-200 text-navy-500 dark:border-navy-600 dark:text-navy-300'}`}
+            value={kr.vencimiento ?? ''}
+            disabled={editar.isPending}
+            onChange={(e) => void editar.mutateAsync({ krId: kr.id, patch: { vencimiento: e.target.value || null } })}
+            title="Vencimiento del KR (se desplaza si se mueve la fecha de inicio)"
+          />
+        ) : (
+          kr.vencimiento && <span className={`text-[11px] ${vencido ? 'text-signal-red' : 'text-navy-400'}`}>vence {kr.vencimiento}</span>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-1.5 pl-0.5">
         {estado?.cumplida ? (
@@ -1470,15 +1504,19 @@ function KrItem({ kr, estado, mediciones }: { kr: Kr; estado: EstadoKr | null; m
               <span className="text-navy-400">sin datos</span>
             )}
             {kr.meta90 !== null && <span>· meta {kr.meta90}{kr.unidad}</span>}
-            <Input
-              value={valorNuevo}
-              onChange={(e) => setValorNuevo(e.target.value)}
-              placeholder="valor"
-              className="h-6 w-16 px-1.5 text-[11px]"
-            />
-            <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" disabled={cargar.isPending || valorNuevo.trim() === ''} onClick={() => void cargarValor()}>
-              Cargar
-            </Button>
+            {puedeEditar && (
+              <>
+                <Input
+                  value={valorNuevo}
+                  onChange={(e) => setValorNuevo(e.target.value)}
+                  placeholder="valor"
+                  className="h-6 w-16 px-1.5 text-[11px]"
+                />
+                <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" disabled={cargar.isPending || valorNuevo.trim() === ''} onClick={() => void cargarValor()}>
+                  Cargar
+                </Button>
+              </>
+            )}
           </span>
         )}
       </div>
@@ -1508,6 +1546,7 @@ function SeguimientoPlan({ planId }: { planId: string }) {
   const { data: avance } = useAvancePlan(planId);
   const emitir = useEmitirLinkSeguimiento();
   const revocar = useRevocarLinkSeguimiento();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A: emitir/revocar el link es escritura
   const [copiado, setCopiado] = useState(false);
 
   if (!avance) return <div className="flex justify-center py-6"><Spinner className="h-5 w-5" /></div>;
@@ -1541,23 +1580,27 @@ function SeguimientoPlan({ planId }: { planId: string }) {
         </div>
         <div className="flex items-center gap-1.5">
           {!avance.link ? (
-            <Button size="sm" variant="gold" onClick={() => void emitir.mutateAsync(planId)} disabled={emitir.isPending}>
-              <Link2 size={14} /><span className="ml-1">Generar link del alumno</span>
-            </Button>
+            puedeEditar && (
+              <Button size="sm" variant="gold" onClick={() => void emitir.mutateAsync(planId)} disabled={emitir.isPending}>
+                <Link2 size={14} /><span className="ml-1">Generar link del alumno</span>
+              </Button>
+            )
           ) : (
             <>
               <Button size="sm" variant="ghost" onClick={() => void copiar()}>
                 {copiado ? <Check size={14} className="text-signal-green" /> : <Copy size={14} />}
                 <span className="ml-1">{copiado ? 'Copiado' : 'Copiar link para WhatsApp'}</span>
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                title="Dar de baja este link (si se filtró). Después podés generar otro."
-                onClick={() => { if (window.confirm('¿Dar de baja el link actual? El alumno va a necesitar el nuevo.')) void revocar.mutateAsync(planId); }}
-              >
-                <X size={14} /><span className="ml-1">Revocar</span>
-              </Button>
+              {puedeEditar && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title="Dar de baja este link (si se filtró). Después podés generar otro."
+                  onClick={() => { if (window.confirm('¿Dar de baja el link actual? El alumno va a necesitar el nuevo.')) void revocar.mutateAsync(planId); }}
+                >
+                  <X size={14} /><span className="ml-1">Revocar</span>
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -1603,20 +1646,27 @@ const ETIQUETA_ESTADO: Record<EstadoAccion, string> = { pendiente: '· pendiente
  */
 function AccionCorregible({ accion: a }: { accion: AvancePlanUI['fases'][number]['acciones'][number] }) {
   const corregir = useCorregirAccion();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A: corregir es escritura
   return (
     <li className="text-xs">
       <div className="flex items-center gap-1.5">
-        <select
-          className="rounded border border-navy-200 bg-white px-1 py-0.5 text-[11px] text-navy-600 dark:border-navy-600 dark:bg-navy-800 dark:text-navy-200"
-          value={a.estado}
-          disabled={corregir.isPending}
-          onChange={(e) => void corregir.mutateAsync({ accionId: a.id, estado: e.target.value as EstadoAccion })}
-          title="Corregir el estado (queda registrado como tuyo)"
-        >
-          <option value="pendiente">☐</option>
-          <option value="en_curso">◐</option>
-          <option value="ejecutado">☑</option>
-        </select>
+        {puedeEditar ? (
+          <select
+            className="rounded border border-navy-200 bg-white px-1 py-0.5 text-[11px] text-navy-600 dark:border-navy-600 dark:bg-navy-800 dark:text-navy-200"
+            value={a.estado}
+            disabled={corregir.isPending}
+            onChange={(e) => void corregir.mutateAsync({ accionId: a.id, estado: e.target.value as EstadoAccion })}
+            title="Corregir el estado (queda registrado como tuyo)"
+          >
+            <option value="pendiente">☐</option>
+            <option value="en_curso">◐</option>
+            <option value="ejecutado">☑</option>
+          </select>
+        ) : (
+          <span className="text-[11px] text-navy-500 dark:text-navy-300">
+            {a.estado === 'ejecutado' ? '☑' : a.estado === 'en_curso' ? '◐' : '☐'}
+          </span>
+        )}
         <span className={a.estado === 'ejecutado' ? 'text-navy-400 line-through' : a.estado === 'en_curso' ? 'text-gold-500' : 'text-navy-700 dark:text-navy-200'}>
           {a.texto}
         </span>
@@ -1630,6 +1680,7 @@ function AccionCorregible({ accion: a }: { accion: AvancePlanUI['fases'][number]
 
 function DatosFicha({ alumno }: { alumno: Alumno }) {
   const editar = useEditarAlumno();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({
     nombre: alumno.nombre,
@@ -1676,10 +1727,12 @@ function DatosFicha({ alumno }: { alumno: Alumno }) {
         <h3 className="flex items-center gap-2 font-display text-lg font-700 text-navy-900 dark:text-navy-50">
           <UserRound size={18} /> Ficha
         </h3>
-        <Button variant="ghost" onClick={() => setEditando((v) => !v)}>
-          {editando ? <X size={14} /> : <Pencil size={14} />}
-          <span className="ml-1">{editando ? 'Cancelar' : 'Editar'}</span>
-        </Button>
+        {puedeEditar && (
+          <Button variant="ghost" onClick={() => setEditando((v) => !v)}>
+            {editando ? <X size={14} /> : <Pencil size={14} />}
+            <span className="ml-1">{editando ? 'Cancelar' : 'Editar'}</span>
+          </Button>
+        )}
       </div>
       {!editando ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -1809,6 +1862,7 @@ function ExportarParaPlan({ diagnosticoId }: { diagnosticoId: string }) {
 
 function DetalleDiagnostico({ diagnostico: d, moneda }: { diagnostico: Diagnostico; moneda: string }) {
   const guardar = useEditarDiagnostico();
+  const puedeEditar = usePuede('editar_alumnos'); // 11A: la corrección es escritura
   const original = useMemo(() => estadoDesdeRespuestas(d.respuestas), [d.respuestas]);
   const [corrigiendo, setCorrigiendo] = useState(false);
   const [valores, setValores] = useState<Valores>(original.valores);
@@ -1850,10 +1904,12 @@ function DetalleDiagnostico({ diagnostico: d, moneda }: { diagnostico: Diagnosti
         </div>
         <div className="flex gap-2">
           <ExportarParaPlan diagnosticoId={d.id} />
-          <Button variant="ghost" onClick={() => { setCorrigiendo((v) => !v); setValores(original.valores); setSinDato(original.sinDato); setError(null); }}>
-            {corrigiendo ? <X size={14} /> : <Pencil size={14} />}
-            <span className="ml-1">{corrigiendo ? 'Descartar' : 'Corregir respuestas'}</span>
-          </Button>
+          {puedeEditar && (
+            <Button variant="ghost" onClick={() => { setCorrigiendo((v) => !v); setValores(original.valores); setSinDato(original.sinDato); setError(null); }}>
+              {corrigiendo ? <X size={14} /> : <Pencil size={14} />}
+              <span className="ml-1">{corrigiendo ? 'Descartar' : 'Corregir respuestas'}</span>
+            </Button>
+          )}
         </div>
       </div>
 

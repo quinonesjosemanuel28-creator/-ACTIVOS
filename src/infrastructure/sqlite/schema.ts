@@ -105,15 +105,15 @@ CREATE TABLE IF NOT EXISTS pagos (
 );
 
 -- ───────── Auth: usuarios y sesiones (login multi-usuario) ─────────
--- NOTA: si tenés un data/activos.db local creado ANTES del rol CONSULTOR, ese
--- archivo conserva el CHECK viejo (SQLite no permite modificarlo). Borrá el
--- .db y se regenera. Tests (:memory:) y producción (PostgreSQL, con su bloque
--- DO) siempre tienen la versión nueva.
+-- NOTA: si tenés un data/activos.db local creado ANTES del rol CONSULTOR (o
+-- del OBSERVADOR, ticket 11A), ese archivo conserva el CHECK viejo (SQLite no
+-- permite modificarlo). Borrá el .db y se regenera. Tests (:memory:) y
+-- producción (PostgreSQL, con su bloque DO) siempre tienen la versión nueva.
 CREATE TABLE IF NOT EXISTS usuarios (
   id                     TEXT PRIMARY KEY,
   email                  TEXT NOT NULL UNIQUE,
   nombre                 TEXT NOT NULL,
-  rol                    TEXT NOT NULL CHECK(rol IN ('LECTOR','EDITOR','ADMIN','CONSULTOR')),
+  rol                    TEXT NOT NULL CHECK(rol IN ('LECTOR','EDITOR','ADMIN','CONSULTOR','OBSERVADOR')),
   password_hash          TEXT NOT NULL,
   activo                 INTEGER NOT NULL DEFAULT 1,
   debe_cambiar_password  INTEGER NOT NULL DEFAULT 0,

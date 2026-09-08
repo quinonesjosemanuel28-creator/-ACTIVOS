@@ -1568,14 +1568,23 @@ export async function registrarContacto(
 }
 
 /** Historial de contactos del alumno (la ficha lo muestra colapsado). */
+/**
+ * Contactos con su autor (ticket 11A §5.3): el contacto de CUALQUIERA apaga
+ * la alerta de inactividad — si un OBSERVADOR le escribe a un alumno ajeno,
+ * el consultor responsable tiene que poder ver por qué se apagó. Mostrar el
+ * autor no cambia la lógica de la alerta: la hace legible.
+ */
 export async function listarContactos(
   repos: ReposAlumnos,
+  usuarios: UsuariosRepo,
   alcance: Alcance,
   alumnoId: string,
-): Promise<Contacto[]> {
+): Promise<(Contacto & { autorNombre: string | null })[]> {
   const alumno = await obtenerAlumno(repos, alcance, alumnoId);
   if (!alumno) throw new ErrorAlumnos('NO_ENCONTRADO', 'Alumno inexistente.');
-  return repos.contactos.listarPorAlumno(alumnoId);
+  const contactos = await repos.contactos.listarPorAlumno(alumnoId);
+  const nombrePorId = new Map((await usuarios.listar()).map((u) => [u.id, u.nombre]));
+  return contactos.map((c) => ({ ...c, autorNombre: nombrePorId.get(c.consultorId) ?? null }));
 }
 
 export interface ResultadoMigracionTelefonos {

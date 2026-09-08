@@ -314,7 +314,7 @@ export const api = {
   // Seguimiento activo (ticket 7C): el contacto se registra ANTES de abrir el link.
   registrarContacto: (alumnoId: string, nota?: string) =>
     req<Contacto>(`/alumnos/${alumnoId}/contactos`, { method: 'POST', body: JSON.stringify({ nota }) }),
-  contactos: (alumnoId: string) => req<Contacto[]>(`/alumnos/${alumnoId}/contactos`),
+  contactos: (alumnoId: string) => req<(Contacto & { autorNombre: string | null })[]>(`/alumnos/${alumnoId}/contactos`),
   cambiarEstadoAlumno: (id: string, estado: EstadoAlumno) =>
     req<Alumno>(`/alumnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado }) }),
   eliminarAlumno: (id: string) => req(`/alumnos/${id}`, { method: 'DELETE' }),

@@ -18,10 +18,14 @@
  *    contabilidad — ni de Academy ni de ninguna unidad del holding. No es "un
  *    LECTOR con menos cosas": es otra rama del árbol. Por eso `puede` es una
  *    lista blanca por rol y no una comparación de nivel.
+ *  - OBSERVADOR (ticket 11A) cuelga de la misma rama que CONSULTOR: solo
+ *    lectura sobre TODA la cartera, con permiso de registrar seguimiento
+ *    (bitácora + contactos). Para el equipo interno que interviene sobre
+ *    alumnos que no tiene asignados. Cero contabilidad, igual que CONSULTOR.
  */
-export type Rol = 'LECTOR' | 'EDITOR' | 'ADMIN' | 'CONSULTOR';
+export type Rol = 'LECTOR' | 'EDITOR' | 'ADMIN' | 'CONSULTOR' | 'OBSERVADOR';
 
-export const ROLES: readonly Rol[] = ['LECTOR', 'EDITOR', 'ADMIN', 'CONSULTOR'] as const;
+export const ROLES: readonly Rol[] = ['LECTOR', 'EDITOR', 'ADMIN', 'CONSULTOR', 'OBSERVADOR'] as const;
 
 /** ¿Es un rol válido? (validación de entradas en el borde). */
 export function esRol(valor: unknown): valor is Rol {
@@ -47,6 +51,11 @@ export function esRol(valor: unknown): valor is Rol {
  * - 'eliminar_alumnos': borrado lógico, papelera y purga definitiva. Solo
  *   ADMIN — el espejo de 'importar' en el contable: lo destructivo no baja
  *   al día a día.
+ * - 'reasignar_alumnos': cambiar el consultor responsable (ticket 11C). Solo
+ *   ADMIN: con 'editar_alumnos' un consultor podría regalarse alumnos ajenos.
+ * - 'registrar_seguimiento': dejar constancia de una intervención SIN editar
+ *   nada (ticket 11A) — escribir bitácora y registrar contacto (WhatsApp).
+ *   Es lo que separa al OBSERVADOR de un lector puro: interviene, no edita.
  *
  * El ÁMBITO (qué filas alcanza) es un eje aparte: ver `Ambito` más abajo.
  */
@@ -58,7 +67,8 @@ export type Accion =
   | 'ver_alumnos'
   | 'editar_alumnos'
   | 'eliminar_alumnos'
-  | 'reasignar_alumnos';
+  | 'reasignar_alumnos'
+  | 'registrar_seguimiento';
 
 export const ACCIONES: readonly Accion[] = [
   'ver',
@@ -69,6 +79,7 @@ export const ACCIONES: readonly Accion[] = [
   'editar_alumnos',
   'eliminar_alumnos',
   'reasignar_alumnos',
+  'registrar_seguimiento',
 ] as const;
 
 /**
@@ -81,12 +92,16 @@ export const ACCIONES: readonly Accion[] = [
 const PERMISOS: Record<Rol, ReadonlySet<Accion>> = {
   LECTOR: new Set<Accion>(['ver']),
   EDITOR: new Set<Accion>(['ver', 'editar']),
-  ADMIN: new Set<Accion>(['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos', 'reasignar_alumnos']),
+  ADMIN: new Set<Accion>(['ver', 'editar', 'importar', 'gestionar_usuarios', 'ver_alumnos', 'editar_alumnos', 'eliminar_alumnos', 'reasignar_alumnos', 'registrar_seguimiento']),
   // Sin 'eliminar_alumnos' a propósito: un consultor gestiona su cartera pero
   // no la borra — ni lógica ni definitivamente. Sin 'reasignar_alumnos'
   // (ticket 11C): si pudiera, podría regalarse un alumno ajeno o desprenderse
   // de uno propio.
-  CONSULTOR: new Set<Accion>(['ver_alumnos', 'editar_alumnos']),
+  CONSULTOR: new Set<Accion>(['ver_alumnos', 'editar_alumnos', 'registrar_seguimiento']),
+  // Solo lectura sobre toda la cartera + registrar seguimiento (ticket 11A).
+  // Sin 'editar_alumnos': el rechazo de cada escritura viene de la ruta, no
+  // de la UI. Y cero contable, igual que CONSULTOR.
+  OBSERVADOR: new Set<Accion>(['ver_alumnos', 'registrar_seguimiento']),
 };
 
 /** ¿El rol puede ejecutar la acción? Núcleo de la autorización. */
@@ -129,6 +144,9 @@ const AMBITO_POR_ROL: Record<Rol, Ambito> = {
   EDITOR: 'todos',
   ADMIN: 'todos',
   CONSULTOR: 'solo_los_mios',
+  // Ámbito total a propósito (ticket 11A): son diez alumnos y todos del
+  // equipo interno. Acotarlo tendrá sentido el día que haya externos.
+  OBSERVADOR: 'todos',
 };
 
 /** Ámbito de filas del rol. */

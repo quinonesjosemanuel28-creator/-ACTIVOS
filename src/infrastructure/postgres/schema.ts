@@ -561,6 +561,30 @@ BEGIN
   END IF;
 END $$;
 
+-- Rol OBSERVADOR (ticket 11A): mismo mecanismo que el de CONSULTOR — ensancha
+-- el CHECK de usuarios.rol sobre la tabla viva, idempotente y aditivo.
+DO $$
+DECLARE
+  restriccion text;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'usuarios'::regclass
+       AND contype = 'c'
+       AND pg_get_constraintdef(oid) LIKE '%OBSERVADOR%'
+  ) THEN
+    SELECT conname INTO restriccion FROM pg_constraint
+     WHERE conrelid = 'usuarios'::regclass
+       AND contype = 'c'
+       AND pg_get_constraintdef(oid) LIKE '%rol%';
+    IF restriccion IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE usuarios DROP CONSTRAINT %I', restriccion);
+    END IF;
+    ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check
+      CHECK (rol IN ('LECTOR','EDITOR','ADMIN','CONSULTOR','OBSERVADOR'));
+  END IF;
+END $$;
+
 -- Migraciones aditivas (mismas que en SQLite, para bases ya creadas).
 ALTER TABLE cierres ADD COLUMN IF NOT EXISTS cantidad_cuotas INTEGER;
 ALTER TABLE cierres ADD COLUMN IF NOT EXISTS monto_cuota_usd DOUBLE PRECISION;

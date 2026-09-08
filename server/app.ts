@@ -479,11 +479,13 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   ));
   // Registro de contacto (ticket 7C): se inserta ANTES de abrir el WhatsApp y
   // es lo que apaga la alerta de inactividad. Append-only, como los checkins.
-  app.post('/api/alumnos/:id/contactos', requiere('editar_alumnos'), h((req, res) =>
+  // 'registrar_seguimiento' (ticket 11A): dejar constancia sin editar nada —
+  // también OBSERVADOR. La capacidad de CONSULTOR/ADMIN no cambia.
+  app.post('/api/alumnos/:id/contactos', requiere('registrar_seguimiento'), h((req, res) =>
     ual.registrarContacto(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
   ));
   app.get('/api/alumnos/:id/contactos', requiere('ver_alumnos'), h((req, res) =>
-    ual.listarContactos(reposAlumnos, alcanceDe(res), param(req, 'id')),
+    ual.listarContactos(reposAlumnos, reposAuth.usuarios, alcanceDe(res), param(req, 'id')),
   ));
   // Corrección durante la llamada: ajusta la fila y la marca como editada por
   // el consultor (no crea envío nuevo). Fuera de ámbito responde 404.
@@ -544,7 +546,9 @@ export function crearApp(infra: Infraestructura, opciones: OpcionesApp = {}): ex
   app.get('/api/alumnos/:id/bitacora', requiere('ver_alumnos'), h((req, res) =>
     ual.bitacoraDeAlumno(reposAlumnos, reposAuth.usuarios, alcanceDe(res), param(req, 'id')),
   ));
-  app.post('/api/alumnos/:id/bitacora', requiere('editar_alumnos'), h((req, res) =>
+  // 'registrar_seguimiento' (ticket 11A): la bitácora es constancia, no
+  // edición — la escribe también el OBSERVADOR sobre alumnos ajenos.
+  app.post('/api/alumnos/:id/bitacora', requiere('registrar_seguimiento'), h((req, res) =>
     ual.cargarBitacora(reposAlumnos, alcanceDe(res), usuarioDe(res).id, param(req, 'id'), req.body),
   ));
   // Ciclo de vida de la nota del alumno (10A): resolver (con devolución que

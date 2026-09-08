@@ -267,7 +267,7 @@ describe('HTTP · CONSULTOR (cero contabilidad, aunque llame la API a mano)', ()
     expect(res.status).toBe(200);
     const r = (await res.json()) as { usuario: { rol: string }; acciones: string[] };
     expect(r.usuario.rol).toBe('CONSULTOR');
-    expect(r.acciones).toEqual(['ver_alumnos', 'editar_alumnos']);
+    expect(r.acciones).toEqual(['ver_alumnos', 'editar_alumnos', 'registrar_seguimiento']);
     expect(r.acciones).not.toContain('ver');
   });
 });

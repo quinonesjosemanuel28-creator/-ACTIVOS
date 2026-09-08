@@ -62,9 +62,9 @@ function AppConSesion() {
   // Sin sesión (401) → solo existe el login.
   if (!sesion.data) return <VistaLogin />;
 
-  // El Dashboard entero es contable. Un rol sin 'ver' (CONSULTOR) no lo monta
-  // — pediría /api/meses y se comería un 403 por panel. Va directo a su panel
-  // de alumnos, con un shell propio sin nada del contable.
+  // El Dashboard entero es contable. Un rol sin 'ver' (CONSULTOR, OBSERVADOR)
+  // no lo monta — pediría /api/meses y se comería un 403 por panel. Va directo
+  // a su panel de alumnos, con un shell propio sin nada del contable.
   if (!accionesDe(sesion.data.usuario.rol).includes('ver')) {
     return <PanelConsultor nombre={sesion.data.usuario.nombre} />;
   }
@@ -81,7 +81,7 @@ function PanelConsultor({ nombre }: { nombre: string }) {
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-navy-900 font-display text-xl font-700 text-gold-400">+</span>
           <div>
             <p className="font-display text-sm font-700 leading-none text-navy-900 dark:text-navy-50">Activos</p>
-            <p className="text-xs text-navy-400">Panel de consultoría · {nombre}</p>
+            <p className="text-xs text-navy-400">Panel de alumnos · {nombre}</p>
           </div>
         </div>
         <button
