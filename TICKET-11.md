@@ -223,7 +223,7 @@ No es urgente, pero el caso va a aparecer el día que haya que mover una cartera
 
 Con la reasignación disponible aparece un agujero nuevo: si el ADMIN le cambia el rol a un usuario con alumnos asignados (CONSULTOR → LECTOR, por ejemplo), esos alumnos quedan colgando de un responsable que ya no puede verlos — y nadie se entera hasta que algo falla.
 
-**`cambiarRol` se bloquea si el usuario tiene alumnos asignados** (fuera de la papelera). El mensaje dice qué hacer: *"primero reasigná sus N alumnos"*. La baja (`darDeBaja`) queda como está — el borde de la tabla del §9 ya lo cubre: el ADMIN los reasigna, hasta entonces solo él los ve.
+**`cambiarRol` se bloquea si el usuario tiene alumnos asignados** (fuera de la papelera) **y el rol nuevo no puede tener cartera** (`puedeSerResponsable`: CONSULTOR o ADMIN). Un pase CONSULTOR ↔ ADMIN no se bloquea — los dos roles sostienen la cartera y bloquearlo frenaría una promoción legítima. El mensaje dice qué hacer: *"primero reasigná sus N alumnos"*. La baja (`darDeBaja`) queda como está — el borde de la tabla del §9 ya lo cubre: el ADMIN los reasigna, hasta entonces solo él los ve.
 
 ### 7.6 Corrección del estado actual
 
@@ -263,7 +263,7 @@ Los 10 alumnos de producción están asignados al ADMIN por el mecanismo del alt
 | Reasignar a un alumno en la papelera | No se puede: la ficha eliminada no admite operaciones |
 | Reasignar al mismo consultor que ya lo tiene | Sin efecto, sin tramo nuevo, sin error |
 | Consultor dado de baja con alumnos asignados | El ADMIN los reasigna; hasta entonces solo él los ve |
-| Cambiarle el rol a un usuario con alumnos asignados | Rechazo: "primero reasigná sus N alumnos" ▲ rev2 |
+| Cambiarle el rol a un usuario con alumnos asignados hacia un rol sin cartera | Rechazo: "primero reasigná sus N alumnos" (CONSULTOR ↔ ADMIN no se bloquea) ▲ rev2 |
 | OBSERVADOR con un alumno pausado o finalizado | Lo ve y puede escribir bitácora igual |
 | Alumno reasignado con notas abiertas | Las notas quedan; las resuelve el consultor nuevo |
 | Contacto registrado por un OBSERVADOR | Apaga la alerta de inactividad, y la ficha muestra que fue él |

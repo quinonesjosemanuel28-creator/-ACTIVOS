@@ -81,16 +81,17 @@ En `src/domain/auth/permisos.ts` — fuente de verdad única.
 **Eje 1 · acciones.** Dos familias que NO se cruzan:
 
 - Contable/admin: `ver`, `editar`, `importar`, `gestionar_usuarios`
-- Alumnos: `ver_alumnos`, `editar_alumnos`, `eliminar_alumnos`
+- Alumnos: `ver_alumnos`, `editar_alumnos`, `eliminar_alumnos`, `reasignar_alumnos`, `registrar_seguimiento`
 
 | Rol | Acciones |
 |---|---|
 | `LECTOR` | `ver` |
 | `EDITOR` | `ver`, `editar` |
 | `ADMIN` | todas |
-| `CONSULTOR` | `ver_alumnos`, `editar_alumnos` — **sin `ver`: cero contabilidad. Sin `eliminar_alumnos`: gestiona su cartera, no la borra** |
+| `CONSULTOR` | `ver_alumnos`, `editar_alumnos`, `registrar_seguimiento` — **sin `ver`: cero contabilidad. Sin `eliminar_alumnos` ni `reasignar_alumnos`: gestiona su cartera, no la borra ni se regala alumnos** |
+| `OBSERVADOR` | `ver_alumnos`, `registrar_seguimiento` — **solo lectura sobre TODA la cartera (ámbito total) + bitácora y contactos. Cero contabilidad. No puede ser responsable de cartera** |
 
-`CONSULTOR` no es un escalón más de la escalera del contable. `puede()` es lista blanca por rol, no comparación de nivel.
+`CONSULTOR` y `OBSERVADOR` no son escalones de la escalera del contable. `puede()` es lista blanca por rol, no comparación de nivel. `registrar_seguimiento` (bitácora + contactos) es "dejar constancia sin editar"; `reasignar_alumnos` (solo ADMIN) mueve la cartera con tramo de historial atómico.
 
 **Eje 2 · ámbito por fila.** `todos` / `solo_los_mios`. Sale de la sesión vía `alcanceDe(res)`, **nunca de la query string**:
 
@@ -113,7 +114,8 @@ Toda ruta declara su acción con `requiere(...)`, **incluidas las de lectura**. 
 | 7 | Panel de control: estado y salud (7A) · documento del plan (7B) · seguimiento activo (7C) | hecho |
 | 8 | El link del alumno: "Esta semana", copy sin castigo, último acceso, agrupado por KR | hecho |
 | 9 | Cierre por acciones: 9A modelo · 9B cierre y métricas · contrato v3 · 9C paralelo · 9D vista del alumno · **9C switch** | hecho — el switch está en `desarrollo`, sin promover. Queda el ticket de limpieza (borrar `cumplido_en` + `marcado`), tras semanas de rodaje |
-| 10 | Notas y bitácora: ciclo de vida de las notas (10A) · bitácora con traba actual (10B) | hecho (en `desarrollo`, sin promover) |
+| 10 | Notas y bitácora: ciclo de vida de las notas (10A) · bitácora con traba actual (10B) | hecho |
+| 11 | Rol OBSERVADOR y gestión de asignación: selector en el alta (11B) · reasignación atómica (11C) · rol + ficha read-only (11A) | hecho (en `desarrollo`, sin promover) — TICKET-11.md rev2. Tras promover: redistribuir los 10 alumnos como prueba de humo (§7.6) |
 | — | Asistente IA sobre el módulo | **descartado** |
 
 El seguimiento va **por fases 30/60/90, no por semanas** (el plan ya viene así de la skill). El contrato del bloque JSON que emite la skill vive en `CONTRATO-PLAN.md` (los dos lados).

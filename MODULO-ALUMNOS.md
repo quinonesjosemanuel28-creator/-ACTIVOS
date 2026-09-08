@@ -112,7 +112,8 @@ Los pasos 6 en adelante son fase 2. La fase 1 llega hasta el punto 5.
 | 7 | Panel de control: estado y salud (7A) · documento del plan (7B) · seguimiento activo (7C) | hecho |
 | 8 | El link del alumno: bloque "Esta semana" · copy sin castigo · último acceso · agrupado por KR | hecho |
 | 9 | Cierre por acciones: modelo (9A) · cierre automático y métricas (9B) · contrato v3 de la skill · paralelo de semáforos (9C tiempo uno) · vista del alumno (9D) · **switch (9C tiempo dos, 25/08)** | hecho — queda el ticket de limpieza: borrar `krs.cumplido_en`, `checkins.marcado` y el campo `cumplido` del patch, con semanas de rodaje |
-| 10 | Notas y bitácora: ciclo de vida de las notas del alumno (10A) · bitácora del consultor con traba actual (10B) | hecho (en `desarrollo`, sin promover) |
+| 10 | Notas y bitácora: ciclo de vida de las notas del alumno (10A) · bitácora del consultor con traba actual (10B) | hecho |
+| 11 | Rol OBSERVADOR y gestión de asignación: selector de consultor en el alta (11B) · reasignación atómica (11C) · rol y ficha en solo lectura (11A) | hecho (en `desarrollo`, sin promover) — tras promover: redistribuir los 10 alumnos de producción como prueba de humo (TICKET-11.md §7.6) |
 | — | Asistente IA sobre el módulo | **descartado** (decisión de José, agosto 2026) |
 
 Quedó anotado para después (fuera del ticket 7): snapshot de cierre a los 90
@@ -254,3 +255,16 @@ La decisión que ordena el ticket: **las consultas se resuelven por WhatsApp; la
 - **La bitácora es interna y append-only** (`bitacora`, CASCADE para que la purga definitiva no falle): texto libre + tipo de contacto + traba actual opcional. **Cargar una entrada registra el contacto** en la misma operación — la alerta de inactividad se apaga sola tras una sesión. La traba vigente (la última CON traba; una sin traba no la pisa) va destacada en la cabecera de la ficha: el semáforo dice QUE está en rojo, la traba dice POR QUÉ.
 - **El alumno jamás ve la bitácora**: ninguna ruta pública la consulta, con test que vuelca el payload completo del link contra un texto centinela. Dos campos con audiencias opuestas conviven en la ficha y la UI lo grita en el punto de escritura: «esto lo ve el alumno» (devolución) vs «interna — el alumno nunca la ve» (bitácora).
 - Ambas tablas en `TABLAS_SENSIBLES` y `TABLAS_NO_COPIADAS`. Fuera de alcance, a reevaluar con volumen: hilos, adjuntos, notificaciones, alertas por consulta sin responder.
+
+### Cerradas en el ticket 11 (septiembre 2026) — rol OBSERVADOR y gestión de asignación
+
+El problema que ordenó el ticket: el equipo interno no podía trabajar sobre la misma cartera (un consultor por alumno + `solo_los_mios` = el que no lo tiene asignado no abre ni la ficha), y los 10 alumnos de producción quedaron asignados al ADMIN por el mecanismo del alta. TICKET-11.md rev2 es la especificación. Orden de ejecución: 11B → 11C → 11A.
+
+- **La acción nueva es `registrar_seguimiento`, no `escribir_bitacora`**: cubre bitácora Y contactos (las dos rutas POST pasaron de `editar_alumnos` a ella; CONSULTOR y ADMIN la reciben — capacidad efectiva idéntica, con test). Sin eso el observador podía abrir WhatsApp pero no registrar el contacto.
+- **OBSERVADOR**: ámbito total + `ver_alumnos` + `registrar_seguimiento`. Cero contable (test), no puede ser responsable de cartera (`puedeSerResponsable`, del dominio: solo CONSULTOR o ADMIN). La ficha muestra el AUTOR de cada contacto: su contacto apaga la alerta del responsable, y sin el nombre se apagaba sola sin explicación.
+- **La ficha en solo lectura se verifica con un test que recorre las DIEZ superficies de escritura** (fichaReadonly.test: render real con la cache presembrada, por rol) + el 403 de cada ruta (observador.http.test). No es una verificación visual: con diez, la forma de fallar es olvidarse una.
+- **Alta con selector (11B)**: `consultorId` opcional — sin él, el creador (cero cambio); el propio id es válido; uno distinto solo lo manda un ADMIN (el CONSULTOR recibe rechazo explícito) y el destino debe existir, estar activo y tener rol con cartera. El primer tramo del historial se abre con el consultor ELEGIDO. El desplegable solo se muestra al ADMIN (la lista sale de `GET /api/usuarios`, que pide `gestionar_usuarios`).
+- **Reasignación (11C)**: acción `reasignar_alumnos` solo ADMIN, endpoint propio (`POST /api/alumnos/reasignar`, uno o varios alumnos) — NO viaja por el patch (Zod lo descarta: con `editar_alumnos` un consultor podría regalarse alumnos). **Método atómico del repo en los dos motores** (`db.transaction` / `BEGIN-COMMIT`): cerrar tramo vigente (`cerrarTramoVigente`, esperando desde el ticket 1) + abrir tramo + `consultor_id`, todo-o-nada. Mismo consultor = no-op sin tramo. El anterior pierde acceso completo; los registros históricos mantienen su autor.
+- **La pantalla de reasignación muestra la carga por consultor** (N alumnos · M en rojo) calculada del panel que ya viajó (`cargaPorConsultor`, pura) — sin endpoint nuevo.
+- **`cambiarRol` con cartera hacia un rol que no puede tenerla se bloquea** (409, "primero reasigná sus N alumnos"); CONSULTOR ↔ ADMIN no se bloquea. El contador lo inyecta el server desde el módulo de alumnos.
+- El export de comparación de semáforos queda visible para OBSERVADOR **a sabiendas**: monitor de solo lectura sin contable, muere entero en el ticket de limpieza del 9.
